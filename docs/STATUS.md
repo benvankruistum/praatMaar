@@ -23,9 +23,8 @@ Laatst bijgewerkt: 2026-07-18.
 
 1. macOS-port — zie [archive/HANDOFF-mac-port.md](archive/HANDOFF-mac-port.md)
    (indicator no-activate + tray-main-thread zijn de blockers).
-2. `dictation.py` opsplitsen (opnamesessie) — genoemd in `CONTEXT.md`.
-3. Recovery-audio opruimen / UI.
-4. Formele releases / binaries via CI (optioneel).
+2. Recovery-audio opruimen / UI.
+3. Formele releases / binaries via CI (optioneel).
 
 ## Historische handoffs
 

@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-import os
 import signal
 import sys
-import tempfile
 import threading
 import time
-from pathlib import Path
 from typing import Any
 
 from indicator import (
     RecordingIndicator,
-    RecordingState,
-    notify_state,
-    push_level,
-    reset_levels,
 )
 
 import app_logging
@@ -22,6 +15,7 @@ import config
 import hotkeys
 import host
 import recovery
+from opnamesessie import Opnamesessie
 from splash import Splash
 
 # De zware libraries worden bewust NIET bij import geladen, maar pas in
@@ -121,23 +115,14 @@ if isinstance(_user_config.get("hotkey"), list) and _user_config["hotkey"]:
 
 
 # =========================================================
-# GLOBALE STATUS
+# GLOBALE STATUS (toetsenbord + wiring)
 # =========================================================
 #
-# De tokenisatie van toetsen (Ctrl/Shift/Alt samenvouwen, letters via vk, enz.)
-# staat in hotkeys.py, gedeeld met het instellingen-dialoog dat een nieuwe
-# sneltoets opneemt.
+# De dicteercyclus-lifecycle zit in `Opnamesessie` (`opnamesessie.py`).
+# Hier blijven alleen de sneltoets-routing en capture-modus voor Instellingen.
+# De tokenisatie staat in hotkeys.py.
 
 state_lock = threading.RLock()
-
-recording = False
-processing = False
-cancel_requested = False
-
-recording_started_at: float | None = None
-
-audio_stream: sd.InputStream | None = None
-audio_chunks: list[np.ndarray] = []
 
 # Houdt bij welke onderdelen van de combinatie zijn ingedrukt.
 pressed_tokens: set[str] = set()
@@ -212,6 +197,8 @@ def _load_dependencies(reporter: Splash) -> None:
     step(5, "Systeemvak laden")
     from tray import TrayIcon as _TrayIcon
     TrayIcon = _TrayIcon
+
+    session.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=write_wav)
 
 
 def _startup(reporter: Splash) -> WhisperModel:
@@ -424,387 +411,6 @@ def wait_until_modifier_keys_released(
         time.sleep(0.05)
 
 
-# =========================================================
-# AUDIO
-# =========================================================
-
-def audio_callback(
-    indata: np.ndarray,
-    frames: int,
-    time_info: Any,
-    status: sd.CallbackFlags,
-) -> None:
-    """
-    Ontvangt audioblokken van de microfoon.
-
-    De callback moet zo weinig mogelijk werk uitvoeren,
-    zodat de audio-opname niet wordt onderbroken.
-    """
-
-    if status:
-        print(f"\nAudio-waarschuwing: {status}")
-
-    with state_lock:
-        is_recording = recording
-        if is_recording:
-            audio_chunks.append(indata.copy())
-
-    # Buiten de lock: goedkoop niveau (RMS) voor de waveform in de indicator.
-    # De audio-callback doet hier alleen rekenwerk + schrijven, geen I/O of Tk.
-    if is_recording and frames > 0:
-        push_level(float(np.sqrt(np.mean(np.square(indata)))))
-
-
-def start_recording() -> None:
-    """Start een nieuwe microfoonopname."""
-
-    global recording
-    global processing
-    global cancel_requested
-    global recording_started_at
-    global audio_stream
-    global audio_chunks
-
-    with state_lock:
-        if recording:
-            return
-
-        if processing:
-            print("\nEr wordt nog een vorige opname verwerkt.")
-            return
-
-        audio_chunks = []
-        cancel_requested = False
-        recording_started_at = time.monotonic()
-
-        try:
-            stream = sd.InputStream(
-                samplerate=SAMPLE_RATE,
-                channels=CHANNELS,
-                dtype="float32",
-                callback=audio_callback,
-                device=MICROPHONE_DEVICE,
-            )
-
-            audio_stream = stream
-            recording = True
-            stream.start()
-
-        except Exception as exc:
-            recording = False
-            recording_started_at = None
-            audio_stream = None
-
-            print()
-            print("De microfoonopname kon niet worden gestart.")
-            print(f"Foutmelding: {exc}")
-            print()
-            print("Controleer:")
-            print("- of Windows microfoontoegang toestaat;")
-            print("- of de juiste standaardmicrofoon is geselecteerd;")
-            print("- of MICROPHONE_DEVICE correct is ingesteld.")
-            return
-
-    reset_levels()
-    notify_state(RecordingState.RECORDING, MODE)
-
-    print()
-    print("● OPNAME GESTART")
-    print("  Spreek nu.")
-    print(
-        "  Stop met Ctrl + Shift + Alt + Spatie "
-        "of met Esc."
-    )
-
-
-def stop_audio_stream() -> None:
-    """Stopt en sluit de actieve microfoonstream."""
-
-    global audio_stream
-
-    stream: sd.InputStream | None
-
-    with state_lock:
-        stream = audio_stream
-        audio_stream = None
-
-    if stream is None:
-        return
-
-    try:
-        stream.stop()
-    except Exception as exc:
-        print(f"Waarschuwing bij stoppen microfoon: {exc}")
-
-    try:
-        stream.close()
-    except Exception as exc:
-        print(f"Waarschuwing bij sluiten microfoon: {exc}")
-
-
-def stop_recording_and_transcribe() -> None:
-    """
-    Stopt de opname en start de transcriptie in een aparte thread.
-    """
-
-    global recording
-    global processing
-    global recording_started_at
-
-    with state_lock:
-        if not recording:
-            return
-
-        recording = False
-
-        started_at = recording_started_at
-        recording_started_at = None
-
-    stop_audio_stream()
-
-    duration = 0.0
-
-    if started_at is not None:
-        duration = time.monotonic() - started_at
-
-    print()
-    print(f"■ OPNAME GESTOPT ({duration:.1f} seconden)")
-
-    if duration < MINIMUM_RECORDING_SECONDS:
-        with state_lock:
-            audio_chunks.clear()
-
-        notify_state(RecordingState.IDLE)
-        print("De opname was te kort en wordt niet verwerkt.")
-        print_ready_message()
-        return
-
-    with state_lock:
-        if not audio_chunks:
-            notify_state(RecordingState.IDLE)
-            print("Er is geen audio opgenomen.")
-            print_ready_message()
-            return
-
-        processing = True
-
-        # Maak een kopie zodat een latere opname deze data
-        # niet kan wijzigen.
-        chunks_to_process = [
-            chunk.copy()
-            for chunk in audio_chunks
-        ]
-
-        audio_chunks.clear()
-
-    notify_state(RecordingState.TRANSCRIBING, MODE)
-
-    thread = threading.Thread(
-        target=transcribe_audio,
-        args=(chunks_to_process,),
-        daemon=True,
-    )
-    thread.start()
-
-
-def cancel_recording() -> None:
-    """
-    Annuleert de opname.
-
-    Er wordt niets getranscribeerd en niets geplakt.
-    """
-
-    global recording
-    global cancel_requested
-    global recording_started_at
-
-    with state_lock:
-        if not recording:
-            return
-
-        cancel_requested = True
-        recording = False
-        recording_started_at = None
-        audio_chunks.clear()
-
-    stop_audio_stream()
-
-    notify_state(RecordingState.CANCELLED)
-
-    print()
-    print("× OPNAME GEANNULEERD")
-    print("Er wordt niets getranscribeerd of geplakt.")
-    print_ready_message()
-
-
-# =========================================================
-# TRANSCRIPTIE
-# =========================================================
-
-def create_temporary_wav(
-    chunks: list[np.ndarray],
-) -> Path:
-    """Maakt van de opgenomen audioblokken een tijdelijk WAV-bestand."""
-
-    if not chunks:
-        raise ValueError("Er zijn geen audioblokken ontvangen.")
-
-    audio = np.concatenate(chunks, axis=0)
-
-    # Maak een mono-array.
-    audio = audio.reshape(-1)
-
-    # sounddevice levert float32-waarden van ongeveer -1 tot 1.
-    # WAV wordt hier opgeslagen als 16-bit PCM.
-    audio_int16 = np.int16(
-        np.clip(audio, -1.0, 1.0) * 32767
-    )
-
-    temporary_file = tempfile.NamedTemporaryFile(
-        prefix="whisper_dictation_",
-        suffix=".wav",
-        delete=False,
-    )
-    temporary_file.close()
-
-    temporary_path = Path(temporary_file.name)
-
-    write_wav(
-        temporary_path,
-        SAMPLE_RATE,
-        audio_int16,
-    )
-
-    return temporary_path
-
-
-def transcribe_audio(
-    chunks: list[np.ndarray],
-) -> None:
-    """Transcribeert de opgenomen audio lokaal met Faster-Whisper."""
-
-    global processing
-
-    temporary_path: Path | None = None
-    final_state = RecordingState.IDLE
-
-    try:
-        print("Transcriptie wordt lokaal uitgevoerd...")
-
-        temporary_path = create_temporary_wav(chunks)
-
-        segments, info = model.transcribe(
-            str(temporary_path),
-            language=LANGUAGE,
-            beam_size=5,
-            vad_filter=True,
-            vad_parameters={
-                "min_silence_duration_ms": 300,
-            },
-            condition_on_previous_text=False,
-        )
-
-        # Faster-Whisper geeft segments als generator terug.
-        # De transcriptie wordt daadwerkelijk uitgevoerd
-        # wanneer we door de generator itereren.
-        text_parts: list[str] = []
-
-        for segment in segments:
-            text = segment.text.strip()
-
-            if text:
-                text_parts.append(text)
-
-        transcript = " ".join(text_parts).strip()
-
-        if not transcript:
-            print()
-            print("Er is geen gesproken tekst herkend.")
-            return
-
-        print()
-        print("-" * 60)
-        print("TRANSCRIPTIE")
-        print("-" * 60)
-        print(transcript)
-        print("-" * 60)
-
-        # Fallback laag 1: transcript direct naar schijf, vóór klembord en
-        # plakken. Zo overleeft de tekst een mislukte plakactie, een defect
-        # klembord én een crash daarna.
-        saved_path: Path | None = None
-        try:
-            saved_path = recovery.save_transcript(transcript)
-            print(f"Transcript opgeslagen: {saved_path}")
-        except OSError as exc:
-            print(f"Waarschuwing: transcript kon niet worden opgeslagen: {exc}")
-
-        # Klembord apart afvangen: een defect klembord mag niet als
-        # "transcriptiefout" worden gemeld en mag de audio niet onnodig
-        # als herstelbestand bewaren.
-        try:
-            pyperclip.copy(transcript)
-            print("De tekst staat op het klembord.")
-        except Exception as exc:
-            print(f"Waarschuwing: kopiëren naar klembord is mislukt: {exc}")
-            if saved_path is not None:
-                print(f"De tekst is wel bewaard: {saved_path}")
-
-        if AUTO_PASTE:
-            wait_until_modifier_keys_released()
-            time.sleep(PASTE_DELAY_SECONDS)
-
-            try:
-                host.paste()
-                print("De tekst is in het actieve invoerveld geplakt.")
-
-            except Exception as exc:
-                print("Automatisch plakken is mislukt.")
-                print(f"Foutmelding: {exc}")
-                print("De tekst staat nog wel op het klembord.")
-                if saved_path is not None:
-                    print(f"En is bewaard als: {saved_path}")
-
-    except Exception as exc:
-        final_state = RecordingState.ERROR
-        print()
-        print("Er is een fout opgetreden tijdens de transcriptie.")
-        print(f"Foutmelding: {exc}")
-
-    finally:
-        if temporary_path is not None and temporary_path.exists():
-            if final_state == RecordingState.ERROR:
-                # Fallback laag 2: bij een transcriptiefout de audio niet
-                # weggooien maar bewaren, zodat later opnieuw getranscribeerd
-                # kan worden.
-                try:
-                    kept = recovery.preserve_audio(temporary_path)
-                    print(f"De opname is bewaard voor herstel: {kept}")
-                except OSError as exc:
-                    print(
-                        "Waarschuwing: audio kon niet worden bewaard "
-                        f"voor herstel: {exc}"
-                    )
-            elif DELETE_TEMP_AUDIO:
-                try:
-                    os.remove(temporary_path)
-                except OSError as exc:
-                    print(
-                        "Waarschuwing: tijdelijk audiobestand "
-                        f"kon niet worden verwijderd: {exc}"
-                    )
-
-        with state_lock:
-            processing = False
-
-        notify_state(final_state)
-        print_ready_message()
-
-
-# =========================================================
-# MELDINGEN
-# =========================================================
-
 def print_ready_message() -> None:
     """Toont dat het programma weer beschikbaar is."""
 
@@ -813,6 +419,40 @@ def print_ready_message() -> None:
         f"Gereed. Druk {hotkeys.format_hotkey(HOTKEY_TOKENS)} "
         "om een opname te starten."
     )
+
+
+def _copy_to_clipboard(text: str) -> None:
+    """Kopieert tekst via het lazy geladen pyperclip."""
+
+    if pyperclip is None:
+        raise RuntimeError("pyperclip is nog niet geladen.")
+    pyperclip.copy(text)
+
+
+def _build_session() -> Opnamesessie:
+    """Bouwt de Opnamesessie met de huidige config en geïnjecteerde seams."""
+
+    return Opnamesessie(
+        host=host.default,
+        sample_rate=SAMPLE_RATE,
+        channels=CHANNELS,
+        microphone_device=MICROPHONE_DEVICE,
+        minimum_recording_seconds=MINIMUM_RECORDING_SECONDS,
+        auto_paste=AUTO_PASTE,
+        paste_delay_seconds=PASTE_DELAY_SECONDS,
+        language=LANGUAGE,
+        delete_temp_audio=DELETE_TEMP_AUDIO,
+        mode=MODE,
+        wait_until_modifiers_clear=wait_until_modifier_keys_released,
+        on_ready=print_ready_message,
+        copy_text=_copy_to_clipboard,
+        save_transcript=recovery.save_transcript,
+        preserve_audio=recovery.preserve_audio,
+    )
+
+
+# Sessiewording bij import (na config); audio-libs en model komen later.
+session = _build_session()
 
 
 # =========================================================
@@ -866,16 +506,13 @@ def on_press(
 
     # Escape afhandelen voordat de sneltoets wordt gecontroleerd.
     if key == keyboard.Key.esc:
-        with state_lock:
-            is_recording = recording
-
-        if not is_recording:
+        if not session.is_recording:
             return
 
         if shift_is_pressed():
-            cancel_recording()
+            session.cancel()
         else:
-            stop_recording_and_transcribe()
+            session.stop_and_transcribe()
 
         return
 
@@ -887,8 +524,8 @@ def on_press(
             return
 
         toggle_latched = True
-        is_recording = recording
-        is_processing = processing
+        is_recording = session.is_recording
+        is_processing = session.is_processing
 
     if MODE == "ptt":
         # Push-to-talk: ingedrukt houden neemt op; loslaten stopt (on_release).
@@ -896,18 +533,18 @@ def on_press(
             print("\nDe vorige opname wordt nog verwerkt.")
         elif not is_recording:
             print("\nDicteren (push-to-talk) gestart.")
-            start_recording()
+            session.start()
 
     else:
         # Toggle: dezelfde sneltoets wisselt tussen starten en stoppen.
         if is_recording:
             print("\nDicteren wordt gestopt via de sneltoets.")
-            stop_recording_and_transcribe()
+            session.stop_and_transcribe()
         elif is_processing:
             print("\nDe vorige opname wordt nog verwerkt.")
         else:
             print("\nDicteren wordt gestart via de sneltoets.")
-            start_recording()
+            session.start()
 
 
 def on_release(
@@ -940,12 +577,9 @@ def on_release(
 
         # Push-to-talk: zodra de sneltoets wordt losgelaten, stoppen.
         if MODE == "ptt" and was_latched:
-            with state_lock:
-                is_recording = recording
-
-            if is_recording:
+            if session.is_recording:
                 print("\nDicteren (push-to-talk) gestopt.")
-                stop_recording_and_transcribe()
+                session.stop_and_transcribe()
 
 
 # =========================================================
@@ -997,6 +631,11 @@ def apply_settings(
     new_hotkey = new_settings.get("hotkey")
     if isinstance(new_hotkey, list) and new_hotkey:
         HOTKEY_TOKENS = {str(token) for token in new_hotkey}
+
+    # Houd de Opnamesessie synchroon met live-instellingen.
+    session.microphone_device = MICROPHONE_DEVICE
+    session.auto_paste = AUTO_PASTE
+    session.mode = MODE
 
     config.save_config(
         {
@@ -1059,6 +698,8 @@ def main() -> None:
         print(f"Foutmelding: {exc}")
         raise SystemExit(1) from exc
 
+    session.model = model
+
     print("Model geladen. Klaar voor gebruik.")
     print(
         f"Bediening ({MODE}): {hotkeys.format_hotkey(HOTKEY_TOKENS)} "
@@ -1118,12 +759,12 @@ def main() -> None:
         tray.stop()
 
         with state_lock:
-            active_recording = recording
+            active_recording = session.is_recording
 
         if active_recording:
-            cancel_recording()
+            session.cancel()
 
-        stop_audio_stream()
+        session.stop_audio_stream()
         indicator.destroy()
 
 

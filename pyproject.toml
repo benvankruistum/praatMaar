@@ -55,6 +55,7 @@ py-modules = [
     "splash",
     "tray",
     "app_logging",
+    "opnamesessie",
 ]
 packages = ["host"]
 

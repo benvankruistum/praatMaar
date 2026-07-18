@@ -15,7 +15,9 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 - Bestandslogging naar `%APPDATA%\praatMaar\praatMaar.log` (`app_logging.py`)
 - Basis-pytest suite en GitHub Actions (Windows)
 - `docs/STATUS.md`; verouderde handoffs gearchiveerd
+- `Opnamesessie` (`opnamesessie.py`) — dicteercyclus los van `dictation.py`
 
 ### Changed
 
 - Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
+- `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`

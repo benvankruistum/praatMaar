@@ -48,6 +48,7 @@ hiddenimports += [
     "tray",
     "indicator",
     "hotkeys",
+    "opnamesessie",
     # Platform-seam: de adapters worden lazy (in host._select) geïmporteerd,
     # dus expliciet opnemen zodat ze zeker in de bundle zitten.
     "host",
