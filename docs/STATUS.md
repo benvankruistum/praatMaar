@@ -27,6 +27,7 @@ Geïmplementeerd (code); runtime-verificatie op een Mac staat nog open:
 - Tray op main thread (`TrayIcon.owns_main_thread` + `run()`)
 - Native overlay-indicator (`indicator._mac`, NSPanel / ADR-0002)
 - UI-polish (fonts, Control/Option/Command-labels, settings-teksten)
+- Instellingen in apart Tk-proces (voorkomt Cocoa/Tk SIGABRT bij sluiten)
 - TCC-docs: [macos-permissions.md](macos-permissions.md)
 - Build-docs: [release-macos.md](release-macos.md), `packaging/macos/entitlements.plist`
 

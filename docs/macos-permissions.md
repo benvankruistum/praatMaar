@@ -28,6 +28,10 @@ Apple dwingt af dat TSM/HIToolbox alleen op de main thread mag. `pynput` doet
 dat vanaf een achtergrondthread en **crasht** (SIGTRAP). praatMaar gebruikt
 daarom op Mac `mac_input.QuartzKeyListener` (AppKit) i.p.v. pynput.
 
+Instellingen draait in een **apart Tk-proces** (`settings_process.py`). Een
+tkinter-dialoog in dezelfde Cocoa-runloop als pystray/NSApp crasht bij sluiten
+(`PyEval_RestoreThread` → SIGABRT).
+
 ## `.app`-bundle
 
 In `praatMaar.spec` staat `NSMicrophoneUsageDescription` in de Info.plist zodat

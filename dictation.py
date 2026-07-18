@@ -866,6 +866,26 @@ def main() -> None:
     def open_settings() -> None:
         # Lazy import: settings.py trekt zelf sounddevice binnen; die is op dit
         # punt (na de splash) allang geladen, dus deze import is direct.
+        if sys.platform == "darwin":
+            # Apart Tk-proces: een Toplevel in pystray's NSApp-runloop crasht
+            # bij sluiten (PyEval_RestoreThread → SIGABRT op macOS 26+).
+            from settings_process import run_settings_subprocess
+
+            def _mac_settings() -> None:
+                # Onderdruk dicteer-hotkeys terwijl Instellingen open is.
+                set_capture(lambda *_: None)
+                try:
+                    new = run_settings_subprocess(current_settings())
+                finally:
+                    set_capture(None)
+                if new is not None:
+                    indicator.call_on_main(
+                        lambda: apply_settings(new, indicator)
+                    )
+
+            threading.Thread(target=_mac_settings, daemon=True).start()
+            return
+
         from settings import open_settings_dialog
 
         indicator.call_on_main(
@@ -955,4 +975,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Frozen macOS: Instellingen-UI als apart proces (zelfde binary).
+    if "--praatmaar-settings-ui" in sys.argv:
+        from settings_process import main as settings_ui_main
+
+        raise SystemExit(settings_ui_main(sys.argv[1:]))
     main()

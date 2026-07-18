@@ -152,11 +152,12 @@ class QuartzKeyListener:
     ) -> None:
         self._on_press = on_press
         self._on_release = on_release
-        self._monitor: Any = None
+        self._global_monitor: Any = None
+        self._local_monitor: Any = None
         self._mod_down: set[str] = set()
 
     def start(self) -> None:
-        if self._monitor is not None:
+        if self._global_monitor is not None or self._local_monitor is not None:
             return
 
         from AppKit import (  # type: ignore[import-not-found]
@@ -168,32 +169,48 @@ class QuartzKeyListener:
 
         mask = NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskFlagsChanged
 
-        def handler(event: Any) -> None:
+        def global_handler(event: Any) -> None:
             try:
                 self._handle(event)
             except Exception:
                 pass
 
-        self._monitor = NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(
-            mask, handler
+        def local_handler(event: Any) -> Any:
+            # Lokale monitor: events terwijl onze app/venster focus heeft
+            # (globale monitors krijgen die niet). Event doorgeven.
+            try:
+                self._handle(event)
+            except Exception:
+                pass
+            return event
+
+        self._global_monitor = NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(
+            mask, global_handler
         )
-        if self._monitor is None:
+        self._local_monitor = NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
+            mask, local_handler
+        )
+        if self._global_monitor is None and self._local_monitor is None:
             raise RuntimeError(
-                "Kon geen globale toetsenmonitor starten. "
+                "Kon geen toetsenmonitor starten. "
                 "Zet Toegankelijkheid aan voor Terminal (of de .app) in "
                 "Systeeminstellingen → Privacy en beveiliging."
             )
 
     def stop(self) -> None:
-        if self._monitor is None:
+        if self._global_monitor is None and self._local_monitor is None:
             return
         try:
             from AppKit import NSEvent  # type: ignore[import-not-found]
 
-            NSEvent.removeMonitor_(self._monitor)
+            if self._global_monitor is not None:
+                NSEvent.removeMonitor_(self._global_monitor)
+            if self._local_monitor is not None:
+                NSEvent.removeMonitor_(self._local_monitor)
         except Exception:
             pass
-        self._monitor = None
+        self._global_monitor = None
+        self._local_monitor = None
         self._mod_down.clear()
 
     def _handle(self, event: Any) -> None:

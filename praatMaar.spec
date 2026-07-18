@@ -39,6 +39,7 @@ if sys.platform == "darwin":
     _COLLECT.append("objc")
     _COLLECT.append("AppKit")
     _COLLECT.append("Foundation")
+    _COLLECT.append("Quartz")
 
 for _pkg in _COLLECT:
     try:
@@ -57,6 +58,7 @@ hiddenimports += [
     "help_dialog",
     "recovery",
     "settings",
+    "settings_process",
     "splash",
     "tray",
     "indicator",

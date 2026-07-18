@@ -53,9 +53,9 @@ class RecordingIndicator:
     """
     Native status-pill op macOS (NSPanel).
 
-    `root` is een verborgen tkinter-root — alleen als parent voor het
-    instellingen-dialoog (`settings.open_settings_dialog`). De pill zelf is
-    AppKit. Tk-events worden in de poll-tick via `update()` verwerkt.
+    Pure AppKit — geen tkinter. Instellingen draait in een apart Tk-proces
+    (`settings_process.run_settings_subprocess`) om Cocoa/Tk-runloop-crashes
+    te vermijden.
     """
 
     def __init__(self, position: str = "boven-midden") -> None:
@@ -80,10 +80,9 @@ class RecordingIndicator:
                 NSWindowStyleMaskNonactivatingPanel,
             )
             from Foundation import NSMakeRect, NSTimer  # type: ignore[import-not-found]
-            import tkinter as tk
         except Exception as exc:
             raise SystemExit(
-                "De macOS-indicator vereist PyObjC (AppKit) en tkinter. "
+                "De macOS-indicator vereist PyObjC (AppKit). "
                 f"Installeer met: pip install 'pyobjc-framework-Cocoa'. ({exc})"
             ) from exc
 
@@ -102,7 +101,6 @@ class RecordingIndicator:
             NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
         )
 
-        self._tk = tk
         self._state = RecordingState.IDLE
         self._mode = "toggle"
         self._frame = 0
@@ -118,11 +116,6 @@ class RecordingIndicator:
         self._ticks_started = False
 
         try:
-            # Verborgen Tk-root voor settings-Toplevel.
-            self.root = tk.Tk()
-            self.root.withdraw()
-            self.root.title("praatMaar")
-
             self._build_panel()
             self.set_position(position)
         except Exception as exc:
@@ -312,12 +305,6 @@ class RecordingIndicator:
         except Exception:
             pass
 
-        # Tk-events voor het instellingen-venster (deelt geen eigen mainloop).
-        try:
-            self.root.update()
-        except Exception:
-            pass
-
         if self._hide_deadline_ms is not None:
             self._hide_elapsed_ms += POLL_INTERVAL_MS
             if self._hide_elapsed_ms >= self._hide_deadline_ms:
@@ -403,10 +390,6 @@ class RecordingIndicator:
         try:
             self._panel.orderOut_(None)
             self._panel.close()
-        except Exception:
-            pass
-        try:
-            self.root.destroy()
         except Exception:
             pass
 

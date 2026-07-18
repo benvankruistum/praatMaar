@@ -58,6 +58,7 @@ py-modules = [
     "hotkeys",
     "recovery",
     "settings",
+    "settings_process",
     "splash",
     "tray",
     "app_logging",

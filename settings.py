@@ -3,13 +3,17 @@ Instellingen-dialoog voor praatMaar (tkinter `Toplevel`).
 
 Geopend vanuit het systeemvak-menu. Bevat o.a. microfoon, sneltoets, Whisper-
 model, spraakherkenningstaal en interfacetaal. Bij Opslaan: `on_apply(...)`.
+
+Op Windows draait het dialoog op de Tk-hoofdthread (gemarshald via
+`indicator.call_on_main`). Op macOS opent Instellingen in een apart Tk-proces
+(`settings_process.run_settings_subprocess`) — een Toplevel in dezelfde
+Cocoa-runloop als pystray/NSApp crasht bij sluiten (`PyEval_RestoreThread` →
+SIGABRT).
 """
 
 from __future__ import annotations
 
 import queue
-import tkinter as tk
-from tkinter import ttk
 from typing import Any, Callable
 
 import sounddevice as sd
@@ -20,7 +24,7 @@ import i18n
 MODELS = ["base", "small", "medium"]
 
 # Voorkomt dat er meerdere dialogen tegelijk openen.
-_open_dialog: "tk.Toplevel | None" = None
+_open_dialog: Any = None
 
 
 def _positions() -> list[tuple[str, str]]:
@@ -57,16 +61,23 @@ def _input_devices() -> list[tuple[str, "int | None"]]:
 
 
 def open_settings_dialog(
-    root: "tk.Misc",
+    root: Any,
     current: dict[str, Any],
     on_apply: Callable[[dict[str, Any]], None],
     set_capture: "Callable[[Any | None], None] | None" = None,
+    *,
+    wait: bool = False,
 ) -> None:
+    import tkinter as tk
+    from tkinter import ttk
+
     global _open_dialog
 
     if _open_dialog is not None and _open_dialog.winfo_exists():
         _open_dialog.lift()
         _open_dialog.focus_force()
+        if wait:
+            root.wait_window(_open_dialog)
         return
 
     win = tk.Toplevel(root)
@@ -332,3 +343,6 @@ def open_settings_dialog(
     win.attributes("-topmost", True)
     win.after(300, lambda: win.attributes("-topmost", False))
     win.focus_force()
+
+    if wait:
+        root.wait_window(win)
