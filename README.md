@@ -20,10 +20,11 @@ transcribeert lokaal met [Faster-Whisper](https://github.com/SYSTRAN/faster-whis
 ### macOS
 
 - macOS op Apple Silicon (arm64)
-- Python **3.10+**, Xcode CLT, Homebrew `portaudio`
+- Python **3.10+** (van [python.org](https://www.python.org/downloads/) of Xcode CLT)
 - TCC: Microfoon, Input Monitoring, Toegankelijkheid —
   [docs/macos-permissions.md](docs/macos-permissions.md)
 - Eerste start: internet voor model-download
+- Geen Homebrew/PortAudio nodig: `sounddevice` via pip bundelt PortAudio
 
 ## Installatie
 

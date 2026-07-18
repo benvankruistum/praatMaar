@@ -10,9 +10,9 @@ en [macos-permissions.md](macos-permissions.md) (TCC).
 ## Vereisten op de bouw-Mac
 
 - macOS op Apple Silicon (arm64 eerst; universal2 niet gegarandeerd door CTranslate2)
-- Xcode Command Line Tools
-- Homebrew + `brew install portaudio`
+- Xcode Command Line Tools (of Python van python.org)
 - Python 3.10+ (getest: 3.11/3.12)
+- Geen Homebrew/PortAudio nodig: `pip install sounddevice` bundelt PortAudio
 - Dependencies inclusief PyObjC:
 
   ```bash
