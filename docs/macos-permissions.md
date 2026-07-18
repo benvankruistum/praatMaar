@@ -6,6 +6,10 @@ mic, geen plakken).
 | Permissie | Waarom | Waar in Systeeminstellingen |
 |-----------|--------|-----------------------------|
 | **Microfoon** | Opname via sounddevice | Privacy en beveiliging → Microfoon |
+
+Tijdens een opname toont macOS soms een **extra** systeembrede mic-indicator
+in de menubalk (privacy). Dat is niet een tweede praatMaar. Buiten opnames houdt
+praatMaar de mic-stream **dicht** op Mac, zodat die systeemicoon weg blijft.
 | **Input Monitoring** | Globale events (sommige macOS-versies) | Privacy en beveiliging → Invoercontrole |
 | **Accessibility** | Globale sneltoets (NSEvent) + Cmd+V (Quartz) | Privacy en beveiliging → Toegankelijkheid |
 

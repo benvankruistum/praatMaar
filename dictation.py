@@ -826,7 +826,9 @@ def main() -> None:
     # handmatige start, of twee keer klikken) stopt hier — vóór het laadscherm en
     # het model — zodat er nooit twee listeners, tray-iconen of indicators komen.
     if not host.acquire_single_instance():
-        print(i18n.t("already_running"))
+        # MacHost print al een PID-hint; elders deze regel.
+        if sys.platform != "darwin":
+            print(i18n.t("already_running"))
         raise SystemExit(0)
 
     # Eerst het laadscherm: het model wordt op een achtergrond-thread geladen
@@ -845,6 +847,7 @@ def main() -> None:
 
     print(i18n.t("model.loaded"))
     # Optioneel: microfoon al openen (anders 0,5–2 s bij eerste/Bluetooth-opname).
+    # Op macOS no-op: warme stream zou de systeembrede mic-indicator permanent tonen.
     if WARM_MICROPHONE:
         session.warmup_microphone()
     print(

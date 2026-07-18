@@ -11,6 +11,7 @@ handmatig verifiëren (paste + login-item); unit-tests dekken app_dir/plist.
 
 from __future__ import annotations
 
+import os
 import plistlib
 import sys
 from pathlib import Path
@@ -45,11 +46,24 @@ class MacHost:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             # Een andere instantie houdt de grendel al vast.
+            try:
+                other = lock_path.read_text(encoding="utf-8").strip()
+            except OSError:
+                other = "?"
+            print(
+                f"Er draait al een praatMaar-proces (PID {other or '?'}). "
+                "Sluit die eerst via het menubalk-icoon → Afsluiten, "
+                "anders zie je twee microfoon-iconen."
+            )
             handle.close()
             return False
 
         # Bestand open (en dus de flock) houden voor de procesduur; het OS geeft de
         # grendel vrij zodra dit proces stopt (ook bij een crash).
+        handle.seek(0)
+        handle.truncate()
+        handle.write(str(os.getpid()))
+        handle.flush()
         self._lock = handle
         return True
 

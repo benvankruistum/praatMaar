@@ -49,3 +49,14 @@ def test_program_arguments_include_dictation_script(mac_home: Path) -> None:
     args = host._program_arguments()
     assert args[0]
     assert args[-1].endswith("dictation.py")
+
+
+def test_single_instance_writes_pid(mac_home: Path) -> None:
+    host = MacHost()
+    assert host.acquire_single_instance() is True
+    lock_path = host.app_dir() / "singleton.lock"
+    assert lock_path.is_file()
+    assert lock_path.read_text(encoding="utf-8").strip().isdigit()
+
+    other = MacHost()
+    assert other.acquire_single_instance() is False
