@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
+import i18n
 from indicator import (
     RecordingState,
     notify_state as default_notify_state,
@@ -54,6 +55,7 @@ class Opnamesessie:
         language: str = "nl",
         delete_temp_audio: bool = True,
         mode: str = "toggle",
+        warm_microphone: bool = False,
         wait_until_modifiers_clear: Callable[[], None] | None = None,
         on_ready: Callable[[], None] | None = None,
         notify: Callable[..., None] | None = None,
@@ -73,6 +75,7 @@ class Opnamesessie:
         self.language = language
         self.delete_temp_audio = delete_temp_audio
         self.mode = mode
+        self.warm_microphone = warm_microphone
 
         self.wait_until_modifiers_clear = wait_until_modifiers_clear or (lambda: None)
         self.on_ready = on_ready or (lambda: None)
@@ -88,6 +91,12 @@ class Opnamesessie:
         self._processing = False
         self._recording_started_at: float | None = None
         self._audio_stream: Any | None = None
+        # Warm-stream gezondheid: Bluetooth-reconnect laat soms een "zombie"
+        # InputStream achter (object bestaat, active=False of geen callbacks).
+        self._stream_opened_at: float | None = None
+        self._last_audio_callback_at: float | None = None
+        # Geen callbacks langer dan dit → stream als dood beschouwen.
+        self._stream_stale_after_seconds = 1.5
         self._audio_chunks: list[Any] = []
 
         self.model: Any | None = None
@@ -112,15 +121,24 @@ class Opnamesessie:
         """
         Opent de microfoonstream alvast (na model-load).
 
-        Zonder dit kost de eerste InputStream.open op Windows vaak 0,5–2 s
-        (zeker Bluetooth), terwijl je al praat. Warm houden = opname start meteen.
+        Alleen als `warm_microphone` aan staat. Zonder warmup kost de eerste
+        InputStream.open op Windows vaak 0,5–2 s (zeker Bluetooth).
         """
+
+        if not self.warm_microphone:
+            return
 
         try:
             self._ensure_stream()
-            print("Microfoon warm — opname start zonder wachttijd.")
+            print(i18n.t("mic.warm"))
         except Exception as exc:
-            print(f"Microfoon-warmup mislukt (opname probeert het later opnieuw): {exc}")
+            print(i18n.t("mic.warm_failed", error=exc))
+
+    def _release_stream_if_cold(self) -> None:
+        """Sluit de stream na een sessie tenzij warm houden aan staat."""
+
+        if not self.warm_microphone:
+            self.stop_audio_stream()
 
     def refresh_input_device(self) -> None:
         """Sluit de warme stream zodat een gewijzigde microfoon opnieuw opent."""
@@ -142,8 +160,31 @@ class Opnamesessie:
             raise RuntimeError("Audio-libraries zijn nog niet gekoppeld (bind_audio).")
         return self._np, self._sd, self._write_wav
 
+    def _stream_is_alive(self) -> bool:
+        """True als de warme InputStream nog bruikbaar lijkt."""
+
+        stream = self._audio_stream
+        if stream is None:
+            return False
+        if not getattr(stream, "active", True):
+            return False
+
+        now = time.monotonic()
+        opened_at = self._stream_opened_at
+        if opened_at is not None and (now - opened_at) < self._stream_stale_after_seconds:
+            # Net geopend: wacht op eerste callbacks.
+            return True
+
+        last = self._last_audio_callback_at
+        if last is None:
+            return False
+        return (now - last) <= self._stream_stale_after_seconds
+
     def _ensure_stream(self) -> None:
-        """Start één InputStream als die nog niet loopt. Open gebeurt buiten de lock."""
+        """Start één InputStream als die nog niet loopt. Heropent dode warme streams."""
+
+        if self._audio_stream is not None and not self._stream_is_alive():
+            self.stop_audio_stream()
 
         with self._lock:
             if self._audio_stream is not None:
@@ -173,6 +214,8 @@ class Opnamesessie:
                     pass
                 return
             self._audio_stream = stream
+            self._stream_opened_at = time.monotonic()
+            self._last_audio_callback_at = None
 
     def audio_callback(
         self,
@@ -182,6 +225,8 @@ class Opnamesessie:
         status: Any,
     ) -> None:
         """sounddevice-callback: buffer + RMS voor de indicator (alleen tijdens opname)."""
+
+        self._last_audio_callback_at = time.monotonic()
 
         np = self._np
         if status:
@@ -210,18 +255,16 @@ class Opnamesessie:
         try:
             info = sd.query_devices(chosen)
         except Exception as exc:
-            print(
-                f"Microfoon-apparaat {chosen} is ongeldig ({exc}); "
-                "val terug op Windows-standaard."
-            )
+            print(i18n.t("rec.device_invalid", device=chosen, error=exc))
             self.microphone_device = None
             return None
 
         if int(info.get("max_input_channels", 0) or 0) <= 0:
-            print(
-                f"Apparaat {chosen} ({info.get('name', '?')}) heeft geen "
-                "microfooningang; val terug op Windows-standaard."
-            )
+            print(i18n.t(
+                "rec.device_no_input",
+                device=chosen,
+                name=info.get("name", "?"),
+            ))
             self.microphone_device = None
             return None
 
@@ -235,7 +278,7 @@ class Opnamesessie:
                 return
 
             if self._processing:
-                print("\nEr wordt nog een vorige opname verwerkt.")
+                print("\n" + i18n.t("rec.busy"))
                 return
 
             self._audio_chunks = []
@@ -254,20 +297,20 @@ class Opnamesessie:
                 self._recording_started_at = None
                 self._audio_chunks.clear()
             print()
-            print("De microfoonopname kon niet worden gestart.")
-            print(f"Foutmelding: {exc}")
+            print(i18n.t("rec.start_failed"))
+            print(i18n.t("rec.error", error=exc))
             print()
-            print("Controleer:")
-            print("- of Windows microfoontoegang toestaat;")
-            print("- of de juiste standaardmicrofoon is geselecteerd;")
-            print("- of de microfoon in Instellingen correct is ingesteld.")
+            print(i18n.t("rec.check_header"))
+            print(i18n.t("rec.check_privacy"))
+            print(i18n.t("rec.check_default"))
+            print(i18n.t("rec.check_settings"))
             self._notify(RecordingState.ERROR)
             return
 
         print()
-        print("● OPNAME GESTART")
-        print("  Spreek nu.")
-        print("  Stop met de sneltoets of met Esc.")
+        print(i18n.t("rec.started"))
+        print(i18n.t("rec.speak"))
+        print(i18n.t("rec.stop_hint"))
 
     def stop_audio_stream(self) -> None:
         """Stopt en sluit de warme microfoonstream (alleen bij afsluiten / mic-wissel)."""
@@ -275,6 +318,8 @@ class Opnamesessie:
         with self._lock:
             stream = self._audio_stream
             self._audio_stream = None
+            self._stream_opened_at = None
+            self._last_audio_callback_at = None
 
         if stream is None:
             return
@@ -290,7 +335,7 @@ class Opnamesessie:
             print(f"Waarschuwing bij sluiten microfoon: {exc}")
 
     def stop_and_transcribe(self) -> None:
-        """Stopt de opname en start de transcriptie; microfoonstream blijft open."""
+        """Stopt de opname en start de transcriptie."""
 
         with self._lock:
             if not self._recording:
@@ -305,26 +350,35 @@ class Opnamesessie:
             duration = time.monotonic() - started_at
 
         print()
-        print(f"■ OPNAME GESTOPT ({duration:.1f} seconden)")
+        print(i18n.t("rec.stopped", seconds=f"{duration:.1f}"))
 
         if duration < self.minimum_recording_seconds:
             with self._lock:
                 self._audio_chunks.clear()
             self._notify(RecordingState.IDLE)
-            print("De opname was te kort en wordt niet verwerkt.")
+            print(i18n.t("rec.too_short"))
+            self._release_stream_if_cold()
             self.on_ready()
             return
 
         with self._lock:
-            if not self._audio_chunks:
-                self._notify(RecordingState.IDLE)
-                print("Er is geen audio opgenomen.")
-                self.on_ready()
-                return
+            chunks_empty = not self._audio_chunks
+            if not chunks_empty:
+                self._processing = True
+                chunks_to_process = [chunk.copy() for chunk in self._audio_chunks]
+                self._audio_chunks.clear()
 
-            self._processing = True
-            chunks_to_process = [chunk.copy() for chunk in self._audio_chunks]
-            self._audio_chunks.clear()
+        if chunks_empty:
+            self._notify(RecordingState.IDLE)
+            print(i18n.t("rec.no_audio"))
+            # Vaak een dode warme stream na Bluetooth reconnect — heropen bij
+            # de volgende start i.p.v. dezelfde zombie te hergebruiken.
+            self.refresh_input_device()
+            self.on_ready()
+            return
+
+        # Koude modus: stream mag dicht zodra de chunks veilig gekopieerd zijn.
+        self._release_stream_if_cold()
 
         self._notify(RecordingState.TRANSCRIBING, self.mode)
 
@@ -336,7 +390,7 @@ class Opnamesessie:
         thread.start()
 
     def cancel(self) -> None:
-        """Annuleert de opname zonder transcriptie of plakken; stream blijft warm."""
+        """Annuleert de opname zonder transcriptie of plakken."""
 
         with self._lock:
             if not self._recording:
@@ -349,8 +403,9 @@ class Opnamesessie:
         self._notify(RecordingState.CANCELLED)
 
         print()
-        print("× OPNAME GEANNULEERD")
-        print("Er wordt niets getranscribeerd of geplakt.")
+        print(i18n.t("rec.cancelled"))
+        print(i18n.t("rec.cancelled_detail"))
+        self._release_stream_if_cold()
         self.on_ready()
 
     def create_temporary_wav(self, chunks: list[Any]) -> Path:
@@ -381,7 +436,7 @@ class Opnamesessie:
         final_state = RecordingState.IDLE
 
         try:
-            print("Transcriptie wordt lokaal uitgevoerd...")
+            print(i18n.t("rec.transcribing"))
 
             if self.model is None:
                 raise RuntimeError("Whisper-model is niet geladen.")
@@ -405,12 +460,12 @@ class Opnamesessie:
             transcript = " ".join(text_parts).strip()
             if not transcript:
                 print()
-                print("Er is geen gesproken tekst herkend.")
+                print(i18n.t("rec.no_speech"))
                 return
 
             print()
             print("-" * 60)
-            print("TRANSCRIPTIE")
+            print(i18n.t("rec.transcript_header"))
             print("-" * 60)
             print(transcript)
             print("-" * 60)
@@ -419,41 +474,37 @@ class Opnamesessie:
             if self._save_transcript is not None:
                 try:
                     saved_path = self._save_transcript(transcript)
-                    print(f"Transcript opgeslagen: {saved_path}")
+                    print(i18n.t("rec.saved", path=saved_path))
                 except OSError as exc:
-                    print(
-                        f"Waarschuwing: transcript kon niet worden opgeslagen: {exc}"
-                    )
+                    print(i18n.t("rec.save_warn", error=exc))
 
             if self._copy_text is not None:
                 try:
                     self._copy_text(transcript)
-                    print("De tekst staat op het klembord.")
+                    print(i18n.t("rec.clipboard"))
                 except Exception as exc:
-                    print(
-                        f"Waarschuwing: kopiëren naar klembord is mislukt: {exc}"
-                    )
+                    print(i18n.t("rec.clipboard_warn", error=exc))
                     if saved_path is not None:
-                        print(f"De tekst is wel bewaard: {saved_path}")
+                        print(i18n.t("rec.saved_anyway", path=saved_path))
 
             if self.auto_paste:
                 self.wait_until_modifiers_clear()
                 time.sleep(self.paste_delay_seconds)
                 try:
                     self.host.paste()
-                    print("De tekst is in het actieve invoerveld geplakt.")
+                    print(i18n.t("rec.pasted"))
                 except Exception as exc:
-                    print("Automatisch plakken is mislukt.")
-                    print(f"Foutmelding: {exc}")
-                    print("De tekst staat nog wel op het klembord.")
+                    print(i18n.t("rec.paste_failed"))
+                    print(i18n.t("rec.error", error=exc))
+                    print(i18n.t("rec.still_clipboard"))
                     if saved_path is not None:
-                        print(f"En is bewaard als: {saved_path}")
+                        print(i18n.t("rec.and_saved", path=saved_path))
 
         except Exception as exc:
             final_state = RecordingState.ERROR
             print()
-            print("Er is een fout opgetreden tijdens de transcriptie.")
-            print(f"Foutmelding: {exc}")
+            print(i18n.t("rec.transcribe_error"))
+            print(i18n.t("rec.error", error=exc))
 
         finally:
             if temporary_path is not None and temporary_path.exists():
@@ -461,7 +512,7 @@ class Opnamesessie:
                     if self._preserve_audio is not None:
                         try:
                             kept = self._preserve_audio(temporary_path)
-                            print(f"De opname is bewaard voor herstel: {kept}")
+                            print(i18n.t("rec.recovery_saved", path=kept))
                         except OSError as exc:
                             print(
                                 "Waarschuwing: audio kon niet worden bewaard "

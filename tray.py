@@ -20,6 +20,7 @@ import pystray
 from PIL import Image, ImageDraw
 from pystray import Menu, MenuItem
 
+import i18n
 from indicator import RecordingState
 
 # Kleuren per toestand (RGBA), afgestemd op de pill.
@@ -33,12 +34,12 @@ _STATE_COLORS: dict[RecordingState, tuple[int, int, int, int]] = {
     RecordingState.ERROR: (255, 82, 82, 255),         # rood
 }
 
-_STATE_TOOLTIPS: dict[RecordingState, str] = {
-    RecordingState.IDLE: "praatMaar — gereed",
-    RecordingState.RECORDING: "praatMaar — opname",
-    RecordingState.TRANSCRIBING: "praatMaar — transcriberen",
-    RecordingState.CANCELLED: "praatMaar — geannuleerd",
-    RecordingState.ERROR: "praatMaar — fout",
+_TOOLTIP_KEYS: dict[RecordingState, str] = {
+    RecordingState.IDLE: "tray.tooltip.idle",
+    RecordingState.RECORDING: "tray.tooltip.recording",
+    RecordingState.TRANSCRIBING: "tray.tooltip.transcribing",
+    RecordingState.CANCELLED: "tray.tooltip.cancelled",
+    RecordingState.ERROR: "tray.tooltip.error",
 }
 
 ICON_SIZE = 64
@@ -50,25 +51,25 @@ def _make_icon(color: tuple[int, int, int, int]) -> Image.Image:
     img = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    scale = ICON_SIZE / 24.0  # het ontwerp is in een 24px-raster
+    scale = ICON_SIZE / 24.0
 
     def s(value: float) -> float:
         return value * scale
 
     width = max(1, int(s(2)))
 
-    # Microfoon-capsule (afgeronde rechthoek).
     draw.rounded_rectangle(
         [s(9), s(3), s(15), s(14)], radius=s(3), fill=color
     )
-    # Beugel: onderste halve cirkel rond de capsule.
     draw.arc([s(6), s(5), s(18), s(17)], start=0, end=180, fill=color, width=width)
-    # Standaard.
     draw.line([s(12), s(17), s(12), s(20)], fill=color, width=width)
-    # Voet.
     draw.line([s(9), s(20), s(15), s(20)], fill=color, width=width)
 
     return img
+
+
+def _tooltip(state: RecordingState) -> str:
+    return i18n.t(_TOOLTIP_KEYS.get(state, "tray.tooltip.idle"))
 
 
 class TrayIcon:
@@ -81,34 +82,41 @@ class TrayIcon:
     ) -> None:
         self._on_quit = on_quit
         self._on_settings = on_settings
+        self._state = RecordingState.IDLE
 
-        # Iconen vooraf renderen (één per toestand).
         self._icons = {
             state: _make_icon(color) for state, color in _STATE_COLORS.items()
         }
 
-        menu = Menu(
-            MenuItem("Instellingen", self._handle_settings, default=True),
-            Menu.SEPARATOR,
-            MenuItem("Afsluiten", self._handle_quit),
-        )
-
         self._icon = pystray.Icon(
             "praatMaar",
             icon=self._icons[RecordingState.IDLE],
-            title=_STATE_TOOLTIPS[RecordingState.IDLE],
-            menu=menu,
+            title=_tooltip(RecordingState.IDLE),
+            menu=self._build_menu(),
         )
 
-    # ----- menu-callbacks (draaien op de tray-thread) -----
+    def _build_menu(self) -> Menu:
+        return Menu(
+            MenuItem(i18n.t("tray.settings"), self._handle_settings, default=True),
+            Menu.SEPARATOR,
+            MenuItem(i18n.t("tray.quit"), self._handle_quit),
+        )
+
+    def refresh_language(self) -> None:
+        """Vernieuwt menu + tooltip na een UI-taalwissel."""
+
+        try:
+            self._icon.menu = self._build_menu()
+            self._icon.title = _tooltip(self._state)
+            self._icon.update_menu()
+        except Exception:
+            pass
 
     def _handle_settings(self, icon: "pystray.Icon", item: "MenuItem") -> None:
         self._on_settings()
 
     def _handle_quit(self, icon: "pystray.Icon", item: "MenuItem") -> None:
         self._on_quit()
-
-    # ----- levenscyclus -----
 
     def start(self) -> None:
         """Start de tray op een eigen thread (niet-blokkerend)."""
@@ -121,13 +129,12 @@ class TrayIcon:
         except Exception:
             pass
 
-    # ----- statusweergave (aangeroepen vanaf de hoofdthread via de pill) -----
-
     def set_state(self, state: RecordingState, mode: str = "toggle") -> None:
+        self._state = state
         try:
             self._icon.icon = self._icons.get(
                 state, self._icons[RecordingState.IDLE]
             )
-            self._icon.title = _STATE_TOOLTIPS.get(state, "praatMaar")
+            self._icon.title = _tooltip(state)
         except Exception:
             pass

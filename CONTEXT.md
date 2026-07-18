@@ -41,3 +41,9 @@ De kleine, altijd-zichtbare status-pill die de dicteercyclus toont zonder de foc
 te stelen van het actieve invoerveld (`indicator.py`). Op Windows via een
 `WS_EX_NOACTIVATE`-shim; de macOS-tegenhanger is nog een open vraag (zie
 `docs/archive/HANDOFF-mac-port.md` en `docs/STATUS.md`).
+
+### i18n (UI-taal)
+
+Interface-teksten via `i18n.py` en JSON onder `locales/` (`nl`/`en`/`de`).
+Config: `ui_language`. Spraakherkenning is apart: `speech_language` → Whisper
+via `Opnamesessie.language`.

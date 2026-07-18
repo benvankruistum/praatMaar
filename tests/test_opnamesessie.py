@@ -38,15 +38,19 @@ class FakeStream:
         self.started = False
         self.stopped = False
         self.closed = False
+        self.active = False
 
     def start(self) -> None:
         self.started = True
+        self.active = True
 
     def stop(self) -> None:
         self.stopped = True
+        self.active = False
 
     def close(self) -> None:
         self.closed = True
+        self.active = False
 
 
 class FakeSoundDevice:
@@ -54,10 +58,13 @@ class FakeSoundDevice:
         self.last_callback: Any = None
         self.stream = FakeStream()
         self.input_stream_calls = 0
+        self._fresh_stream_each_open = False
 
     def InputStream(self, **kwargs: Any) -> FakeStream:
         self.input_stream_calls += 1
         self.last_callback = kwargs.get("callback")
+        if self._fresh_stream_each_open or self.input_stream_calls > 1:
+            self.stream = FakeStream()
         return self.stream
 
 
@@ -106,6 +113,7 @@ def session(host: FakeHost, sd: FakeSoundDevice, states: list[RecordingState], t
         language="nl",
         delete_temp_audio=True,
         mode="toggle",
+        warm_microphone=False,
         wait_until_modifiers_clear=lambda: None,
         on_ready=lambda: None,
         notify=lambda state, mode=None: states.append(state),
@@ -141,14 +149,118 @@ def test_start_while_recording_is_noop(session: Opnamesessie, sd: FakeSoundDevic
 
 
 def test_stop_keeps_stream_warm(session: Opnamesessie, sd: FakeSoundDevice) -> None:
+    session.warm_microphone = True
     session.start()
     assert sd.input_stream_calls == 1
+    # Warme stream blijft callbacks leveren (zoals PortAudio).
+    assert sd.last_callback is not None
+    sd.last_callback(np.zeros((160, 1), dtype=np.float32), 160, None, None)
     session.stop_and_transcribe()
     assert sd.stream.started
     assert not sd.stream.stopped
     assert not sd.stream.closed
     session.start()
     assert sd.input_stream_calls == 1
+
+
+def test_stop_closes_stream_when_warm_disabled(
+    session: Opnamesessie, sd: FakeSoundDevice
+) -> None:
+    session.warm_microphone = False
+    sd._fresh_stream_each_open = True
+    session.start()
+    first = sd.stream
+    assert sd.last_callback is not None
+    sd.last_callback(np.zeros((160, 1), dtype=np.float32), 160, None, None)
+    session.stop_and_transcribe()
+    assert first.closed
+    assert session._audio_stream is None
+
+    session.start()
+    assert sd.input_stream_calls == 2
+
+
+def test_cancel_closes_stream_when_warm_disabled(
+    session: Opnamesessie, sd: FakeSoundDevice
+) -> None:
+    session.warm_microphone = False
+    session.start()
+    first = sd.stream
+    session.cancel()
+    assert first.closed
+    assert session._audio_stream is None
+
+
+def test_warmup_is_noop_when_warm_disabled(
+    session: Opnamesessie, sd: FakeSoundDevice
+) -> None:
+    session.warm_microphone = False
+    session.warmup_microphone()
+    assert sd.input_stream_calls == 0
+    assert session._audio_stream is None
+
+
+def test_start_reopens_inactive_warm_stream(
+    session: Opnamesessie, sd: FakeSoundDevice
+) -> None:
+    """Bluetooth uit/aan: PortAudio-stream blijft bestaan maar is niet meer active."""
+
+    session.warm_microphone = True
+    sd._fresh_stream_each_open = True
+    session.warmup_microphone()
+    assert sd.input_stream_calls == 1
+    first = sd.stream
+    first.active = False
+
+    session.start()
+    assert sd.input_stream_calls == 2
+    assert first.stopped and first.closed
+    assert sd.stream.started and sd.stream.active
+    assert session.is_recording
+
+
+def test_start_reopens_stale_warm_stream_without_callbacks(
+    session: Opnamesessie, sd: FakeSoundDevice, monkeypatch
+) -> None:
+    """Stream 'active' maar geen callbacks meer (klassieke BT-zombie)."""
+
+    session.warm_microphone = True
+    sd._fresh_stream_each_open = True
+    session.warmup_microphone()
+    assert sd.input_stream_calls == 1
+    first = sd.stream
+
+    # Simuleer dat open + laatste callback lang geleden waren.
+    session._stream_opened_at = 0.0
+    session._last_audio_callback_at = 0.0
+    monkeypatch.setattr(
+        "opnamesessie.time.monotonic",
+        lambda: 100.0,
+    )
+
+    session.start()
+    assert sd.input_stream_calls == 2
+    assert first.closed
+    assert session.is_recording
+
+
+def test_empty_recording_refreshes_stream_for_next_start(
+    session: Opnamesessie, sd: FakeSoundDevice
+) -> None:
+    """Geen chunks ondanks lange opname → stream afbreken voor herstel."""
+
+    sd._fresh_stream_each_open = True
+    session.minimum_recording_seconds = 0.0
+    session.start()
+    assert sd.input_stream_calls == 1
+    first = sd.stream
+    # Geen callback = geen audio.
+    session.stop_and_transcribe()
+    assert first.closed
+    assert session._audio_stream is None
+
+    session.start()
+    assert sd.input_stream_calls == 2
 
 
 def test_cancel_clears_recording(session: Opnamesessie, states: list) -> None:

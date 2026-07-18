@@ -1,18 +1,8 @@
 """
 Instellingen-dialoog voor praatMaar (tkinter `Toplevel`).
 
-Geopend vanuit het systeemvak-menu ("Instellingen"). Anders dan de pill mag dit
-venster **wel** focus pakken — je typt/kiest erin. Draait op de hoofdthread
-(gemarshald via `indicator.call_on_main`).
-
-Bevat: microfoon, pill-positie, auto-plakken, bedieningsmodus (toggle/push-to-
-talk), de sneltoets (opneembaar), automatisch meestarten en het Whisper-model.
-Bij Opslaan roept het `on_apply(new_settings)` aan; `dictation.py` bewaart en
-past toe (live waar kan; model pas na herstart).
-
-Het opnemen van een sneltoets gebruikt de globale listener van de app (via de
-`set_capture`-callback), zodat de opgeslagen combinatie exact overeenkomt met wat
-de listener herkent. hotkeys.py verzorgt de omzetting toets ↔ token ↔ label.
+Geopend vanuit het systeemvak-menu. Bevat o.a. microfoon, sneltoets, Whisper-
+model, spraakherkenningstaal en interfacetaal. Bij Opslaan: `on_apply(...)`.
 """
 
 from __future__ import annotations
@@ -25,22 +15,38 @@ from typing import Any, Callable
 import sounddevice as sd
 
 import hotkeys
+import i18n
 
 MODELS = ["base", "small", "medium"]
-POSITIONS = [("Boven-midden", "boven-midden"), ("Onder-midden", "onder-midden")]
-MODES = [
-    ("Toggle: indrukken start én stopt", "toggle"),
-    ("Push-to-talk: ingedrukt houden", "ptt"),
-]
 
 # Voorkomt dat er meerdere dialogen tegelijk openen.
 _open_dialog: "tk.Toplevel | None" = None
 
 
+def _positions() -> list[tuple[str, str]]:
+    return [
+        (i18n.t("settings.position.top"), "boven-midden"),
+        (i18n.t("settings.position.bottom"), "onder-midden"),
+    ]
+
+
+def _modes() -> list[tuple[str, str]]:
+    return [
+        (i18n.t("settings.mode.toggle"), "toggle"),
+        (i18n.t("settings.mode.ptt"), "ptt"),
+    ]
+
+
+def _language_choices() -> list[tuple[str, str]]:
+    return [
+        (i18n.LANGUAGE_LABELS[code], code) for code in i18n.SUPPORTED_UI_LANGUAGES
+    ]
+
+
 def _input_devices() -> list[tuple[str, "int | None"]]:
     """(label, device-index) voor elk invoerapparaat; index None = Windows-standaard."""
 
-    options: list[tuple[str, int | None]] = [("Windows-standaard", None)]
+    options: list[tuple[str, int | None]] = [(i18n.t("settings.mic.default"), None)]
     try:
         for index, device in enumerate(sd.query_devices()):
             if device.get("max_input_channels", 0) > 0:
@@ -64,9 +70,9 @@ def open_settings_dialog(
         return
 
     win = tk.Toplevel(root)
-    win.withdraw()  # verborgen opbouwen; pas tonen na het positioneren
+    win.withdraw()
     _open_dialog = win
-    win.title("praatMaar — Instellingen")
+    win.title(i18n.t("settings.title"))
     win.resizable(False, False)
     win.configure(padx=18, pady=16)
     win.columnconfigure(0, weight=1)
@@ -81,56 +87,81 @@ def open_settings_dialog(
 
     row = 0
 
+    def _section_label(text: str) -> None:
+        nonlocal row
+        ttk.Label(win, text=text).grid(row=row, column=0, sticky="w", pady=(0, 2))
+        row += 1
+
     # Microfoon.
-    ttk.Label(win, text="Microfoon").grid(row=row, column=0, sticky="w", pady=(0, 2))
-    row += 1
+    _section_label(i18n.t("settings.microphone"))
     mic_var = tk.StringVar(value=current_device_label)
-    mic_box = ttk.Combobox(
+    ttk.Combobox(
         win, textvariable=mic_var, values=device_labels, state="readonly", width=42
-    )
-    mic_box.grid(row=row, column=0, sticky="ew", pady=(0, 12))
+    ).grid(row=row, column=0, sticky="ew", pady=(0, 12))
     row += 1
 
     # Pill-positie.
-    ttk.Label(win, text="Positie van de indicator").grid(
-        row=row, column=0, sticky="w", pady=(0, 2)
-    )
-    row += 1
-    pos_labels = [label for label, _ in POSITIONS]
-    pos_value_by_label = {label: value for label, value in POSITIONS}
-    pos_label_by_value = {value: label for label, value in POSITIONS}
+    positions = _positions()
+    _section_label(i18n.t("settings.indicator_position"))
+    pos_labels = [label for label, _ in positions]
+    pos_value_by_label = {label: value for label, value in positions}
+    pos_label_by_value = {value: label for label, value in positions}
     pos_var = tk.StringVar(
         value=pos_label_by_value.get(
             current.get("indicator_position"), pos_labels[0]
         )
     )
-    pos_box = ttk.Combobox(
+    ttk.Combobox(
         win, textvariable=pos_var, values=pos_labels, state="readonly", width=42
-    )
-    pos_box.grid(row=row, column=0, sticky="ew", pady=(0, 12))
+    ).grid(row=row, column=0, sticky="ew", pady=(0, 12))
     row += 1
 
     # Bedieningsmodus.
-    ttk.Label(win, text="Bediening").grid(row=row, column=0, sticky="w", pady=(0, 2))
-    row += 1
-    mode_labels = [label for label, _ in MODES]
-    mode_value_by_label = {label: value for label, value in MODES}
-    mode_label_by_value = {value: label for label, value in MODES}
+    modes = _modes()
+    _section_label(i18n.t("settings.mode"))
+    mode_labels = [label for label, _ in modes]
+    mode_value_by_label = {label: value for label, value in modes}
+    mode_label_by_value = {value: label for label, value in modes}
     mode_var = tk.StringVar(
         value=mode_label_by_value.get(current.get("mode"), mode_labels[0])
     )
-    mode_box = ttk.Combobox(
+    ttk.Combobox(
         win, textvariable=mode_var, values=mode_labels, state="readonly", width=42
+    ).grid(row=row, column=0, sticky="ew", pady=(0, 12))
+    row += 1
+
+    # Spraakherkenning.
+    lang_choices = _language_choices()
+    lang_labels = [label for label, _ in lang_choices]
+    lang_value_by_label = {label: value for label, value in lang_choices}
+    lang_label_by_value = {value: label for label, value in lang_choices}
+    speech_code = i18n.normalize_language(
+        current.get("speech_language"),
+        allowed=i18n.SUPPORTED_SPEECH_LANGUAGES,
     )
-    mode_box.grid(row=row, column=0, sticky="ew", pady=(0, 12))
+    _section_label(i18n.t("settings.speech_language"))
+    speech_var = tk.StringVar(value=lang_label_by_value.get(speech_code, lang_labels[0]))
+    ttk.Combobox(
+        win, textvariable=speech_var, values=lang_labels, state="readonly", width=42
+    ).grid(row=row, column=0, sticky="ew", pady=(0, 12))
     row += 1
 
-    # Sneltoets (opneembaar).
-    ttk.Label(win, text="Sneltoets").grid(row=row, column=0, sticky="w", pady=(0, 2))
+    # Interfacetaal.
+    ui_code = i18n.normalize_language(
+        current.get("ui_language"),
+        allowed=i18n.SUPPORTED_UI_LANGUAGES,
+    )
+    _section_label(i18n.t("settings.ui_language"))
+    ui_var = tk.StringVar(value=lang_label_by_value.get(ui_code, lang_labels[0]))
+    ttk.Combobox(
+        win, textvariable=ui_var, values=lang_labels, state="readonly", width=42
+    ).grid(row=row, column=0, sticky="ew", pady=(0, 12))
     row += 1
 
+    # Sneltoets.
+    _section_label(i18n.t("settings.hotkey"))
     hotkey_tokens = list(current.get("hotkey") or hotkeys.DEFAULT_HOTKEY)
-    capture = {
+    capture: dict[str, Any] = {
         "active": False,
         "pressed": set(),
         "best": set(),
@@ -147,7 +178,7 @@ def open_settings_dialog(
     ttk.Label(
         hk_frame, textvariable=hk_var, relief="groove", padding=(8, 4), anchor="w"
     ).grid(row=0, column=0, sticky="ew", padx=(0, 8))
-    record_btn = ttk.Button(hk_frame, text="Opnemen…")
+    record_btn = ttk.Button(hk_frame, text=i18n.t("settings.hotkey.record"))
     record_btn.grid(row=0, column=1)
 
     def _drain_capture() -> None:
@@ -158,10 +189,9 @@ def open_settings_dialog(
                     continue
                 if event == "press":
                     capture["pressed"].add(token)
-                    # De grootste tegelijk-vastgehouden combinatie wint.
                     if len(capture["pressed"]) >= len(capture["best"]):
                         capture["best"] = set(capture["pressed"])
-                else:  # release
+                else:
                     capture["pressed"].discard(token)
         except queue.Empty:
             pass
@@ -174,7 +204,6 @@ def open_settings_dialog(
             capture["poll_id"] = win.after(50, _drain_capture)
 
     def _capture_cb(event: str, key: Any) -> None:
-        # Loopt op de listener-thread; alleen data doorschuiven, geen Tk hier.
         capture["queue"].put((event, hotkeys.key_to_token(key)))
 
     def _start_capture() -> None:
@@ -185,8 +214,8 @@ def open_settings_dialog(
         capture["best"] = set()
         while not capture["queue"].empty():
             capture["queue"].get_nowait()
-        hk_var.set("Druk de combinatie in…")
-        record_btn.config(text="Gebruik deze")
+        hk_var.set(i18n.t("settings.hotkey.press"))
+        record_btn.config(text=i18n.t("settings.hotkey.use"))
         set_capture(_capture_cb)
         capture["poll_id"] = win.after(50, _drain_capture)
 
@@ -201,17 +230,12 @@ def open_settings_dialog(
             capture["poll_id"] = None
         if confirm and capture["best"]:
             normalized = hotkeys.normalize(capture["best"])
-            # Alleen modifiers (Ctrl+Shift+Alt) is geen bruikbare sneltoets —
-            # die gaat af bij elke willekeurige toetscombinatie met die mods.
             if any(token not in hotkeys.MODIFIER_TOKENS for token in normalized):
                 hotkey_tokens[:] = normalized
             else:
-                print(
-                    "Sneltoets genegeerd: voeg minstens één gewone toets toe "
-                    "(bijv. Spatie of een letter)."
-                )
+                print(i18n.t("settings.hotkey.modifiers_only"))
         hk_var.set(hotkeys.format_hotkey(hotkey_tokens))
-        record_btn.config(text="Opnemen…")
+        record_btn.config(text=i18n.t("settings.hotkey.record"))
 
     def _toggle_capture() -> None:
         if capture["active"]:
@@ -223,49 +247,48 @@ def open_settings_dialog(
     if set_capture is None:
         record_btn.state(["disabled"])
 
-    # Automatisch meestarten.
     autostart_var = tk.BooleanVar(value=bool(current.get("autostart", False)))
     ttk.Checkbutton(
         win,
-        text="Automatisch meestarten met Windows",
+        text=i18n.t("settings.autostart"),
         variable=autostart_var,
     ).grid(row=row, column=0, sticky="w", pady=(0, 12))
     row += 1
 
-    # Auto-plakken.
     paste_var = tk.BooleanVar(value=bool(current.get("auto_paste", True)))
     ttk.Checkbutton(
-        win, text="Automatisch plakken in het actieve invoerveld", variable=paste_var
+        win, text=i18n.t("settings.auto_paste"), variable=paste_var
     ).grid(row=row, column=0, sticky="w", pady=(0, 12))
     row += 1
 
-    # Whisper-model.
-    ttk.Label(win, text="Whisper-model").grid(row=row, column=0, sticky="w", pady=(0, 2))
+    warm_var = tk.BooleanVar(value=bool(current.get("warm_microphone", False)))
+    ttk.Checkbutton(
+        win, text=i18n.t("settings.warm_microphone"), variable=warm_var
+    ).grid(row=row, column=0, sticky="w", pady=(0, 12))
     row += 1
+
+    _section_label(i18n.t("settings.model"))
     model_var = tk.StringVar(value=str(current.get("model", "small")))
-    model_box = ttk.Combobox(
+    ttk.Combobox(
         win, textvariable=model_var, values=MODELS, state="readonly", width=42
-    )
-    model_box.grid(row=row, column=0, sticky="ew", pady=(0, 2))
+    ).grid(row=row, column=0, sticky="ew", pady=(0, 2))
     row += 1
     ttk.Label(
-        win, text="Wijziging van het model werkt pas na herstart.",
+        win, text=i18n.t("settings.model.restart"),
         foreground="#888888",
     ).grid(row=row, column=0, sticky="w", pady=(0, 14))
     row += 1
 
-    # Knoppen.
     buttons = ttk.Frame(win)
     buttons.grid(row=row, column=0, sticky="e")
 
     def close() -> None:
         global _open_dialog
-        _stop_capture(confirm=False)  # listener nooit onderdrukt achterlaten
+        _stop_capture(confirm=False)
         _open_dialog = None
         win.destroy()
 
     def save() -> None:
-        # Loopt het opnemen nog? Dan de huidige combinatie overnemen.
         if capture["active"]:
             _stop_capture(confirm=True)
 
@@ -278,21 +301,25 @@ def open_settings_dialog(
             "hotkey": list(hotkey_tokens),
             "autostart": bool(autostart_var.get()),
             "auto_paste": bool(paste_var.get()),
+            "warm_microphone": bool(warm_var.get()),
             "model": model_var.get(),
+            "speech_language": lang_value_by_label.get(speech_var.get(), "nl"),
+            "ui_language": lang_value_by_label.get(ui_var.get(), "nl"),
         }
         try:
             on_apply(new_settings)
         finally:
             close()
 
-    ttk.Button(buttons, text="Annuleren", command=close).grid(row=0, column=0, padx=(0, 8))
-    ttk.Button(buttons, text="Opslaan", command=save).grid(row=0, column=1)
+    ttk.Button(buttons, text=i18n.t("settings.cancel"), command=close).grid(
+        row=0, column=0, padx=(0, 8)
+    )
+    ttk.Button(buttons, text=i18n.t("settings.save"), command=save).grid(
+        row=0, column=1
+    )
 
     win.protocol("WM_DELETE_WINDOW", close)
 
-    # Positioneren terwijl verborgen, dán tonen. Windows honoreert de geometrie
-    # die vóór het eerste mappen is gezet; zet je 'm daarna, dan wint de
-    # cascade-default (het venster negeert de positie).
     win.update_idletasks()
     width = win.winfo_reqwidth()
     height = win.winfo_reqheight()

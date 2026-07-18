@@ -9,6 +9,8 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Added
 
+- Meertaligheid: `speech_language` + `ui_language` (`nl`/`en`/`de`), JSON-locales en `i18n.py`
+- Optionele warme microfoon (`warm_microphone`, default uit)
 - Publieke-repo basics: LICENSE (MIT), README, SECURITY, CONTRIBUTING, CHANGELOG
 - `pyproject.toml`, `requirements.txt` / `requirements-dev.txt` met gepinde deps
 - `start-praatMaar.bat` / `.vbs` met relatieve paden (vervangt machine-specifieke `start-whisper.*`)
@@ -18,7 +20,6 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 - `Opnamesessie` (`opnamesessie.py`) — dicteercyclus los van `dictation.py`
 - Windows indie-release: Inno Setup-script, `scripts/build-windows.ps1`, Release-workflow
 
-### Changed
+### Fixed
 
-- Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
-- `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`
+- Warme microfoonstream heropent na Bluetooth disconnect/reconnect (geen stille lege opnames meer)

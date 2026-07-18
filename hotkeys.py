@@ -31,7 +31,7 @@ _DISPLAY_NAMES = {
     "ctrl": "Ctrl",
     "shift": "Shift",
     "alt": "Alt",
-    "space": "Spatie",
+    "space": None,  # via i18n key.space
     "enter": "Enter",
     "tab": "Tab",
     "esc": "Esc",
@@ -106,18 +106,22 @@ def normalize(tokens: Iterable[str]) -> list[str]:
 def format_hotkey(tokens: Iterable[str]) -> str:
     """Maakt een leesbaar label, bijv. 'Ctrl + Shift + Alt + Spatie'."""
 
+    import i18n
+
     parts = normalize(tokens)
     if not parts:
         return "(geen)"
 
     labels: list[str] = []
     for token in parts:
-        if token in _DISPLAY_NAMES:
-            labels.append(_DISPLAY_NAMES[token])
+        if token == "space":
+            labels.append(i18n.t("key.space"))
+        elif token in _DISPLAY_NAMES and _DISPLAY_NAMES[token] is not None:
+            labels.append(_DISPLAY_NAMES[token])  # type: ignore[arg-type]
         elif len(token) == 1:
             labels.append(token.upper())
         elif token.startswith("f") and token[1:].isdigit():
-            labels.append(token.upper())  # functietoetsen: F1..F12
+            labels.append(token.upper())
         else:
             labels.append(token.capitalize())
 

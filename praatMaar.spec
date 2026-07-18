@@ -12,7 +12,7 @@ Het Whisper-model wordt NIET meegebundeld: het wordt bij de eerste start
 
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [('locales', 'locales')]
 binaries = []
 hiddenimports = []
 
@@ -50,6 +50,7 @@ hiddenimports += [
     "hotkeys",
     "opnamesessie",
     "win_identity",
+    "i18n",
     # Platform-seam: de adapters worden lazy (in host._select) geïmporteerd,
     # dus expliciet opnemen zodat ze zeker in de bundle zitten.
     "host",

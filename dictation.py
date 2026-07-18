@@ -14,6 +14,7 @@ import app_logging
 import config
 import hotkeys
 import host
+import i18n
 import recovery
 import win_identity
 from opnamesessie import Opnamesessie
@@ -58,7 +59,7 @@ MODEL_NAME = "small"
 DEVICE = "cpu"
 COMPUTE_TYPE = "int8"
 
-# Nederlands afdwingen.
+# Spraakherkenning (Whisper). UI-taal staat apart in i18n.
 LANGUAGE = "nl"
 
 # Audio-instellingen.
@@ -72,6 +73,10 @@ MICROPHONE_DEVICE: int | None = None
 
 # Automatisch plakken in het actieve invoerveld.
 AUTO_PASTE = True
+
+# Microfoonstream warm houden tussen opnames (sneller, mic blijft open).
+# Default uit: privacyvriendelijker, vooral bij automatisch meestarten.
+WARM_MICROPHONE = False
 
 # Korte wachttijd voordat Ctrl+V wordt uitgevoerd.
 PASTE_DELAY_SECONDS = 0.30
@@ -107,12 +112,25 @@ if "microphone_device" in _user_config:
     MICROPHONE_DEVICE = _user_config["microphone_device"]
 if "auto_paste" in _user_config:
     AUTO_PASTE = bool(_user_config["auto_paste"])
+if "warm_microphone" in _user_config:
+    WARM_MICROPHONE = bool(_user_config["warm_microphone"])
 if "indicator_position" in _user_config:
     INDICATOR_POSITION = str(_user_config["indicator_position"])
 if _user_config.get("mode") in ("toggle", "ptt"):
     MODE = str(_user_config["mode"])
 if isinstance(_user_config.get("hotkey"), list) and _user_config["hotkey"]:
     HOTKEY_TOKENS = {str(token) for token in _user_config["hotkey"]}
+if "speech_language" in _user_config:
+    LANGUAGE = i18n.normalize_language(
+        _user_config["speech_language"],
+        allowed=i18n.SUPPORTED_SPEECH_LANGUAGES,
+    )
+_ui = i18n.normalize_language(
+    _user_config.get("ui_language"),
+    allowed=i18n.SUPPORTED_UI_LANGUAGES,
+)
+i18n.set_ui_language(_ui)
+
 
 
 # =========================================================
@@ -136,6 +154,9 @@ toggle_latched = False
 # (zodat het opnemen de dicteeropname niet start).
 capturing = False
 _capture_cb: "Any | None" = None
+
+# Systeemvak (gezet in main); nodig voor live UI-taalwissel.
+_tray = None
 
 
 # =========================================================
@@ -170,23 +191,25 @@ def _load_dependencies(reporter: Splash) -> None:
         # Onbepaalde ("bezig") animatie: een blokkerende import kan de balk niet
         # tussentijds laten oplopen, dus houdt de glijdende animatie de indruk van
         # voortgang vast. Het detail toont wél de stap-teller.
-        reporter.set_progress(None, f"onderdeel {index} van {total_steps}")
+        reporter.set_progress(
+            None, i18n.t("splash.part", index=index, total=total_steps)
+        )
 
-    step(1, "Spraakherkenning laden")
+    step(1, i18n.t("splash.dep.whisper"))
     from faster_whisper import WhisperModel as _WhisperModel
     WhisperModel = _WhisperModel
 
-    step(2, "Audioverwerking laden")
+    step(2, i18n.t("splash.dep.audio"))
     import numpy as _np
     from scipy.io.wavfile import write as _write_wav
     np = _np
     write_wav = _write_wav
 
-    step(3, "Microfoon laden")
+    step(3, i18n.t("splash.dep.mic"))
     import sounddevice as _sd
     sd = _sd
 
-    step(4, "Toetsenbord en plakken laden")
+    step(4, i18n.t("splash.dep.keyboard"))
     from pynput import keyboard as _keyboard
     import pyperclip as _pyperclip
     keyboard = _keyboard
@@ -195,7 +218,7 @@ def _load_dependencies(reporter: Splash) -> None:
     # De sneltoets-tokenisatie in hotkeys.py koppelen aan pynput.
     hotkeys.init(keyboard)
 
-    step(5, "Systeemvak laden")
+    step(5, i18n.t("splash.dep.tray"))
     from tray import TrayIcon as _TrayIcon
     TrayIcon = _TrayIcon
 
@@ -353,12 +376,12 @@ def load_model(reporter: Splash) -> WhisperModel:
         need_download = True
 
     if need_download:
-        reporter.set_status("Model wordt gedownload (eenmalig)…")
+        reporter.set_status(i18n.t("splash.download"))
         reporter.set_progress(0.0, "")
         model_path = _download_model_with_progress(MODEL_NAME, reporter)
 
     # Laden vanaf schijf: geen betrouwbaar percentage, dus onbepaald ("bezig").
-    reporter.set_status("Model wordt geladen…")
+    reporter.set_status(i18n.t("splash.loading"))
     reporter.set_progress(None)
 
     return WhisperModel(
@@ -416,10 +439,7 @@ def print_ready_message() -> None:
     """Toont dat het programma weer beschikbaar is."""
 
     print()
-    print(
-        f"Gereed. Druk {hotkeys.format_hotkey(HOTKEY_TOKENS)} "
-        "om een opname te starten."
-    )
+    print(i18n.t("ready", hotkey=hotkeys.format_hotkey(HOTKEY_TOKENS)))
 
 
 def _copy_to_clipboard(text: str) -> None:
@@ -444,6 +464,7 @@ def _build_session() -> Opnamesessie:
         language=LANGUAGE,
         delete_temp_audio=DELETE_TEMP_AUDIO,
         mode=MODE,
+        warm_microphone=WARM_MICROPHONE,
         wait_until_modifiers_clear=wait_until_modifier_keys_released,
         on_ready=print_ready_message,
         copy_text=_copy_to_clipboard,
@@ -531,20 +552,20 @@ def on_press(
     if MODE == "ptt":
         # Push-to-talk: ingedrukt houden neemt op; loslaten stopt (on_release).
         if is_processing:
-            print("\nDe vorige opname wordt nog verwerkt.")
+            print("\n" + i18n.t("dictation.busy"))
         elif not is_recording:
-            print("\nDicteren (push-to-talk) gestart.")
+            print("\n" + i18n.t("dictation.ptt_started"))
             session.start()
 
     else:
         # Toggle: dezelfde sneltoets wisselt tussen starten en stoppen.
         if is_recording:
-            print("\nDicteren wordt gestopt via de sneltoets.")
+            print("\n" + i18n.t("dictation.stopped_hotkey"))
             session.stop_and_transcribe()
         elif is_processing:
-            print("\nDe vorige opname wordt nog verwerkt.")
+            print("\n" + i18n.t("dictation.busy"))
         else:
-            print("\nDicteren wordt gestart via de sneltoets.")
+            print("\n" + i18n.t("dictation.started_hotkey"))
             session.start()
 
 
@@ -579,7 +600,7 @@ def on_release(
         # Push-to-talk: zodra de sneltoets wordt losgelaten, stoppen.
         if MODE == "ptt" and was_latched:
             if session.is_recording:
-                print("\nDicteren (push-to-talk) gestopt.")
+                print("\n" + i18n.t("dictation.ptt_stopped"))
                 session.stop_and_transcribe()
 
 
@@ -594,9 +615,12 @@ def current_settings() -> dict[str, Any]:
         "model": MODEL_NAME,
         "microphone_device": MICROPHONE_DEVICE,
         "auto_paste": AUTO_PASTE,
+        "warm_microphone": WARM_MICROPHONE,
         "indicator_position": INDICATOR_POSITION,
         "mode": MODE,
         "hotkey": hotkeys.normalize(HOTKEY_TOKENS),
+        "speech_language": LANGUAGE,
+        "ui_language": i18n.ui_language(),
         "autostart": host.is_autostart_enabled(),
     }
 
@@ -609,12 +633,12 @@ def apply_settings(
     Bewaart en past gewijzigde instellingen toe. Draait op de hoofdthread
     (het dialoog is daarheen gemarshald), dus GUI-calls zijn hier veilig.
 
-    Live: pill-positie, auto-plakken, modus, sneltoets en automatisch meestarten.
-    Volgende opname: microfoon. Na herstart: model.
+    Live: pill-positie, auto-plakken, warm-mic, modus, sneltoets, talen,
+    automatisch meestarten. Volgende opname: microfoon. Na herstart: model.
     """
 
     global MODEL_NAME, MICROPHONE_DEVICE, AUTO_PASTE, INDICATOR_POSITION
-    global MODE, HOTKEY_TOKENS
+    global MODE, HOTKEY_TOKENS, LANGUAGE, WARM_MICROPHONE
 
     new_model = str(new_settings.get("model", MODEL_NAME))
     model_changed = new_model != MODEL_NAME
@@ -624,6 +648,7 @@ def apply_settings(
     MODEL_NAME = new_model
     MICROPHONE_DEVICE = new_settings.get("microphone_device", MICROPHONE_DEVICE)
     AUTO_PASTE = bool(new_settings.get("auto_paste", AUTO_PASTE))
+    WARM_MICROPHONE = bool(new_settings.get("warm_microphone", WARM_MICROPHONE))
     INDICATOR_POSITION = new_position
 
     if new_settings.get("mode") in ("toggle", "ptt"):
@@ -633,22 +658,43 @@ def apply_settings(
     if isinstance(new_hotkey, list) and new_hotkey:
         HOTKEY_TOKENS = {str(token) for token in new_hotkey}
 
+    LANGUAGE = i18n.normalize_language(
+        new_settings.get("speech_language", LANGUAGE),
+        allowed=i18n.SUPPORTED_SPEECH_LANGUAGES,
+    )
+    ui = i18n.set_ui_language(
+        i18n.normalize_language(
+            new_settings.get("ui_language"),
+            allowed=i18n.SUPPORTED_UI_LANGUAGES,
+        )
+    )
+
     # Houd de Opnamesessie synchroon met live-instellingen.
     old_mic = session.microphone_device
+    old_warm = session.warm_microphone
     session.microphone_device = MICROPHONE_DEVICE
     session.auto_paste = AUTO_PASTE
     session.mode = MODE
+    session.language = LANGUAGE
+    session.warm_microphone = WARM_MICROPHONE
     if old_mic != MICROPHONE_DEVICE:
         session.refresh_input_device()
+    elif old_warm and not WARM_MICROPHONE:
+        session.stop_audio_stream()
+    elif (not old_warm) and WARM_MICROPHONE:
+        session.warmup_microphone()
 
     config.save_config(
         {
             "model": MODEL_NAME,
             "microphone_device": MICROPHONE_DEVICE,
             "auto_paste": AUTO_PASTE,
+            "warm_microphone": WARM_MICROPHONE,
             "indicator_position": INDICATOR_POSITION,
             "mode": MODE,
             "hotkey": hotkeys.normalize(HOTKEY_TOKENS),
+            "speech_language": LANGUAGE,
+            "ui_language": ui,
         }
     )
 
@@ -661,10 +707,13 @@ def apply_settings(
     if position_changed:
         indicator.set_position(new_position)
 
+    if _tray is not None:
+        _tray.refresh_language()
+
     print()
-    print("Instellingen opgeslagen.")
+    print(i18n.t("settings.saved"))
     if model_changed:
-        print("Let op: het gewijzigde model werkt pas na herstart.")
+        print(i18n.t("settings.model_restart_note"))
 
 
 def main() -> None:
@@ -677,20 +726,20 @@ def main() -> None:
     draaien op eigen threads.
     """
 
-    global model
+    global model, _tray
 
     # Vóór splash/tray: Windows-app-id (taakbalk-groep / identiteit).
     win_identity.apply_windows_app_identity()
 
     # Bestandslog: onder pythonw / windowed exe is er geen console.
     log_file = app_logging.setup_logging()
-    print(f"Logbestand: {log_file}")
+    print(i18n.t("log.path", path=log_file))
 
     # Slechts één instantie tegelijk. Een tweede start (bijv. autostart én een
     # handmatige start, of twee keer klikken) stopt hier — vóór het laadscherm en
     # het model — zodat er nooit twee listeners, tray-iconen of indicators komen.
     if not host.acquire_single_instance():
-        print("praatMaar draait al; deze tweede start wordt gestopt.")
+        print(i18n.t("already_running"))
         raise SystemExit(0)
 
     # Eerst het laadscherm: het model wordt op een achtergrond-thread geladen
@@ -701,18 +750,22 @@ def main() -> None:
         model = Splash().run(_startup)
     except Exception as exc:
         # De fout is al in het laadscherm getoond; hier alleen netjes stoppen.
-        print("Het Whisper-model kon niet worden geladen.")
-        print(f"Foutmelding: {exc}")
+        print(i18n.t("model.load_failed"))
+        print(i18n.t("model.error", error=exc))
         raise SystemExit(1) from exc
 
     session.model = model
 
-    print("Model geladen. Klaar voor gebruik.")
-    # Microfoon al openen: anders kost de eerste opname 0,5–2 s (Bluetooth).
-    session.warmup_microphone()
+    print(i18n.t("model.loaded"))
+    # Optioneel: microfoon al openen (anders 0,5–2 s bij eerste/Bluetooth-opname).
+    if WARM_MICROPHONE:
+        session.warmup_microphone()
     print(
-        f"Bediening ({MODE}): {hotkeys.format_hotkey(HOTKEY_TOKENS)} "
-        "(of Esc) om te starten/stoppen."
+        i18n.t(
+            "controls",
+            mode=MODE,
+            hotkey=hotkeys.format_hotkey(HOTKEY_TOKENS),
+        )
     )
 
     # Harde afhankelijkheid: kan de indicator niet initialiseren, dan stopt de
@@ -739,6 +792,7 @@ def main() -> None:
         on_quit=indicator.request_stop,
         on_settings=open_settings,
     )
+    _tray = tray
 
     # De pill is de enige toestandseigenaar; die stuurt het tray-icoon aan.
     indicator.state_listener = tray.set_state
@@ -762,7 +816,7 @@ def main() -> None:
 
     finally:
         print()
-        print("Programma wordt afgesloten.")
+        print(i18n.t("shutdown"))
 
         listener.stop()
         tray.stop()

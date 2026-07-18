@@ -85,12 +85,12 @@ COLOR_TRANSCRIBING = "#ffb020"
 COLOR_CANCELLED = "#9aa0a6"
 COLOR_ERROR = "#ff5252"
 
-# Nederlandse labels per toestand.
-STATE_LABELS = {
-    RecordingState.RECORDING: "Opname",
-    RecordingState.TRANSCRIBING: "Transcriberen",
-    RecordingState.CANCELLED: "Geannuleerd",
-    RecordingState.ERROR: "Fout",
+# Labels per toestand — via i18n (zie state_label()).
+STATE_LABEL_KEYS = {
+    RecordingState.RECORDING: "state.recording",
+    RecordingState.TRANSCRIBING: "state.transcribing",
+    RecordingState.CANCELLED: "state.cancelled",
+    RecordingState.ERROR: "state.error",
 }
 
 STATE_COLORS = {
@@ -99,6 +99,13 @@ STATE_COLORS = {
     RecordingState.CANCELLED: COLOR_CANCELLED,
     RecordingState.ERROR: COLOR_ERROR,
 }
+
+
+def state_label(state: RecordingState) -> str:
+    import i18n
+
+    key = STATE_LABEL_KEYS.get(state)
+    return i18n.t(key) if key else ""
 
 
 # =========================================================
@@ -493,7 +500,7 @@ class RecordingIndicator:
         color = STATE_COLORS.get(state, MUTED_COLOR)
 
         # Label.
-        c.itemconfigure(self._label, text=STATE_LABELS.get(state, ""))
+        c.itemconfigure(self._label, text=state_label(state))
 
         # Statuspuntje — pulserend bij opname, anders statisch.
         if state == RecordingState.RECORDING:
@@ -516,8 +523,14 @@ class RecordingIndicator:
 
         # Modus-tag (bij opname en transcriberen).
         if state in (RecordingState.RECORDING, RecordingState.TRANSCRIBING):
+            import i18n
+
             # ↔ en ● renderen betrouwbaar in Segoe UI (⇄/◉ niet altijd).
-            tag = "● push-to-talk" if self._mode == "ptt" else "↔ toggle"
+            tag = (
+                f"● {i18n.t('state.tag.ptt')}"
+                if self._mode == "ptt"
+                else f"↔ {i18n.t('state.tag.toggle')}"
+            )
             c.itemconfigure(self._tag, text=tag, state="normal")
         else:
             c.itemconfigure(self._tag, text="", state="hidden")

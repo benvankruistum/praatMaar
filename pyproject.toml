@@ -57,6 +57,7 @@ py-modules = [
     "app_logging",
     "opnamesessie",
     "win_identity",
+    "i18n",
 ]
 packages = ["host"]
 
