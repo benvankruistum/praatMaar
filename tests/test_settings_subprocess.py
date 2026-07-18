@@ -1,4 +1,4 @@
-"""Tests voor het macOS-instellingen-subprocess (geen echte GUI)."""
+"""Tests voor macOS Tk-dialogen in een apart subprocess (geen echte GUI)."""
 
 from __future__ import annotations
 
@@ -54,3 +54,34 @@ def test_run_settings_subprocess_frozen_argv(monkeypatch) -> None:
     assert seen
     assert seen[0][0] == "/App/praatMaar"
     assert seen[0][1] == "--praatmaar-settings-ui"
+
+
+def test_run_destinations_subprocess_frozen_argv(monkeypatch) -> None:
+    seen: list[list[str]] = []
+
+    def fake_run(cmd, env=None, check=False):  # noqa: ANN001
+        seen.append(list(cmd))
+        return None
+
+    monkeypatch.setattr(settings_process.subprocess, "run", fake_run)
+    monkeypatch.setattr(settings_process.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(settings_process.sys, "executable", "/App/praatMaar")
+
+    settings_process.run_destinations_subprocess({"destinations": []})
+    assert seen[0][1] == "--praatmaar-destinations-ui"
+
+
+def test_run_help_subprocess_no_out_file(monkeypatch) -> None:
+    seen: list[list[str]] = []
+
+    def fake_run(cmd, env=None, check=False):  # noqa: ANN001
+        seen.append(list(cmd))
+        return None
+
+    monkeypatch.setattr(settings_process.subprocess, "run", fake_run)
+    monkeypatch.setattr(settings_process.sys, "frozen", False, raising=False)
+
+    assert settings_process.run_help_subprocess({"ui_language": "nl"}) is None
+    assert "--praatmaar-help-ui" in seen[0]
+    # Help heeft geen out.json-argument.
+    assert seen[0][-1].endswith("in.json")

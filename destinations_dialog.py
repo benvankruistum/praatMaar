@@ -117,12 +117,16 @@ def open_destinations_dialog(
     parent: tk.Misc,
     current: dict[str, Any],
     on_apply: Callable[[dict[str, Any]], None],
+    *,
+    wait: bool = False,
 ) -> None:
     global _open_dialog
 
     if _open_dialog is not None and _open_dialog.winfo_exists():
         _open_dialog.lift()
         _open_dialog.focus_force()
+        if wait:
+            parent.wait_window(_open_dialog)
         return
 
     win = tk.Toplevel(parent)
@@ -372,3 +376,6 @@ def open_destinations_dialog(
     win.attributes("-topmost", True)
     win.after(300, lambda: win.attributes("-topmost", False))
     win.focus_force()
+
+    if wait:
+        parent.wait_window(win)

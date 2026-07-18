@@ -901,6 +901,23 @@ def main() -> None:
         )
 
     def open_destinations() -> None:
+        if sys.platform == "darwin":
+            from settings_process import run_destinations_subprocess
+
+            def _mac_destinations() -> None:
+                set_capture(lambda *_: None)
+                try:
+                    new = run_destinations_subprocess(current_settings())
+                finally:
+                    set_capture(None)
+                if new is not None:
+                    indicator.call_on_main(
+                        lambda: apply_settings(new, indicator)
+                    )
+
+            threading.Thread(target=_mac_destinations, daemon=True).start()
+            return
+
         from destinations_dialog import open_destinations_dialog
 
         indicator.call_on_main(
@@ -912,6 +929,19 @@ def main() -> None:
         )
 
     def open_help() -> None:
+        if sys.platform == "darwin":
+            from settings_process import run_help_subprocess
+
+            def _mac_help() -> None:
+                set_capture(lambda *_: None)
+                try:
+                    run_help_subprocess(current_settings())
+                finally:
+                    set_capture(None)
+
+            threading.Thread(target=_mac_help, daemon=True).start()
+            return
+
         from help_dialog import open_help as show_help
 
         indicator.call_on_main(lambda: show_help(indicator.root))
@@ -978,9 +1008,14 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # Frozen macOS: Instellingen-UI als apart proces (zelfde binary).
-    if "--praatmaar-settings-ui" in sys.argv:
-        from settings_process import main as settings_ui_main
+    # Frozen macOS: dialogen als apart proces (zelfde binary).
+    for _flag in (
+        "--praatmaar-settings-ui",
+        "--praatmaar-destinations-ui",
+        "--praatmaar-help-ui",
+    ):
+        if _flag in sys.argv:
+            from settings_process import main as settings_ui_main
 
-        raise SystemExit(settings_ui_main(sys.argv[1:]))
+            raise SystemExit(settings_ui_main(sys.argv[1:]))
     main()
