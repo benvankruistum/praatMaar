@@ -10,6 +10,8 @@ lokaal met Faster-Whisper (geen cloud) en plakt de tekst in het actieve invoerve
 Altijd via feature-branches; **geen commits of pushes op `main`**.
 Details: [CONTRIBUTING.md](CONTRIBUTING.md) · Cursor-rule: `.cursor/rules/git-branches.mdc`.
 
+Lint/format: `ruff check` + `ruff format` (CI enforced). Zie CONTRIBUTING.
+
 ## Agent skills
 
 ### Issue tracker

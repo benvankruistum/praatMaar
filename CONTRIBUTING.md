@@ -10,10 +10,14 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
 python -m pytest
+python -m ruff check .
+python -m ruff format .
 ```
 
-Python **3.10+**, Windows. macOS-wijzigingen zijn welkom, maar de app is
-daar nog niet ondersteund — zie [docs/STATUS.md](docs/STATUS.md).
+Op macOS/Linux: zelfde met `.venv/bin/activate`.
+
+Python **3.10+**, Windows en macOS. Zie [docs/STATUS.md](docs/STATUS.md)
+voor platformstatus.
 
 ## Domeintaal
 
@@ -28,6 +32,9 @@ beslissingen staan in `docs/adr/`.
 - OS-specifieke code hoort achter de `host`-seam (of een toekomstige GUI-seam),
   niet verspreid door `dictation.py`.
 - Voeg tests toe voor pure logica (`hotkeys`, `config`, `recovery`, …).
+- Linting/formatting met **Ruff** (config in `pyproject.toml`). CI draait
+  `ruff check` en `ruff format --check`. Voor commit: `ruff check --fix .`
+  en `ruff format .`.
 
 ## Git-workflow
 
@@ -47,7 +54,7 @@ Zit je per ongeluk op `main` met lokale wijzigingen: meteen
 
 1. Branch vanaf `main` (zie hierboven) — geen commits op `main`.
 2. Kleine, reviewbare PR’s met een korte uitleg van **waarom**.
-3. Zorg dat `pytest` groen is.
+3. Zorg dat `pytest` en `ruff` (check + format) groen zijn.
 4. Vermeld Windows-/macOS-teststappen als je UI, hotkeys of packaging raakt.
 
 ## Issues

@@ -14,7 +14,8 @@ Windows-/ISO-toetsenborden: modifiers worden uit ``modifierFlags`` gelezen
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 # ANSI/US + veelgebruikte extra keycodes → tokens (fysieke toets).
 _KEYCODE_TOKENS: dict[int, str] = {

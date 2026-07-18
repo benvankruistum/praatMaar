@@ -25,9 +25,7 @@ def test_prune_keeps_newest(tmp_path: Path, monkeypatch) -> None:
     directory = tmp_path / "transcripts"
     directory.mkdir()
     for index in range(5):
-        (directory / f"2026-01-0{index + 1}_120000.txt").write_text(
-            str(index), encoding="utf-8"
-        )
+        (directory / f"2026-01-0{index + 1}_120000.txt").write_text(str(index), encoding="utf-8")
     recovery.prune_transcripts(max_files=2)
     remaining = sorted(p.name for p in directory.glob("*.txt"))
     assert remaining == ["2026-01-04_120000.txt", "2026-01-05_120000.txt"]
@@ -44,9 +42,7 @@ def test_save_transcript_custom_dir_skips_prune(tmp_path: Path, monkeypatch) -> 
     default = tmp_path / "transcripts"
     default.mkdir(parents=True, exist_ok=True)
     for index in range(3):
-        (default / f"2026-01-0{index + 1}_120000.txt").write_text(
-            str(index), encoding="utf-8"
-        )
+        (default / f"2026-01-0{index + 1}_120000.txt").write_text(str(index), encoding="utf-8")
 
     path2 = recovery.save_transcript("tweede", directory=custom)
     assert path2.parent == custom

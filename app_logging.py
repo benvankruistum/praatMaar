@@ -99,9 +99,7 @@ def setup_logging() -> Path:
     path = directory / _LOG_NAME
 
     log_file = path.open("a", encoding="utf-8", errors="replace")
-    log_file.write(
-        f"\n--- praatMaar start {datetime.now().isoformat(timespec='seconds')} ---\n"
-    )
+    log_file.write(f"\n--- praatMaar start {datetime.now().isoformat(timespec='seconds')} ---\n")
     log_file.flush()
 
     sys.stdout = cast(TextIO, _Tee(getattr(sys, "stdout", None), log_file))
@@ -115,9 +113,7 @@ def setup_logging() -> Path:
     )
     if not already:
         handler = logging.FileHandler(path, encoding="utf-8")
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-        )
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
         root.addHandler(handler)
         root.setLevel(logging.INFO)
 

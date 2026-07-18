@@ -13,7 +13,8 @@ eerst `init(keyboard)` aan zodra pynput beschikbaar is.
 from __future__ import annotations
 
 import sys
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 _keyboard: Any = None
 

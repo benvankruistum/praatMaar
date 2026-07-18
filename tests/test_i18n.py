@@ -26,7 +26,4 @@ def test_t_fallback_to_nl() -> None:
 
 def test_speech_codes_supported() -> None:
     for code in ("nl", "en", "de"):
-        assert (
-            i18n.normalize_language(code, allowed=i18n.SUPPORTED_SPEECH_LANGUAGES)
-            == code
-        )
+        assert i18n.normalize_language(code, allowed=i18n.SUPPORTED_SPEECH_LANGUAGES) == code

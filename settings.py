@@ -14,7 +14,8 @@ SIGABRT).
 from __future__ import annotations
 
 import queue
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import sounddevice as sd
 
@@ -42,12 +43,10 @@ def _modes() -> list[tuple[str, str]]:
 
 
 def _language_choices() -> list[tuple[str, str]]:
-    return [
-        (i18n.LANGUAGE_LABELS[code], code) for code in i18n.SUPPORTED_UI_LANGUAGES
-    ]
+    return [(i18n.LANGUAGE_LABELS[code], code) for code in i18n.SUPPORTED_UI_LANGUAGES]
 
 
-def _input_devices() -> list[tuple[str, "int | None"]]:
+def _input_devices() -> list[tuple[str, int | None]]:
     """(label, device-index) voor elk invoerapparaat; index None = Windows-standaard."""
 
     options: list[tuple[str, int | None]] = [(i18n.t("settings.mic.default"), None)]
@@ -64,7 +63,7 @@ def open_settings_dialog(
     root: Any,
     current: dict[str, Any],
     on_apply: Callable[[dict[str, Any]], None],
-    set_capture: "Callable[[Any | None], None] | None" = None,
+    set_capture: Callable[[Any | None], None] | None = None,
     *,
     wait: bool = False,
     use_tk_capture: bool = False,
@@ -98,9 +97,7 @@ def open_settings_dialog(
     device_labels = [label for label, _ in devices]
     current_device = current.get("microphone_device")
     device_label_by_value = {value: label for label, value in devices}
-    current_device_label = device_label_by_value.get(
-        current_device, device_labels[0]
-    )
+    current_device_label = device_label_by_value.get(current_device, device_labels[0])
 
     row = 0
 
@@ -112,9 +109,9 @@ def open_settings_dialog(
     # Microfoon.
     _section_label(i18n.t("settings.microphone"))
     mic_var = tk.StringVar(value=current_device_label)
-    ttk.Combobox(
-        win, textvariable=mic_var, values=device_labels, state="readonly", width=42
-    ).grid(row=row, column=0, sticky="ew", pady=(0, 12))
+    ttk.Combobox(win, textvariable=mic_var, values=device_labels, state="readonly", width=42).grid(
+        row=row, column=0, sticky="ew", pady=(0, 12)
+    )
     row += 1
 
     # Pill-positie.
@@ -124,13 +121,11 @@ def open_settings_dialog(
     pos_value_by_label = {label: value for label, value in positions}
     pos_label_by_value = {value: label for label, value in positions}
     pos_var = tk.StringVar(
-        value=pos_label_by_value.get(
-            current.get("indicator_position"), pos_labels[0]
-        )
+        value=pos_label_by_value.get(current.get("indicator_position"), pos_labels[0])
     )
-    ttk.Combobox(
-        win, textvariable=pos_var, values=pos_labels, state="readonly", width=42
-    ).grid(row=row, column=0, sticky="ew", pady=(0, 12))
+    ttk.Combobox(win, textvariable=pos_var, values=pos_labels, state="readonly", width=42).grid(
+        row=row, column=0, sticky="ew", pady=(0, 12)
+    )
     row += 1
 
     # Bedieningsmodus.
@@ -139,12 +134,10 @@ def open_settings_dialog(
     mode_labels = [label for label, _ in modes]
     mode_value_by_label = {label: value for label, value in modes}
     mode_label_by_value = {value: label for label, value in modes}
-    mode_var = tk.StringVar(
-        value=mode_label_by_value.get(current.get("mode"), mode_labels[0])
+    mode_var = tk.StringVar(value=mode_label_by_value.get(current.get("mode"), mode_labels[0]))
+    ttk.Combobox(win, textvariable=mode_var, values=mode_labels, state="readonly", width=42).grid(
+        row=row, column=0, sticky="ew", pady=(0, 12)
     )
-    ttk.Combobox(
-        win, textvariable=mode_var, values=mode_labels, state="readonly", width=42
-    ).grid(row=row, column=0, sticky="ew", pady=(0, 12))
     row += 1
 
     # Spraakherkenning.
@@ -158,9 +151,9 @@ def open_settings_dialog(
     )
     _section_label(i18n.t("settings.speech_language"))
     speech_var = tk.StringVar(value=lang_label_by_value.get(speech_code, lang_labels[0]))
-    ttk.Combobox(
-        win, textvariable=speech_var, values=lang_labels, state="readonly", width=42
-    ).grid(row=row, column=0, sticky="ew", pady=(0, 12))
+    ttk.Combobox(win, textvariable=speech_var, values=lang_labels, state="readonly", width=42).grid(
+        row=row, column=0, sticky="ew", pady=(0, 12)
+    )
     row += 1
 
     # Interfacetaal.
@@ -170,9 +163,9 @@ def open_settings_dialog(
     )
     _section_label(i18n.t("settings.ui_language"))
     ui_var = tk.StringVar(value=lang_label_by_value.get(ui_code, lang_labels[0]))
-    ttk.Combobox(
-        win, textvariable=ui_var, values=lang_labels, state="readonly", width=42
-    ).grid(row=row, column=0, sticky="ew", pady=(0, 12))
+    ttk.Combobox(win, textvariable=ui_var, values=lang_labels, state="readonly", width=42).grid(
+        row=row, column=0, sticky="ew", pady=(0, 12)
+    )
     row += 1
 
     # Sneltoets.
@@ -192,9 +185,9 @@ def open_settings_dialog(
     row += 1
 
     hk_var = tk.StringVar(value=hotkeys.format_hotkey(hotkey_tokens))
-    ttk.Label(
-        hk_frame, textvariable=hk_var, relief="groove", padding=(8, 4), anchor="w"
-    ).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+    ttk.Label(hk_frame, textvariable=hk_var, relief="groove", padding=(8, 4), anchor="w").grid(
+        row=0, column=0, sticky="ew", padx=(0, 8)
+    )
     record_btn = ttk.Button(hk_frame, text=i18n.t("settings.hotkey.record"))
     record_btn.grid(row=0, column=1)
 
@@ -327,25 +320,26 @@ def open_settings_dialog(
     row += 1
 
     paste_var = tk.BooleanVar(value=bool(current.get("auto_paste", True)))
-    ttk.Checkbutton(
-        win, text=i18n.t("settings.auto_paste"), variable=paste_var
-    ).grid(row=row, column=0, sticky="w", pady=(0, 12))
+    ttk.Checkbutton(win, text=i18n.t("settings.auto_paste"), variable=paste_var).grid(
+        row=row, column=0, sticky="w", pady=(0, 12)
+    )
     row += 1
 
     warm_var = tk.BooleanVar(value=bool(current.get("warm_microphone", False)))
-    ttk.Checkbutton(
-        win, text=i18n.t("settings.warm_microphone"), variable=warm_var
-    ).grid(row=row, column=0, sticky="w", pady=(0, 12))
+    ttk.Checkbutton(win, text=i18n.t("settings.warm_microphone"), variable=warm_var).grid(
+        row=row, column=0, sticky="w", pady=(0, 12)
+    )
     row += 1
 
     _section_label(i18n.t("settings.model"))
     model_var = tk.StringVar(value=str(current.get("model", "small")))
-    ttk.Combobox(
-        win, textvariable=model_var, values=MODELS, state="readonly", width=42
-    ).grid(row=row, column=0, sticky="ew", pady=(0, 2))
+    ttk.Combobox(win, textvariable=model_var, values=MODELS, state="readonly", width=42).grid(
+        row=row, column=0, sticky="ew", pady=(0, 2)
+    )
     row += 1
     ttk.Label(
-        win, text=i18n.t("settings.model.restart"),
+        win,
+        text=i18n.t("settings.model.restart"),
         foreground="#888888",
     ).grid(row=row, column=0, sticky="w", pady=(0, 14))
     row += 1
@@ -365,9 +359,7 @@ def open_settings_dialog(
 
         new_settings = {
             "microphone_device": dict(devices).get(mic_var.get()),
-            "indicator_position": pos_value_by_label.get(
-                pos_var.get(), "boven-midden"
-            ),
+            "indicator_position": pos_value_by_label.get(pos_var.get(), "boven-midden"),
             "mode": mode_value_by_label.get(mode_var.get(), "toggle"),
             "hotkey": list(hotkey_tokens),
             "autostart": bool(autostart_var.get()),
@@ -385,9 +377,7 @@ def open_settings_dialog(
     ttk.Button(buttons, text=i18n.t("settings.cancel"), command=close).grid(
         row=0, column=0, padx=(0, 8)
     )
-    ttk.Button(buttons, text=i18n.t("settings.save"), command=save).grid(
-        row=0, column=1
-    )
+    ttk.Button(buttons, text=i18n.t("settings.save"), command=save).grid(row=0, column=1)
 
     win.protocol("WM_DELETE_WINDOW", close)
 

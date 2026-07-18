@@ -31,8 +31,8 @@ from __future__ import annotations
 import queue
 import sys
 import threading
-from typing import Any, Callable
-
+from collections.abc import Callable
+from typing import Any
 
 # =========================================================
 # UITERLIJK (constanten — bedoeld om te tunen)
@@ -57,6 +57,7 @@ BAR_X1 = 30
 BAR_X2 = SPLASH_WIDTH - 30
 BAR_Y = 108
 BAR_HEIGHT = 10
+
 
 def _ui_fonts() -> tuple[tuple, tuple, tuple]:
     """Platform-conforme UI-fonts voor het laadscherm."""
@@ -89,14 +90,14 @@ class Splash:
         import tkinter as tk
 
         self._tk = tk
-        self._queue: "queue.Queue[tuple[Any, ...]]" = queue.Queue()
+        self._queue: queue.Queue[tuple[Any, ...]] = queue.Queue()
 
         self._result: Any = None
         self._error: BaseException | None = None
         self._worker_done = False
 
         # Voortgangsstaat.
-        self._fraction: float | None = 0.0   # None = onbepaald ("bezig")
+        self._fraction: float | None = 0.0  # None = onbepaald ("bezig")
         self._indeterminate_phase = 0.0
         self._frame = 0
         self._error_shown = False
@@ -130,30 +131,47 @@ class Splash:
 
         # Titel.
         c.create_text(
-            SPLASH_WIDTH / 2, 40, text=app_name,
-            fill=TEXT_COLOR, font=TITLE_FONT,
+            SPLASH_WIDTH / 2,
+            40,
+            text=app_name,
+            fill=TEXT_COLOR,
+            font=TITLE_FONT,
         )
 
         # Statusregel.
         self._status_item = c.create_text(
-            SPLASH_WIDTH / 2, 74, text="Bezig met opstarten…",
-            fill=MUTED_COLOR, font=STATUS_FONT,
+            SPLASH_WIDTH / 2,
+            74,
+            text="Bezig met opstarten…",
+            fill=MUTED_COLOR,
+            font=STATUS_FONT,
         )
 
         # Voortgangsbalk: track + vulling.
         c.create_rectangle(
-            BAR_X1, BAR_Y, BAR_X2, BAR_Y + BAR_HEIGHT,
-            fill=TRACK_COLOR, outline="",
+            BAR_X1,
+            BAR_Y,
+            BAR_X2,
+            BAR_Y + BAR_HEIGHT,
+            fill=TRACK_COLOR,
+            outline="",
         )
         self._bar_fill = c.create_rectangle(
-            BAR_X1, BAR_Y, BAR_X1, BAR_Y + BAR_HEIGHT,
-            fill=ACCENT_COLOR, outline="",
+            BAR_X1,
+            BAR_Y,
+            BAR_X1,
+            BAR_Y + BAR_HEIGHT,
+            fill=ACCENT_COLOR,
+            outline="",
         )
 
         # Detailregel (percentage / MB) onder de balk.
         self._detail_item = c.create_text(
-            SPLASH_WIDTH / 2, BAR_Y + BAR_HEIGHT + 20, text="",
-            fill=MUTED_COLOR, font=DETAIL_FONT,
+            SPLASH_WIDTH / 2,
+            BAR_Y + BAR_HEIGHT + 20,
+            text="",
+            fill=MUTED_COLOR,
+            font=DETAIL_FONT,
         )
 
         # Verborgen "Sluiten"-knop, alleen zichtbaar in de foutstaat
@@ -201,7 +219,7 @@ class Splash:
 
     # ----- levenscyclus -----
 
-    def run(self, worker: Callable[["Splash"], Any]) -> Any:
+    def run(self, worker: Callable[[Splash], Any]) -> Any:
         """
         Toont het laadscherm en voert `worker(self)` uit op een achtergrond-thread.
 
@@ -210,9 +228,7 @@ class Splash:
         exception door die `worker` opwierp.
         """
 
-        thread = threading.Thread(
-            target=self._run_worker, args=(worker,), daemon=True
-        )
+        thread = threading.Thread(target=self._run_worker, args=(worker,), daemon=True)
         thread.start()
 
         self.root.deiconify()
@@ -229,7 +245,7 @@ class Splash:
 
         return self._result
 
-    def _run_worker(self, worker: Callable[["Splash"], Any]) -> None:
+    def _run_worker(self, worker: Callable[[Splash], Any]) -> None:
         try:
             self._result = worker(self)
             self._queue.put(("done",))
@@ -290,9 +306,7 @@ class Splash:
 
         # Balk verbergen, knop tonen.
         c.itemconfigure(self._bar_fill, state="hidden")
-        self._close_button.place(
-            relx=0.5, y=BAR_Y + BAR_HEIGHT + 18, anchor="center"
-        )
+        self._close_button.place(relx=0.5, y=BAR_Y + BAR_HEIGHT + 18, anchor="center")
 
     # ----- tekenen -----
 
@@ -311,9 +325,7 @@ class Splash:
             t = (self._frame % 80) / 80.0
             phase = 1.0 - abs(2.0 * t - 1.0)
             x1 = BAR_X1 + travel * phase
-            c.coords(
-                self._bar_fill, x1, BAR_Y, x1 + chunk, BAR_Y + BAR_HEIGHT
-            )
+            c.coords(self._bar_fill, x1, BAR_Y, x1 + chunk, BAR_Y + BAR_HEIGHT)
         else:
             fraction = max(0.0, min(1.0, self._fraction))
             x2 = BAR_X1 + span * fraction

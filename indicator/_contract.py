@@ -81,7 +81,7 @@ def mode_tag(mode: str) -> str:
 # STATUSDOORGIFTE (thread-safe, producent -> GUI)
 # =========================================================
 
-_status_queue: "queue.Queue[tuple[RecordingState, str]]" = queue.Queue()
+_status_queue: queue.Queue[tuple[RecordingState, str]] = queue.Queue()
 _level_lock = threading.Lock()
 _levels: deque[float] = deque(maxlen=NUM_BARS)
 

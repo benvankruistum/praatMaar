@@ -16,15 +16,22 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 import i18n
 from destinations import match_command
 from indicator import (
     RecordingState,
+)
+from indicator import (
     notify_state as default_notify_state,
+)
+from indicator import (
     push_level as default_push_level,
+)
+from indicator import (
     reset_levels as default_reset_levels,
 )
 
@@ -273,11 +280,13 @@ class Opnamesessie:
             return None
 
         if int(info.get("max_input_channels", 0) or 0) <= 0:
-            print(i18n.t(
-                "rec.device_no_input",
-                device=chosen,
-                name=info.get("name", "?"),
-            ))
+            print(
+                i18n.t(
+                    "rec.device_no_input",
+                    device=chosen,
+                    name=info.get("name", "?"),
+                )
+            )
             self.microphone_device = None
             return None
 
@@ -538,8 +547,7 @@ class Opnamesessie:
                             print(i18n.t("rec.recovery_saved", path=kept))
                         except OSError as exc:
                             print(
-                                "Waarschuwing: audio kon niet worden bewaard "
-                                f"voor herstel: {exc}"
+                                f"Waarschuwing: audio kon niet worden bewaard voor herstel: {exc}"
                             )
                 elif self.delete_temp_audio:
                     try:

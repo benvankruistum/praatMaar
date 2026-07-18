@@ -7,18 +7,17 @@ import time
 from pathlib import Path
 from typing import Any
 
-from indicator import (
-    RecordingIndicator,
-)
-
 import app_logging
 import config
 import destinations
-import hotkeys
 import host
+import hotkeys
 import i18n
 import recovery
 import win_identity
+from indicator import (
+    RecordingIndicator,
+)
 from opnamesessie import Opnamesessie
 from splash import Splash
 
@@ -28,13 +27,13 @@ from splash import Splash
 # Ze worden daar aan deze globals toegewezen zodat de rest van de code ze
 # ongewijzigd als `np`, `sd`, ... kan blijven gebruiken. `settings` en `tray`
 # worden lazy geïmporteerd (settings trekt zelf sounddevice binnen).
-np = None            # numpy
-sd = None            # sounddevice
+np = None  # numpy
+sd = None  # sounddevice
 pyperclip = None
-keyboard = None      # pynput.keyboard
-write_wav = None     # scipy.io.wavfile.write
+keyboard = None  # pynput.keyboard
+write_wav = None  # scipy.io.wavfile.write
 WhisperModel = None  # faster_whisper.WhisperModel
-TrayIcon = None      # tray.TrayIcon
+TrayIcon = None  # tray.TrayIcon
 
 # De console-meldingen gebruiken tekens als ●, ■ en ×. Op Windows valt stdout
 # terug op cp1252 zodra de uitvoer naar een bestand of pipe gaat, en dan crasht
@@ -165,7 +164,7 @@ toggle_latched = False
 # listener elke toets door naar deze callback en voert géén normale actie uit
 # (zodat het opnemen de dicteeropname niet start).
 capturing = False
-_capture_cb: "Any | None" = None
+_capture_cb: Any | None = None
 
 # Systeemvak (gezet in main); nodig voor live UI-taalwissel.
 _tray = None
@@ -206,27 +205,29 @@ def _load_dependencies(reporter: Splash) -> None:
         # Onbepaalde ("bezig") animatie: een blokkerende import kan de balk niet
         # tussentijds laten oplopen, dus houdt de glijdende animatie de indruk van
         # voortgang vast. Het detail toont wél de stap-teller.
-        reporter.set_progress(
-            None, i18n.t("splash.part", index=index, total=total_steps)
-        )
+        reporter.set_progress(None, i18n.t("splash.part", index=index, total=total_steps))
 
     step(1, i18n.t("splash.dep.whisper"))
     from faster_whisper import WhisperModel as _WhisperModel
+
     WhisperModel = _WhisperModel
 
     step(2, i18n.t("splash.dep.audio"))
     import numpy as _np
     from scipy.io.wavfile import write as _write_wav
+
     np = _np
     write_wav = _write_wav
 
     step(3, i18n.t("splash.dep.mic"))
     import sounddevice as _sd
+
     sd = _sd
 
     step(4, i18n.t("splash.dep.keyboard"))
-    from pynput import keyboard as _keyboard
     import pyperclip as _pyperclip
+    from pynput import keyboard as _keyboard
+
     keyboard = _keyboard
     pyperclip = _pyperclip
 
@@ -235,6 +236,7 @@ def _load_dependencies(reporter: Splash) -> None:
 
     step(5, i18n.t("splash.dep.tray"))
     from tray import TrayIcon as _TrayIcon
+
     TrayIcon = _TrayIcon
 
     session.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=write_wav)
@@ -284,9 +286,7 @@ class _DownloadTracker:
             )
 
 
-def _download_model_with_progress(
-    model_name: str, reporter: Splash
-) -> str:
+def _download_model_with_progress(model_name: str, reporter: Splash) -> str:
     """
     Downloadt het model via huggingface_hub met een eigen tqdm-klasse die de
     voortgang doorgeeft aan het laadscherm. Retourneert het lokale pad.
@@ -322,9 +322,7 @@ def _download_model_with_progress(
         from faster_whisper.utils import _MODELS as _fw_models
     except ImportError:
         _fw_models = {}
-    repo_id = _fw_models.get(model_name) or _KNOWN_REPO_IDS.get(
-        model_name, model_name
-    )
+    repo_id = _fw_models.get(model_name) or _KNOWN_REPO_IDS.get(model_name, model_name)
 
     # Dezelfde bestandenselectie als faster_whisper.download_model.
     allow_patterns = [
@@ -409,6 +407,7 @@ def load_model(reporter: Splash) -> WhisperModel:
 # =========================================================
 # HULPFUNCTIES VOOR TOETSEN
 # =========================================================
+
 
 def hotkey_is_pressed() -> bool:
     """Controleert of de volledige ingestelde sneltoets is ingedrukt."""
@@ -551,7 +550,8 @@ session = _build_session()
 # TOETSENBORDLISTENER
 # =========================================================
 
-def set_capture(callback: "Any | None") -> None:
+
+def set_capture(callback: Any | None) -> None:
     """
     Zet het opnemen van een nieuwe sneltoets aan (callback) of uit (None).
 
@@ -598,9 +598,7 @@ def on_press(
 
     # Escape afhandelen voordat de sneltoets wordt gecontroleerd.
     # Token-check (macOS MacKey) én pynput-Key.esc (Windows).
-    is_esc = token == "esc" or (
-        keyboard is not None and key == keyboard.Key.esc
-    )
+    is_esc = token == "esc" or (keyboard is not None and key == keyboard.Key.esc)
     if is_esc:
         if not session.is_recording:
             return
@@ -682,6 +680,7 @@ def on_release(
 # INSTELLINGEN TOEPASSEN (systeemvak → Instellingen)
 # =========================================================
 
+
 def current_settings() -> dict[str, Any]:
     """De huidige waarden, voor het vullen van het instellingen-dialoog."""
 
@@ -739,7 +738,7 @@ def apply_settings(
         new_settings.get("speech_language", LANGUAGE),
         allowed=i18n.SUPPORTED_SPEECH_LANGUAGES,
     )
-    ui = i18n.set_ui_language(
+    i18n.set_ui_language(
         i18n.normalize_language(
             new_settings.get("ui_language"),
             allowed=i18n.SUPPORTED_UI_LANGUAGES,
@@ -747,9 +746,7 @@ def apply_settings(
     )
 
     if "destinations" in new_settings:
-        DESTINATIONS = destinations.sanitize_destinations(
-            new_settings["destinations"]
-        )
+        DESTINATIONS = destinations.sanitize_destinations(new_settings["destinations"])
         if "active_destination" not in new_settings and ACTIVE_DESTINATION is not None:
             if not any(d["name"] == ACTIVE_DESTINATION for d in DESTINATIONS):
                 ACTIVE_DESTINATION = None
@@ -882,9 +879,7 @@ def main() -> None:
                 finally:
                     set_capture(None)
                 if new is not None:
-                    indicator.call_on_main(
-                        lambda: apply_settings(new, indicator)
-                    )
+                    indicator.call_on_main(lambda: apply_settings(new, indicator))
 
             threading.Thread(target=_mac_settings, daemon=True).start()
             return
@@ -911,9 +906,7 @@ def main() -> None:
                 finally:
                     set_capture(None)
                 if new is not None:
-                    indicator.call_on_main(
-                        lambda: apply_settings(new, indicator)
-                    )
+                    indicator.call_on_main(lambda: apply_settings(new, indicator))
 
             threading.Thread(target=_mac_destinations, daemon=True).start()
             return

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from host._mac import MacHost, _AGENT_LABEL
+from host._mac import _AGENT_LABEL, MacHost
 
 
 @pytest.fixture()
@@ -27,9 +27,7 @@ def test_autostart_writes_and_removes_plist(mac_home: Path) -> None:
     assert host.is_autostart_enabled() is False
 
     host.set_autostart(True)
-    plist_path = (
-        mac_home / "Library" / "LaunchAgents" / f"{_AGENT_LABEL}.plist"
-    )
+    plist_path = mac_home / "Library" / "LaunchAgents" / f"{_AGENT_LABEL}.plist"
     assert plist_path.is_file()
     assert host.is_autostart_enabled() is True
 
