@@ -12,7 +12,9 @@ en [macos-permissions.md](macos-permissions.md) (TCC).
 - macOS op Apple Silicon (arm64 eerst; universal2 niet gegarandeerd door CTranslate2)
 - Xcode Command Line Tools (of Python van python.org)
 - Python 3.10+ (getest: 3.11/3.12)
-- Geen Homebrew/PortAudio nodig: `pip install sounddevice` bundelt PortAudio
+- Geen PortAudio via brew nodig: `pip install sounddevice` bundelt PortAudio
+- Bij Homebrew-Python: ook `brew install python-tk@3.12` (anders
+  `No module named '_tkinter'` bij splash/settings)
 - Dependencies inclusief PyObjC:
 
   ```bash
@@ -55,6 +57,8 @@ Zonder signing: rechtsklik → Open bij Gatekeeper-blokkade, of
 source .venv/bin/activate
 python dictation.py
 ```
+
+Homebrew is optioneel en niet vereist voor PortAudio.
 
 Zet TCC-permissies zoals beschreven in [macos-permissions.md](macos-permissions.md).
 Permissies hechten aan de **Terminal** (of IDE) waarmee je start — niet aan een
