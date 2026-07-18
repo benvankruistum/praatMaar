@@ -39,7 +39,7 @@ def test_format_hotkey_letter() -> None:
 def test_format_hotkey_mac_labels(monkeypatch) -> None:
     monkeypatch.setattr(hotkeys.sys, "platform", "darwin")
     label = hotkeys.format_hotkey(["ctrl", "alt", "cmd", "space"])
-    assert label == "Control + Option + Command + Spatie"
+    assert label == "Control + Option + Command (Win) + Spatie"
 
 
 def test_format_hotkey_win_cmd_as_win(monkeypatch) -> None:

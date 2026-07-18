@@ -6,13 +6,17 @@ achtergrondthread (`dispatch_assert_queue` / SIGTRAP). NSEvent-monitors lopen
 op de Cocoa-mainloop (dezelfde als pystray) en vermijden die API.
 
 Paste gebeurt met Quartz CGEvents (⌘V via keycode), niet via pyautogui/pynput.
+
+Windows-/ISO-toetsenborden: modifiers worden uit ``modifierFlags`` gelezen
+(niet alleen uit bekende keycodes), en onbekende toetsen vallen terug op
+``charactersIgnoringModifiers`` of ``kc<n>``.
 """
 
 from __future__ import annotations
 
 from typing import Any, Callable
 
-# ANSI/US keycodes → tokens (fysieke toets; voldoende voor hotkeys + settings).
+# ANSI/US + veelgebruikte extra keycodes → tokens (fysieke toets).
 _KEYCODE_TOKENS: dict[int, str] = {
     0x00: "a",
     0x01: "s",
@@ -24,6 +28,7 @@ _KEYCODE_TOKENS: dict[int, str] = {
     0x07: "x",
     0x08: "c",
     0x09: "v",
+    0x0A: "section",  # ISO-toets links van Z / bij Shift (vaak <> op PC)
     0x0B: "b",
     0x0C: "q",
     0x0D: "w",
@@ -67,10 +72,15 @@ _KEYCODE_TOKENS: dict[int, str] = {
     0x33: "backspace",
     0x35: "esc",
     0x75: "delete",
+    0x72: "insert",
     0x73: "home",
     0x77: "end",
     0x74: "page_up",
     0x79: "page_down",
+    0x7B: "left",
+    0x7C: "right",
+    0x7D: "down",
+    0x7E: "up",
     0x7A: "f1",
     0x78: "f2",
     0x63: "f3",
@@ -83,21 +93,73 @@ _KEYCODE_TOKENS: dict[int, str] = {
     0x6D: "f10",
     0x67: "f11",
     0x6F: "f12",
+    # Numpad
+    0x52: "num0",
+    0x53: "num1",
+    0x54: "num2",
+    0x55: "num3",
+    0x56: "num4",
+    0x57: "num5",
+    0x58: "num6",
+    0x59: "num7",
+    0x5B: "num8",
+    0x5C: "num9",
+    0x4C: "num_enter",
+    0x45: "num_add",
+    0x4E: "num_sub",
+    0x43: "num_mul",
+    0x4B: "num_div",
+    0x41: "num_dec",
+    0x47: "num_clear",
 }
 
-# Modifier keycodes (FlagsChanged).
+# Modifier keycodes (FlagsChanged) — aanvullend; primaire bron is modifierFlags.
 _MOD_KEYCODES: dict[int, str] = {
-    0x37: "cmd",  # left command
+    0x37: "cmd",  # left command / Windows-toets
     0x36: "cmd",  # right command
     0x38: "shift",
     0x3C: "shift",
-    0x3A: "alt",  # option
+    0x3A: "alt",  # option / Alt
     0x3D: "alt",
     0x3B: "ctrl",
     0x3E: "ctrl",
 }
 
+_MODIFIER_FLAG_BITS: dict[str, int] = {
+    "cmd": 1 << 20,  # NSEventModifierFlagCommand (Win-toets op PC-boards)
+    "shift": 1 << 17,
+    "alt": 1 << 19,  # Option / Alt / AltGr (deels)
+    "ctrl": 1 << 18,
+}
+
+# NSEvent function-key Unicode (charactersIgnoringModifiers).
+_FUNCTION_CHAR_TOKENS: dict[int, str] = {
+    0xF700: "up",
+    0xF701: "down",
+    0xF702: "left",
+    0xF703: "right",
+    0xF704: "f1",
+    0xF705: "f2",
+    0xF706: "f3",
+    0xF707: "f4",
+    0xF708: "f5",
+    0xF709: "f6",
+    0xF70A: "f7",
+    0xF70B: "f8",
+    0xF70C: "f9",
+    0xF70D: "f10",
+    0xF70E: "f11",
+    0xF70F: "f12",
+    0xF727: "insert",
+    0xF728: "delete",
+    0xF729: "home",
+    0xF72B: "end",
+    0xF72C: "page_up",
+    0xF72D: "page_down",
+}
+
 _KEY_V = 0x09
+_MODIFIER_TOKENS = frozenset(_MODIFIER_FLAG_BITS)
 
 
 class MacKey:
@@ -137,12 +199,66 @@ def _token_for_keycode(keycode: int) -> str | None:
     return _KEYCODE_TOKENS.get(int(keycode))
 
 
+def _token_from_characters(chars: str | None) -> str | None:
+    if not chars:
+        return None
+    ch = chars[0]
+    code = ord(ch)
+    if code in _FUNCTION_CHAR_TOKENS:
+        return _FUNCTION_CHAR_TOKENS[code]
+    if ch == " ":
+        return "space"
+    if ch in ("\r", "\n"):
+        return "enter"
+    if ch == "\t":
+        return "tab"
+    if ch == "\x1b":
+        return "esc"
+    if ch == "\x08" or ch == "\x7f":
+        return "backspace"
+    # Printbare ASCII (letters/cijfers/leestekens op PC- en ISO-layouts).
+    if 33 <= code <= 126:
+        return ch.lower()
+    return None
+
+
+def token_for_nsevent(event: Any) -> str | None:
+    """
+    Zet een NSEvent om naar een hotkey-token.
+
+    Volgorde: bekende keycode → charactersIgnoringModifiers → kc<keycode>.
+    Modifiers zelf worden via modifierFlags gesynchroniseerd, niet hier.
+    """
+
+    keycode = int(event.keyCode())
+    if keycode in _MOD_KEYCODES:
+        return _MOD_KEYCODES[keycode]
+
+    mapped = _KEYCODE_TOKENS.get(keycode)
+    if mapped is not None:
+        return mapped
+
+    try:
+        chars = event.charactersIgnoringModifiers()
+    except Exception:
+        chars = None
+    from_chars = _token_from_characters(chars if isinstance(chars, str) else None)
+    if from_chars is not None:
+        return from_chars
+
+    # Laatste redmiddel: fysieke toets blijft matchbaar bij dicteren.
+    return f"kc{keycode}"
+
+
 class QuartzKeyListener:
     """
     Globale toetsenmonitor op de Cocoa-mainloop.
 
     API-compatibiliteit met pynput.Listener: `start()` / `stop()`, callbacks
     `on_press` / `on_release` krijgen een `MacKey`.
+
+    Modifiers komen uit ``modifierFlags`` (betrouwbaar op Windows-toetsenborden
+    waar Win=Command en Alt=Option); gewone toetsen via keycode + fallback.
     """
 
     def __init__(
@@ -176,8 +292,6 @@ class QuartzKeyListener:
                 pass
 
         def local_handler(event: Any) -> Any:
-            # Lokale monitor: events terwijl onze app/venster focus heeft
-            # (globale monitors krijgen die niet). Event doorgeven.
             try:
                 self._handle(event)
             except Exception:
@@ -213,6 +327,17 @@ class QuartzKeyListener:
         self._local_monitor = None
         self._mod_down.clear()
 
+    def _sync_modifiers(self, flags: int) -> None:
+        for token, bit in _MODIFIER_FLAG_BITS.items():
+            is_down = bool(flags & bit)
+            was_down = token in self._mod_down
+            if is_down and not was_down:
+                self._mod_down.add(token)
+                self._on_press(MacKey(token))
+            elif not is_down and was_down:
+                self._mod_down.discard(token)
+                self._on_release(MacKey(token))
+
     def _handle(self, event: Any) -> None:
         from AppKit import (  # type: ignore[import-not-found]
             NSEventTypeFlagsChanged,
@@ -221,33 +346,17 @@ class QuartzKeyListener:
         )
 
         etype = event.type()
-        keycode = int(event.keyCode())
+        flags = int(event.modifierFlags())
+        # Altijd uit flags: Win-toets=Command, Alt=Option, ook als keycode afwijkt.
+        self._sync_modifiers(flags)
 
         if etype == NSEventTypeFlagsChanged:
-            token = _MOD_KEYCODES.get(keycode)
-            if token is None:
-                return
-            # FlagsChanged: bepaal of de modifier nu aan of uit staat.
-            flags = int(event.modifierFlags())
-            flag_bits = {
-                "cmd": 1 << 20,  # NSEventModifierFlagCommand
-                "shift": 1 << 17,
-                "alt": 1 << 19,
-                "ctrl": 1 << 18,
-            }
-            is_down = bool(flags & flag_bits[token])
-            was_down = token in self._mod_down
-            if is_down and not was_down:
-                self._mod_down.add(token)
-                self._on_press(MacKey(token))
-            elif not is_down and was_down:
-                self._mod_down.discard(token)
-                self._on_release(MacKey(token))
             return
 
-        token = _token_for_keycode(keycode)
-        if token is None:
+        token = token_for_nsevent(event)
+        if token is None or token in _MODIFIER_TOKENS:
             return
+
         key = MacKey(token)
         if etype == NSEventTypeKeyDown:
             if event.isARepeat():

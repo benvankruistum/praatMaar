@@ -32,6 +32,11 @@ Instellingen draait in een **apart Tk-proces** (`settings_process.py`). Een
 tkinter-dialoog in dezelfde Cocoa-runloop als pystray/NSApp crasht bij sluiten
 (`PyEval_RestoreThread` → SIGABRT).
 
+Sneltoets-opname in Instellingen gebruikt Tk KeyPress (niet alleen NSEvent-
+keycodes), zodat **Windows-/PC-toetsenborden** (Win-toets = Command, Alt,
+pijltjes, ISO-`<>`) wél geregistreerd worden. De dicteer-hotkey zelf luistert
+via `QuartzKeyListener` met dezelfde tokens (modifiers uit `modifierFlags`).
+
 ## `.app`-bundle
 
 In `praatMaar.spec` staat `NSMicrophoneUsageDescription` in de Info.plist zodat

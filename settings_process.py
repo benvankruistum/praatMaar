@@ -5,6 +5,10 @@ Op macOS crasht het sluiten van een Tk-`Toplevel` die in dezelfde Cocoa-
 runloop als pystray/NSApp hangt (`PyEval_RestoreThread` → SIGABRT). Daarom
 draait Instellingen daar in een apart proces met een echte `mainloop`.
 
+Sneltoets-opname gebeurt via Tk KeyPress/KeyRelease (`use_tk_capture`) — dat
+herkent Windows-/PC-toetsenborden (Win=Meta/Super, Alt, enz.) beter dan alleen
+NSEvent-keycodes.
+
 Parent: ``run_settings_subprocess(current)`` → dict of None.
 Kind: ``python settings_process.py <in.json> <out.json>``
 of frozen: ``praatMaar --praatmaar-settings-ui <in.json> <out.json>``.
@@ -84,28 +88,11 @@ def main(argv: "list[str] | None" = None) -> int:
 
     import tkinter as tk
 
-    from mac_input import QuartzKeyListener
     from settings import open_settings_dialog
 
     root = tk.Tk()
     root.withdraw()
     root.title("praatMaar — Instellingen")
-
-    capture_cb: "Any | None" = None
-
-    def on_press(key: Any) -> None:
-        cb = capture_cb
-        if cb is not None:
-            cb("press", key)
-
-    def on_release(key: Any) -> None:
-        cb = capture_cb
-        if cb is not None:
-            cb("release", key)
-
-    def set_capture(callback: "Any | None") -> None:
-        nonlocal capture_cb
-        capture_cb = callback
 
     def on_apply(new_settings: dict[str, Any]) -> None:
         out_path.write_text(
@@ -113,24 +100,16 @@ def main(argv: "list[str] | None" = None) -> int:
             encoding="utf-8",
         )
 
-    listener = QuartzKeyListener(on_press=on_press, on_release=on_release)
-    try:
-        listener.start()
-    except Exception as exc:
-        print(f"Waarschuwing: sneltoets-opname niet beschikbaar ({exc})")
-        listener = None
-
     try:
         open_settings_dialog(
             root,
             current,
             on_apply,
-            set_capture if listener is not None else None,
+            set_capture=None,
             wait=True,
+            use_tk_capture=True,
         )
     finally:
-        if listener is not None:
-            listener.stop()
         try:
             root.destroy()
         except Exception:

@@ -47,15 +47,72 @@ _DISPLAY_NAMES_WIN = {
     "end": "End",
     "page_up": "PageUp",
     "page_down": "PageDown",
+    "left": "←",
+    "right": "→",
+    "up": "↑",
+    "down": "↓",
+    "section": "<>",
 }
 
 _DISPLAY_NAMES_MAC = {
     **_DISPLAY_NAMES_WIN,
     "ctrl": "Control",
     "alt": "Option",
-    "cmd": "Command",
-    "cmd_l": "Command",
-    "cmd_r": "Command",
+    # Win-toets op een PC-board = Command op macOS.
+    "cmd": "Command (Win)",
+    "cmd_l": "Command (Win)",
+    "cmd_r": "Command (Win)",
+}
+
+# Tk keysym → token (Instellingen-opname op macOS; PC-/Windows-boards).
+_TK_KEYSYM_TOKENS: dict[str, str] = {
+    "Control_L": "ctrl",
+    "Control_R": "ctrl",
+    "Shift_L": "shift",
+    "Shift_R": "shift",
+    "Alt_L": "alt",
+    "Alt_R": "alt",
+    "Option_L": "alt",
+    "Option_R": "alt",
+    "Meta_L": "cmd",
+    "Meta_R": "cmd",
+    "Super_L": "cmd",
+    "Super_R": "cmd",
+    "Command": "cmd",
+    "Command_L": "cmd",
+    "Command_R": "cmd",
+    "Win_L": "cmd",
+    "Win_R": "cmd",
+    "space": "space",
+    "Return": "enter",
+    "KP_Enter": "num_enter",
+    "Tab": "tab",
+    "Escape": "esc",
+    "BackSpace": "backspace",
+    "Delete": "delete",
+    "Insert": "insert",
+    "Home": "home",
+    "End": "end",
+    "Prior": "page_up",
+    "Next": "page_down",
+    "Left": "left",
+    "Right": "right",
+    "Up": "up",
+    "Down": "down",
+    "plus": "=",
+    "minus": "-",
+    "equal": "=",
+    "comma": ",",
+    "period": ".",
+    "slash": "/",
+    "backslash": "\\",
+    "bracketleft": "[",
+    "bracketright": "]",
+    "semicolon": ";",
+    "apostrophe": "'",
+    "grave": "`",
+    "less": "section",
+    "greater": "section",
 }
 
 
@@ -123,6 +180,43 @@ def key_to_token(key: Any) -> str | None:
             return f"vk{vk}"
 
     return None
+
+
+def tk_keysym_to_token(keysym: str) -> str | None:
+    """Zet een Tk ``event.keysym`` om naar een hotkey-token."""
+
+    if not keysym:
+        return None
+    mapped = _TK_KEYSYM_TOKENS.get(keysym)
+    if mapped is not None:
+        return mapped
+    if len(keysym) == 1:
+        return keysym.lower()
+    if keysym.startswith("F") and keysym[1:].isdigit():
+        return keysym.lower()  # F1 → f1
+    if keysym.startswith("KP_") and len(keysym) == 4 and keysym[3].isdigit():
+        return f"num{keysym[3]}"
+    # Onbekende keysym: toch vastleggen zodat PC-boards niet stil falen.
+    safe = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in keysym)
+    return f"tk_{safe.lower()}" if safe else None
+
+
+def tk_event_modifier_tokens(state: int) -> set[str]:
+    """Modifiers uit Tk ``event.state`` (bitmasks; platformonafhankelijk genoeg)."""
+
+    mods: set[str] = set()
+    # Tk: Shift=0x0001, Control=0x0004, Mod1/Alt=0x0008, Mod4/Super=0x0040,
+    # Mod2 vaak NumLock; Meta/Command op macOS vaak 0x0010 (Mod2) of 0x0080.
+    if state & 0x0001:
+        mods.add("shift")
+    if state & 0x0004:
+        mods.add("ctrl")
+    if state & 0x0008:
+        mods.add("alt")
+    if state & (0x0010 | 0x0040 | 0x0080):
+        # Meta / Super / Command — Win-toets op PC-board onder macOS.
+        mods.add("cmd")
+    return mods
 
 
 def normalize(tokens: Iterable[str]) -> list[str]:

@@ -67,7 +67,13 @@ def open_settings_dialog(
     set_capture: "Callable[[Any | None], None] | None" = None,
     *,
     wait: bool = False,
+    use_tk_capture: bool = False,
 ) -> None:
+    """
+    ``use_tk_capture``: neem sneltoetsen op via Tk KeyPress/KeyRelease
+    (betrouwbaarder voor Windows-/PC-toetsenborden in het macOS-settingsproces).
+    """
+
     import tkinter as tk
     from tkinter import ttk
 
@@ -217,8 +223,57 @@ def open_settings_dialog(
     def _capture_cb(event: str, key: Any) -> None:
         capture["queue"].put((event, hotkeys.key_to_token(key)))
 
+    def _tk_capture_event(event: Any) -> str:
+        """Tk KeyPress/Release → queue; 'break' dempt verdere dialoog-afhandeling."""
+
+        if not capture["active"]:
+            return "break"
+
+        type_name = getattr(event.type, "name", str(event.type))
+        try:
+            type_num = int(event.type)
+        except (TypeError, ValueError):
+            type_num = -1
+        if type_name in ("KeyPress", "2") or type_num == 2:
+            kind = "press"
+        elif type_name in ("KeyRelease", "3") or type_num == 3:
+            kind = "release"
+        else:
+            return "break"
+
+        token = hotkeys.tk_keysym_to_token(str(event.keysym))
+        mods = hotkeys.tk_event_modifier_tokens(int(event.state))
+        if kind == "press":
+            for mod in mods:
+                capture["queue"].put(("press", mod))
+            if token is not None and token not in mods:
+                capture["queue"].put(("press", token))
+        else:
+            if token is not None:
+                capture["queue"].put(("release", token))
+            still = hotkeys.tk_event_modifier_tokens(int(event.state))
+            for mod in ("ctrl", "shift", "alt", "cmd"):
+                if mod not in still:
+                    capture["queue"].put(("release", mod))
+        return "break"
+
+    def _bind_tk_capture() -> None:
+        win.bind("<KeyPress>", _tk_capture_event)
+        win.bind("<KeyRelease>", _tk_capture_event)
+        try:
+            win.focus_force()
+        except Exception:
+            pass
+
+    def _unbind_tk_capture() -> None:
+        try:
+            win.unbind("<KeyPress>")
+            win.unbind("<KeyRelease>")
+        except Exception:
+            pass
+
     def _start_capture() -> None:
-        if set_capture is None:
+        if set_capture is None and not use_tk_capture:
             return
         capture["active"] = True
         capture["pressed"] = set()
@@ -227,13 +282,18 @@ def open_settings_dialog(
             capture["queue"].get_nowait()
         hk_var.set(i18n.t("settings.hotkey.press"))
         record_btn.config(text=i18n.t("settings.hotkey.use"))
-        set_capture(_capture_cb)
+        if use_tk_capture:
+            _bind_tk_capture()
+        if set_capture is not None:
+            set_capture(_capture_cb)
         capture["poll_id"] = win.after(50, _drain_capture)
 
     def _stop_capture(confirm: bool) -> None:
         if not capture["active"]:
             return
         capture["active"] = False
+        if use_tk_capture:
+            _unbind_tk_capture()
         if set_capture is not None:
             set_capture(None)
         if capture["poll_id"] is not None:
@@ -255,7 +315,7 @@ def open_settings_dialog(
             _start_capture()
 
     record_btn.config(command=_toggle_capture)
-    if set_capture is None:
+    if set_capture is None and not use_tk_capture:
         record_btn.state(["disabled"])
 
     autostart_var = tk.BooleanVar(value=bool(current.get("autostart", False)))
