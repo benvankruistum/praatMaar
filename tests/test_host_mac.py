@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import plistlib
+import sys
 from pathlib import Path
 
 import pytest
@@ -52,6 +53,9 @@ def test_program_arguments_include_dictation_script(mac_home: Path) -> None:
 
 
 def test_single_instance_writes_pid(mac_home: Path) -> None:
+    if sys.platform == "win32":
+        pytest.skip("fcntl.flock bestaat niet op Windows")
+
     host = MacHost()
     assert host.acquire_single_instance() is True
     lock_path = host.app_dir() / "singleton.lock"

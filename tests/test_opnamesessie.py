@@ -148,7 +148,10 @@ def test_start_while_recording_is_noop(session: Opnamesessie, sd: FakeSoundDevic
     assert sd.stream is first
 
 
-def test_stop_keeps_stream_warm(session: Opnamesessie, sd: FakeSoundDevice) -> None:
+def test_stop_keeps_stream_warm(
+    session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
     session.warm_microphone = True
     session.start()
     assert sd.input_stream_calls == 1
@@ -201,10 +204,11 @@ def test_warmup_is_noop_when_warm_disabled(
 
 
 def test_start_reopens_inactive_warm_stream(
-    session: Opnamesessie, sd: FakeSoundDevice
+    session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Bluetooth uit/aan: PortAudio-stream blijft bestaan maar is niet meer active."""
 
+    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
     session.warm_microphone = True
     sd._fresh_stream_each_open = True
     session.warmup_microphone()
@@ -224,6 +228,7 @@ def test_start_reopens_stale_warm_stream_without_callbacks(
 ) -> None:
     """Stream 'active' maar geen callbacks meer (klassieke BT-zombie)."""
 
+    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
     session.warm_microphone = True
     sd._fresh_stream_each_open = True
     session.warmup_microphone()
