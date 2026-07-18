@@ -57,16 +57,21 @@ def _unique_path(directory: Path, stem: str, suffix: str) -> Path:
     return candidate
 
 
-def save_transcript(text: str) -> Path:
+def save_transcript(text: str, directory: Path | None = None) -> Path:
     """
     Schrijft het transcript atomisch weg (tmp-bestand + replace) en ruimt
-    daarna oude transcripts op. Geeft het pad van het bewaarde bestand terug.
+    daarna oude transcripts op in de standaardmap. Geeft het pad van het
+    bewaarde bestand terug.
+
+    Bij een custom `directory` wordt alleen daar weggeschreven; prune draait
+    dan niet (alleen voor de default `%APPDATA%\\praatMaar\\transcripts\\`).
     """
 
-    directory = transcripts_dir()
-    directory.mkdir(parents=True, exist_ok=True)
+    default = transcripts_dir()
+    target_dir = directory if directory is not None else default
+    target_dir.mkdir(parents=True, exist_ok=True)
 
-    target = _unique_path(directory, _timestamp(), ".txt")
+    target = _unique_path(target_dir, _timestamp(), ".txt")
     tmp = target.with_name(target.name + ".tmp")
 
     with tmp.open("w", encoding="utf-8") as handle:
@@ -74,7 +79,8 @@ def save_transcript(text: str) -> Path:
 
     tmp.replace(target)
 
-    prune_transcripts()
+    if target_dir.resolve() == default.resolve():
+        prune_transcripts()
 
     return target
 

@@ -33,6 +33,28 @@ def test_prune_keeps_newest(tmp_path: Path, monkeypatch) -> None:
     assert remaining == ["2026-01-04_120000.txt", "2026-01-05_120000.txt"]
 
 
+def test_save_transcript_custom_dir_skips_prune(tmp_path: Path, monkeypatch) -> None:
+    _patch_dirs(tmp_path, monkeypatch)
+    custom = tmp_path / "project"
+    path = recovery.save_transcript("hallo", directory=custom)
+    assert path.parent == custom
+    assert path.read_text(encoding="utf-8") == "hallo"
+
+    default = tmp_path / "transcripts"
+    default.mkdir(parents=True, exist_ok=True)
+    for index in range(3):
+        (default / f"2026-01-0{index + 1}_120000.txt").write_text(
+            str(index), encoding="utf-8"
+        )
+
+    path2 = recovery.save_transcript("tweede", directory=custom)
+    assert path2.parent == custom
+    assert path2.read_text(encoding="utf-8") == "tweede"
+    assert len(list(default.glob("*.txt"))) == 3
+    assert path.exists()
+    assert len(list(custom.glob("*.txt"))) == 2
+
+
 def test_preserve_audio_moves_wav(tmp_path: Path, monkeypatch) -> None:
     _patch_dirs(tmp_path, monkeypatch)
     source = tmp_path / "tmp_audio.wav"
