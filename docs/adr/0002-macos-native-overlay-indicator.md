@@ -56,10 +56,15 @@ Op macOS bouwen we de indicator als **native overlay**:
 
 ## Gevolgen
 
-- Extra dependency op macOS: `pyobjc-framework-Cocoa` (of gerichte PyObjC-wheels).
-- Indicator-code splitst of krijgt een Mac-pad: Windows blijft ctypes/tkinter;
-  Mac wordt AppKit/`NSPanel`.
+- Extra dependency op macOS: `pyobjc-framework-Cocoa` (environment marker in
+  `requirements.txt` / `pyproject.toml`).
+- Indicator-package: `indicator._contract` + `indicator._win` + `indicator._mac`.
 - Acceptatiecriterium op Mac: tijdens opname/transcriberen blijft het
   voorgrondvenster (bijv. Notes/TextEdit) key; Cmd+V plakt in dat veld.
-- Blocking voor de rest van de Mac-port: zonder deze pill (of een tijdelijke
-  stub) is de dicteercyclus op Mac niet productiewaardig volgens de gekozen UX.
+- Tray deelt de Cocoa-mainloop (`TrayIcon.run` op Darwin); de pill plant een
+  `NSTimer` via `prepare_external_runloop()`.
+
+## Implementatiestatus (2026-07-18)
+
+Code landde in de repo; **runtime-verificatie op een fysieke Mac** is de
+volgende stap (focus-diefstal, paste, LaunchAgent, TCC-prompts).

@@ -799,12 +799,14 @@ def apply_settings(
 
 def main() -> None:
     """
-    Start de indicator (hoofdthread), het systeemvak-icoon (eigen thread) en de
-    globale toetsenbordlistener.
+    Start de indicator, het systeemvak-/menubalk-icoon en de globale
+    toetsenbordlistener.
 
-    De tkinter-mainloop moet op de hoofdthread draaien (Tk-eis), dus die
-    blokkeert i.p.v. `listener.join()`. De pynput-listener en de pystray-tray
-    draaien op eigen threads.
+    Threading per OS:
+    - Windows: tkinter-mainloop op de hoofdthread; pystray detached; pynput
+      op een eigen thread.
+    - macOS: Cocoa-runloop op de hoofdthread via pystray (`TrayIcon.run`);
+      de native NSPanel-indicator plant een NSTimer op dezelfde runloop.
     """
 
     global model, _tray, _indicator
@@ -826,7 +828,7 @@ def main() -> None:
     # Eerst het laadscherm: het model wordt op een achtergrond-thread geladen
     # (en zo nodig gedownload) terwijl de splash de voortgang toont. De splash
     # draait zijn eigen mainloop op de hoofdthread en wordt volledig afgebroken
-    # voordat de indicator zijn eigen Tk-root opbouwt.
+    # voordat de indicator zijn venster opbouwt.
     try:
         model = Splash().run(_startup)
     except Exception as exc:
@@ -855,8 +857,8 @@ def main() -> None:
     _indicator = indicator
     indicator.set_destination(ACTIVE_DESTINATION)
 
-    # Systeemvak-icoon. "Afsluiten" en Ctrl+C funnelen beide naar request_stop();
-    # "Instellingen" wordt naar de hoofdthread gemarshald (tkinter-eis).
+    # Systeemvak-/menubalk. "Afsluiten" en Ctrl+C funnelen naar request_stop +
+    # tray.stop; "Instellingen" wordt naar de hoofdthread gemarshald.
     def open_settings() -> None:
         # Lazy import: settings.py trekt zelf sounddevice binnen; die is op dit
         # punt (na de splash) allang geladen, dus deze import is direct.
@@ -887,8 +889,12 @@ def main() -> None:
 
         indicator.call_on_main(lambda: show_help(indicator.root))
 
+    def request_shutdown() -> None:
+        indicator.request_stop()
+        tray.stop()
+
     tray = TrayIcon(
-        on_quit=indicator.request_stop,
+        on_quit=request_shutdown,
         on_settings=open_settings,
         on_destinations=open_destinations,
         on_help=open_help,
@@ -905,12 +911,16 @@ def main() -> None:
     )
     listener.start()
 
-    # Ctrl+C in de console laat de mainloop netjes eindigen. De handler draait
-    # op de hoofdthread; de poll-tick (elke ~50 ms) pikt de stop-vlag op.
-    signal.signal(signal.SIGINT, lambda *_: indicator.request_stop())
+    # Ctrl+C in de console laat de mainloop netjes eindigen.
+    signal.signal(signal.SIGINT, lambda *_: request_shutdown())
 
     try:
-        indicator.run()
+        if tray.owns_main_thread:
+            # macOS: NSTimer op de Cocoa-runloop, pystray blokkeert met NSApp.
+            indicator.prepare_external_runloop()
+            tray.run()
+        else:
+            indicator.run()
 
     except KeyboardInterrupt:
         pass

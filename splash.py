@@ -58,10 +58,23 @@ BAR_X2 = SPLASH_WIDTH - 30
 BAR_Y = 108
 BAR_HEIGHT = 10
 
-# Lettertypen.
-TITLE_FONT = ("Segoe UI Semibold", 15)
-STATUS_FONT = ("Segoe UI", 10)
-DETAIL_FONT = ("Segoe UI", 9)
+def _ui_fonts() -> tuple[tuple, tuple, tuple]:
+    """Platform-conforme UI-fonts voor het laadscherm."""
+
+    if sys.platform == "darwin":
+        return (
+            ("Helvetica Neue", 15, "bold"),
+            ("Helvetica Neue", 10),
+            ("Helvetica Neue", 9),
+        )
+    return (
+        ("Segoe UI Semibold", 15),
+        ("Segoe UI", 10),
+        ("Segoe UI", 9),
+    )
+
+
+TITLE_FONT, STATUS_FONT, DETAIL_FONT = _ui_fonts()
 
 
 class Splash:
@@ -73,11 +86,6 @@ class Splash:
     """
 
     def __init__(self, app_name: str = "praatMaar") -> None:
-        if sys.platform != "win32":
-            # Niet strikt Windows-only, maar de app draait alleen op Windows;
-            # we houden het gedrag daar gelijk aan de rest.
-            pass
-
         import tkinter as tk
 
         self._tk = tk
