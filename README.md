@@ -65,10 +65,12 @@ gedownload naar `%USERPROFILE%\.cache\huggingface`. Daarna: systeemvak-icoon
 |--------|-----------|
 | Start/stop dicteren (toggle) | `Ctrl+Shift+Alt+Spatie` |
 | Annuleren tijdens opname | `Esc` |
-| Instellingen / afsluiten | Rechtsklik systeemvak-icoon |
+| Instellingen / Bestemmingen / Help / afsluiten | Rechtsklik systeemvak-icoon |
 
 Sneltoets, modus (toggle of push-to-talk), microfoon en model zijn aanpasbaar
-via **Instellingen** in het systeemvak-menu.
+via **Instellingen** in het systeemvak-menu. **Bestemmingen** beheren sticky
+opslagmappen (naam + pad; wisselen met stem via exacte naam). **Help** opent
+lokale gebruikersdocumentatie (nl/en/de).
 
 ## Privacy
 

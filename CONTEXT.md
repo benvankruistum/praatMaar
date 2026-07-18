@@ -47,3 +47,18 @@ te stelen van het actieve invoerveld (`indicator.py`). Op Windows via een
 Interface-teksten via `i18n.py` en JSON onder `locales/` (`nl`/`en`/`de`).
 Config: `ui_language`. Spraakherkenning is apart: `speech_language` → Whisper
 via `Opnamesessie.language`.
+
+### bestemming
+
+Een benoemd transcriptdoel: **naam + map** in `config.json` (`destinations`).
+De actieve bestemming is **sticky** — blijft gelden tot je wisselt of reset.
+Wisselen via stem: na transcriptie exacte match (genormaliseerd) op de
+bestemmingsnaam; reset-frase **`standaard`** zet terug naar de defaultmap
+(`%APPDATA%\praatMaar\transcripts\`). Geen fuzzy match in v1.
+
+- **Pill:** toont de actieve naam in idle (`indicator.py` / `set_destination`).
+- **Tray:** beheer via menu-item **Bestemmingen** (`destinations_dialog.py`),
+  naast Instellingen en Help — niet in het algemene Instellingen-scherm.
+- **Logica:** `destinations.py` (normaliseren, matchen, padresolutie);
+  wiring in `dictation.py`; commando-check in `Opnamesessie` vóór plakken.
+- **Opslaan:** `recovery.save_transcript` naar actieve map; prune alleen default.

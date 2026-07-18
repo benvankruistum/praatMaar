@@ -19,6 +19,11 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 - `docs/STATUS.md`; verouderde handoffs gearchiveerd
 - `Opnamesessie` (`opnamesessie.py`) — dicteercyclus los van `dictation.py`
 - Windows indie-release: Inno Setup-script, `scripts/build-windows.ps1`, Release-workflow
+- **Bestemmingen:** sticky transcriptdoelen (naam→map), stemwissel via exacte
+  match, actieve naam in de pill, beheer via tray-dialoog
+- **Help:** tray-item met lokale gebruikersdocumentatie (`docs/user/help.*.md`,
+  nl/en/de)
+- Transcriptmap en actieve bestemmingsmap openen vanuit de Bestemmingen-dialoog
 
 ### Fixed
 

@@ -746,6 +746,9 @@ def apply_settings(
         DESTINATIONS = destinations.sanitize_destinations(
             new_settings["destinations"]
         )
+        if "active_destination" not in new_settings and ACTIVE_DESTINATION is not None:
+            if not any(d["name"] == ACTIVE_DESTINATION for d in DESTINATIONS):
+                ACTIVE_DESTINATION = None
     if "active_destination" in new_settings:
         raw_active = new_settings["active_destination"]
         if raw_active is None:
