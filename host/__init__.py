@@ -79,27 +79,42 @@ def _select() -> Host:
     raise RuntimeError(f"Niet-ondersteund platform: {sys.platform!r}")
 
 
-# De gekozen instantie voor dit besturingssysteem. Code die wil substitueren
-# (tests) accepteert zelf een `Host`; vrije consumenten gebruiken deze default
-# via de gemaksfuncties hieronder.
-default: Host = _select()
+# Lazy gekozen adapter. Niet bij import selecteren: zo blijven unit-tests op
+# Linux `host._mac` / contract-helpers kunnen laden zonder RuntimeError, en
+# blijft de module-top licht.
+_default: Host | None = None
+
+
+def get_default() -> Host:
+    """De adapter voor dit besturingssysteem (eenmalig gekozen)."""
+
+    global _default
+    if _default is None:
+        _default = _select()
+    return _default
+
+
+def __getattr__(name: str) -> Host:
+    if name == "default":
+        return get_default()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def paste() -> None:
-    default.paste()
+    get_default().paste()
 
 
 def set_autostart(enabled: bool) -> None:
-    default.set_autostart(enabled)
+    get_default().set_autostart(enabled)
 
 
 def is_autostart_enabled() -> bool:
-    return default.is_autostart_enabled()
+    return get_default().is_autostart_enabled()
 
 
 def app_dir() -> Path:
-    return default.app_dir()
+    return get_default().app_dir()
 
 
 def acquire_single_instance() -> bool:
-    return default.acquire_single_instance()
+    return get_default().acquire_single_instance()

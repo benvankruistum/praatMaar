@@ -2,13 +2,17 @@
 """
 PyInstaller-buildscript voor praatMaar (onedir, windowed).
 
-Bouwen:  .venv\\Scripts\\pyinstaller.exe praatMaar.spec --clean
-Resultaat: dist\\praatMaar\\praatMaar.exe
+Windows:  .venv\\Scripts\\pyinstaller.exe praatMaar.spec --clean
+          → dist\\praatMaar\\praatMaar.exe
+
+macOS:    .venv/bin/pyinstaller praatMaar.spec --clean
+          → dist/praatMaar.app  (BUNDLE, alleen op Darwin)
 
 Het Whisper-model wordt NIET meegebundeld: het wordt bij de eerste start
-(eenmalig) gedownload naar de HuggingFace-cache van de gebruiker
-(%USERPROFILE%\\.cache\\huggingface). Daar is het laadscherm voor.
+(eenmalig) gedownload naar de HuggingFace-cache van de gebruiker.
 """
+
+import sys
 
 from PyInstaller.utils.hooks import collect_all
 
@@ -20,25 +24,32 @@ hiddenimports = []
 # PyInstaller niet vanzelf volledig meepakt. collect_all haalt van elk de
 # submodules, datafiles én binaries op.
 _COLLECT = [
-    "faster_whisper",   # assets/silero_vad_v6.onnx (VAD)
-    "ctranslate2",      # native inferentie-DLL's
-    "onnxruntime",      # native DLL's voor het VAD-model
-    "av",               # PyAV: audio decoderen (native DLL's)
-    "tokenizers",       # native .pyd, gebruikt door faster_whisper
-    "sounddevice",      # PortAudio-DLL (_sounddevice_data)
-    "pynput",           # toetsenbord-backend wordt dynamisch geladen
-    "pystray",          # systeemvak-backend wordt dynamisch geladen
-    "huggingface_hub",  # veel lazy imports voor de download
+    "faster_whisper",
+    "ctranslate2",
+    "onnxruntime",
+    "av",
+    "tokenizers",
+    "sounddevice",
+    "pynput",
+    "pystray",
+    "huggingface_hub",
 ]
 
+if sys.platform == "darwin":
+    _COLLECT.append("objc")
+    _COLLECT.append("AppKit")
+    _COLLECT.append("Foundation")
+    _COLLECT.append("Quartz")
+
 for _pkg in _COLLECT:
-    _d, _b, _h = collect_all(_pkg)
+    try:
+        _d, _b, _h = collect_all(_pkg)
+    except Exception:
+        continue
     datas += _d
     binaries += _b
     hiddenimports += _h
 
-# Lokale modules die pas lazy (binnen functies) geïmporteerd worden; expliciet
-# opnemen zodat ze zeker in de bundle zitten.
 hiddenimports += [
     "app_logging",
     "config",
@@ -47,11 +58,16 @@ hiddenimports += [
     "help_dialog",
     "recovery",
     "settings",
+    "settings_process",
     "splash",
     "tray",
     "indicator",
+    "indicator._contract",
+    "indicator._win",
+    "indicator._mac",
     "hotkeys",
     "opnamesessie",
+    "mac_input",
     "win_identity",
     "i18n",
     # Platform-seam: de adapters worden lazy (in host._select) geïmporteerd,
@@ -72,7 +88,6 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Niet gebruikt; scheelt fors in omvang en buildtijd.
         "torch",
         "tensorflow",
         "matplotlib",
@@ -96,15 +111,17 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,          # windowed, net als pythonw (geen console)
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
-    entitlements_file=None,
+    entitlements_file=(
+        "packaging/macos/entitlements.plist" if sys.platform == "darwin" else None
+    ),
     # FileDescription/ProductName → "praatMaar" i.p.v. generieke bootloader-naam
     # in Windows-taakbalkhoek / systeempictogrammen-lijst.
-    version="version_info.txt",
+    version="version_info.txt" if sys.platform == "win32" else None,
 )
 
 coll = COLLECT(
@@ -116,3 +133,25 @@ coll = COLLECT(
     upx_exclude=[],
     name="praatMaar",
 )
+
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name="praatMaar.app",
+        icon=None,
+        bundle_identifier="nl.wulf.praatmaar",
+        info_plist={
+            "CFBundleName": "praatMaar",
+            "CFBundleDisplayName": "praatMaar",
+            "CFBundleShortVersionString": "0.1.0",
+            "CFBundleVersion": "0.1.0",
+            "NSHighResolutionCapable": True,
+            "NSMicrophoneUsageDescription": (
+                "praatMaar heeft microfoontoegang nodig om spraak op te nemen "
+                "voor lokale transcriptie."
+            ),
+            "NSAppleEventsUsageDescription": (
+                "praatMaar stuurt plak-toetsen naar het actieve invoerveld."
+            ),
+        },
+    )

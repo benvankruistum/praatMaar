@@ -24,7 +24,13 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 - **Help:** tray-item met lokale gebruikersdocumentatie (`docs/user/help.*.md`,
   nl/en/de)
 - Transcriptmap en actieve bestemmingsmap openen vanuit de Bestemmingen-dialoog
+- macOS-port: native NSPanel-indicator (`indicator._mac`, ADR-0002), tray op
+  main thread, `host._mac`, TCC- en release-docs, PyObjC-dependency op Darwin
 
 ### Fixed
 
 - Warme microfoonstream heropent na Bluetooth disconnect/reconnect (geen stille lege opnames meer)
+- Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
+- `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`
+- Indicator gesplitst naar package `indicator/` (contract + `_win` / `_mac`)
+- Hotkey-/settings-/splash-labels platform-aware (Mac: Control/Option/Command)

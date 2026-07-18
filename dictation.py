@@ -434,7 +434,7 @@ def wait_until_modifier_keys_released(
     Ctrl+Shift+V wordt uitgevoerd in plaats van Ctrl+V.
     """
 
-    relevant = {"ctrl", "shift", "alt"} | HOTKEY_TOKENS
+    relevant = {"ctrl", "shift", "alt", "cmd"} | HOTKEY_TOKENS
     started = time.monotonic()
 
     while True:
@@ -597,7 +597,11 @@ def on_press(
             pressed_tokens.add(token)
 
     # Escape afhandelen voordat de sneltoets wordt gecontroleerd.
-    if key == keyboard.Key.esc:
+    # Token-check (macOS MacKey) én pynput-Key.esc (Windows).
+    is_esc = token == "esc" or (
+        keyboard is not None and key == keyboard.Key.esc
+    )
+    if is_esc:
         if not session.is_recording:
             return
 
@@ -799,12 +803,14 @@ def apply_settings(
 
 def main() -> None:
     """
-    Start de indicator (hoofdthread), het systeemvak-icoon (eigen thread) en de
-    globale toetsenbordlistener.
+    Start de indicator, het systeemvak-/menubalk-icoon en de globale
+    toetsenbordlistener.
 
-    De tkinter-mainloop moet op de hoofdthread draaien (Tk-eis), dus die
-    blokkeert i.p.v. `listener.join()`. De pynput-listener en de pystray-tray
-    draaien op eigen threads.
+    Threading per OS:
+    - Windows: tkinter-mainloop op de hoofdthread; pystray detached; pynput
+      op een eigen thread.
+    - macOS: Cocoa-runloop op de hoofdthread via pystray (`TrayIcon.run`);
+      de native NSPanel-indicator plant een NSTimer op dezelfde runloop.
     """
 
     global model, _tray, _indicator
@@ -820,13 +826,15 @@ def main() -> None:
     # handmatige start, of twee keer klikken) stopt hier — vóór het laadscherm en
     # het model — zodat er nooit twee listeners, tray-iconen of indicators komen.
     if not host.acquire_single_instance():
-        print(i18n.t("already_running"))
+        # MacHost print al een PID-hint; elders deze regel.
+        if sys.platform != "darwin":
+            print(i18n.t("already_running"))
         raise SystemExit(0)
 
     # Eerst het laadscherm: het model wordt op een achtergrond-thread geladen
     # (en zo nodig gedownload) terwijl de splash de voortgang toont. De splash
     # draait zijn eigen mainloop op de hoofdthread en wordt volledig afgebroken
-    # voordat de indicator zijn eigen Tk-root opbouwt.
+    # voordat de indicator zijn venster opbouwt.
     try:
         model = Splash().run(_startup)
     except Exception as exc:
@@ -839,6 +847,7 @@ def main() -> None:
 
     print(i18n.t("model.loaded"))
     # Optioneel: microfoon al openen (anders 0,5–2 s bij eerste/Bluetooth-opname).
+    # Op macOS no-op: warme stream zou de systeembrede mic-indicator permanent tonen.
     if WARM_MICROPHONE:
         session.warmup_microphone()
     print(
@@ -855,11 +864,31 @@ def main() -> None:
     _indicator = indicator
     indicator.set_destination(ACTIVE_DESTINATION)
 
-    # Systeemvak-icoon. "Afsluiten" en Ctrl+C funnelen beide naar request_stop();
-    # "Instellingen" wordt naar de hoofdthread gemarshald (tkinter-eis).
+    # Systeemvak-/menubalk. "Afsluiten" en Ctrl+C funnelen naar request_stop +
+    # tray.stop; "Instellingen" wordt naar de hoofdthread gemarshald.
     def open_settings() -> None:
         # Lazy import: settings.py trekt zelf sounddevice binnen; die is op dit
         # punt (na de splash) allang geladen, dus deze import is direct.
+        if sys.platform == "darwin":
+            # Apart Tk-proces: een Toplevel in pystray's NSApp-runloop crasht
+            # bij sluiten (PyEval_RestoreThread → SIGABRT op macOS 26+).
+            from settings_process import run_settings_subprocess
+
+            def _mac_settings() -> None:
+                # Onderdruk dicteer-hotkeys terwijl Instellingen open is.
+                set_capture(lambda *_: None)
+                try:
+                    new = run_settings_subprocess(current_settings())
+                finally:
+                    set_capture(None)
+                if new is not None:
+                    indicator.call_on_main(
+                        lambda: apply_settings(new, indicator)
+                    )
+
+            threading.Thread(target=_mac_settings, daemon=True).start()
+            return
+
         from settings import open_settings_dialog
 
         indicator.call_on_main(
@@ -872,6 +901,23 @@ def main() -> None:
         )
 
     def open_destinations() -> None:
+        if sys.platform == "darwin":
+            from settings_process import run_destinations_subprocess
+
+            def _mac_destinations() -> None:
+                set_capture(lambda *_: None)
+                try:
+                    new = run_destinations_subprocess(current_settings())
+                finally:
+                    set_capture(None)
+                if new is not None:
+                    indicator.call_on_main(
+                        lambda: apply_settings(new, indicator)
+                    )
+
+            threading.Thread(target=_mac_destinations, daemon=True).start()
+            return
+
         from destinations_dialog import open_destinations_dialog
 
         indicator.call_on_main(
@@ -883,12 +929,29 @@ def main() -> None:
         )
 
     def open_help() -> None:
+        if sys.platform == "darwin":
+            from settings_process import run_help_subprocess
+
+            def _mac_help() -> None:
+                set_capture(lambda *_: None)
+                try:
+                    run_help_subprocess(current_settings())
+                finally:
+                    set_capture(None)
+
+            threading.Thread(target=_mac_help, daemon=True).start()
+            return
+
         from help_dialog import open_help as show_help
 
         indicator.call_on_main(lambda: show_help(indicator.root))
 
+    def request_shutdown() -> None:
+        indicator.request_stop()
+        tray.stop()
+
     tray = TrayIcon(
-        on_quit=indicator.request_stop,
+        on_quit=request_shutdown,
         on_settings=open_settings,
         on_destinations=open_destinations,
         on_help=open_help,
@@ -899,18 +962,30 @@ def main() -> None:
     indicator.state_listener = tray.set_state
     tray.start()
 
-    listener = keyboard.Listener(
-        on_press=on_press,
-        on_release=on_release,
-    )
+    # macOS 26+: géén pynput.Listener (TSM-crash op achtergrondthread).
+    # NSEvent-monitor op de Cocoa-mainloop i.p.v. pynput.
+    if tray.owns_main_thread:
+        from mac_input import QuartzKeyListener
+
+        listener = QuartzKeyListener(on_press=on_press, on_release=on_release)
+    else:
+        listener = keyboard.Listener(
+            on_press=on_press,
+            on_release=on_release,
+        )
     listener.start()
 
-    # Ctrl+C in de console laat de mainloop netjes eindigen. De handler draait
-    # op de hoofdthread; de poll-tick (elke ~50 ms) pikt de stop-vlag op.
-    signal.signal(signal.SIGINT, lambda *_: indicator.request_stop())
+    # Ctrl+C in de console laat de mainloop netjes eindigen.
+    signal.signal(signal.SIGINT, lambda *_: request_shutdown())
 
     try:
-        indicator.run()
+        if tray.owns_main_thread:
+            # macOS: NSTimer + NSEvent-monitor op de Cocoa-runloop; pystray
+            # blokkeert met NSApp (menubalk-icoon rechtsboven).
+            indicator.prepare_external_runloop()
+            tray.run()
+        else:
+            indicator.run()
 
     except KeyboardInterrupt:
         pass
@@ -933,4 +1008,14 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Frozen macOS: dialogen als apart proces (zelfde binary).
+    for _flag in (
+        "--praatmaar-settings-ui",
+        "--praatmaar-destinations-ui",
+        "--praatmaar-help-ui",
+    ):
+        if _flag in sys.argv:
+            from settings_process import main as settings_ui_main
+
+            raise SystemExit(settings_ui_main(sys.argv[1:]))
     main()

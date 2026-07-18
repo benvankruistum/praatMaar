@@ -1,20 +1,25 @@
 """
-Systeemvak-icoon voor praatMaar (pystray).
+Systeemvak-/menubalk-icoon voor praatMaar (pystray).
 
 Toont een microfoon-icoon dat per dicteertoestand kleurt (donker = gereed,
-rood = opname, amber = transcriberen), met een rechtsklik-menu (Instellingen,
-Bestemmingen, Help, Afsluiten). Draait op een **eigen thread** via
-`Icon.run_detached()`; de
-tkinter-mainloop houdt de hoofdthread.
+rood = opname, amber = transcriberen), met een menu (Instellingen,
+Bestemmingen, Help, Afsluiten).
 
-Regel: menu-callbacks draaien op de tray-thread en doen géén tkinter-werk. Ze
-zetten alleen een vlag (`request_stop`) of marshalen naar de hoofdthread
-(`indicator.call_on_main`). Icoon-/tooltip-updates komen van de pill op de
-hoofdthread via `set_state`.
+Threading:
+- **Windows:** `Icon.run_detached()` op een eigen thread; tkinter houdt de
+  hoofdthread.
+- **macOS:** AppKit eist de main-thread-runloop. `start()` is daar een no-op;
+  `run()` blokkeert met `Icon.run()` (Cocoa). De indicator plant een NSTimer
+  op dezelfde runloop (zie `indicator._mac`).
+
+Regel: menu-callbacks doen géén tkinter-werk. Ze zetten een vlag
+(`request_stop`) of marshalen naar de hoofdthread (`indicator.call_on_main`).
+Icoon-/tooltip-updates komen van de pill via `set_state`.
 """
 
 from __future__ import annotations
 
+import sys
 from typing import Callable
 
 import pystray
@@ -74,7 +79,7 @@ def _tooltip(state: RecordingState) -> str:
 
 
 class TrayIcon:
-    """Het systeemvak-icoon. `start()`/`stop()` beheren de detached tray-thread."""
+    """Systeemvak-/menubalk-icoon. Zie module-doc voor threading per OS."""
 
     def __init__(
         self,
@@ -88,6 +93,7 @@ class TrayIcon:
         self._on_destinations = on_destinations
         self._on_help = on_help
         self._state = RecordingState.IDLE
+        self._running_main = False
 
         self._icons = {
             state: _make_icon(color) for state, color in _STATE_COLORS.items()
@@ -119,6 +125,12 @@ class TrayIcon:
         except Exception:
             pass
 
+    @property
+    def owns_main_thread(self) -> bool:
+        """True op macOS: de menubalk moet de Cocoa-mainloop op de hoofdthread."""
+
+        return sys.platform == "darwin"
+
     def _handle_settings(self, icon: "pystray.Icon", item: "MenuItem") -> None:
         self._on_settings()
 
@@ -130,11 +142,34 @@ class TrayIcon:
 
     def _handle_quit(self, icon: "pystray.Icon", item: "MenuItem") -> None:
         self._on_quit()
+        # Zorg dat een blokkerende `run()` (Darwin) terugkeert.
+        try:
+            self._icon.stop()
+        except Exception:
+            pass
 
     def start(self) -> None:
-        """Start de tray op een eigen thread (niet-blokkerend)."""
+        """
+        Start de tray.
 
+        Windows: niet-blokkerend op een eigen thread.
+        macOS: no-op — bel daarna `run()` op de hoofdthread.
+        """
+
+        if self.owns_main_thread:
+            return
         self._icon.run_detached()
+
+    def run(self) -> None:
+        """Blokkerende Cocoa-/menubalk-runloop (macOS). Op Windows: no-op."""
+
+        if not self.owns_main_thread:
+            return
+        self._running_main = True
+        try:
+            self._icon.run()
+        finally:
+            self._running_main = False
 
     def stop(self) -> None:
         try:

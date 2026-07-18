@@ -1,22 +1,34 @@
 # praatMaar
 
-Lokale, Nederlandstalige dicteertool voor **Windows**. Neemt spraak op via een
-sneltoets, transcribeert lokaal met [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)
+Lokale, Nederlandstalige dicteertool. Neemt spraak op via een sneltoets,
+transcribeert lokaal met [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)
 (geen cloud-API) en plakt de tekst in het actieve invoerveld.
 
-> **Platform:** alleen Windows wordt ondersteund. macOS staat op de roadmap
-> (`docs/STATUS.md`); de app start daar nu niet.
+> **Platform:** Windows 10/11 is primair ondersteund. **macOS** heeft een
+> native overlay-port (NSPanel); runtime-verificatie op een Mac staat nog open —
+> zie [docs/STATUS.md](docs/STATUS.md).
 
 ## Vereisten
+
+### Windows
 
 - Windows 10/11
 - Python **3.10+** (getest tot 3.13)
 - Microfoon + microfoontoegang in Windows-privacyinstellingen
 - Eerste start: internet om het Whisper-model te downloaden (daarna offline)
 
+### macOS
+
+- macOS op Apple Silicon (arm64)
+- Python **3.10+** (van [python.org](https://www.python.org/downloads/) of Xcode CLT)
+- TCC: Microfoon, Input Monitoring, Toegankelijkheid —
+  [docs/macos-permissions.md](docs/macos-permissions.md)
+- Eerste start: internet voor model-download
+- Geen Homebrew/PortAudio nodig: `sounddevice` via pip bundelt PortAudio
+
 ## Installatie
 
-### Kant-en-klare build (aanbevolen)
+### Kant-en-klare build (Windows, aanbevolen)
 
 Download de nieuwste release op
 [GitHub Releases](https://github.com/benvankruistum/praatMaar/releases):
@@ -29,7 +41,7 @@ Builds zijn **niet digitaal ondertekend** (indie/OSS). Als Windows waarschuwt
 
 Details: [docs/release-windows.md](docs/release-windows.md).
 
-### Vanuit broncode
+### Vanuit broncode (Windows)
 
 ```powershell
 git clone https://github.com/benvankruistum/praatMaar.git
@@ -39,7 +51,21 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-## Starten
+### Vanuit broncode (macOS)
+
+```bash
+brew install portaudio
+git clone https://github.com/benvankruistum/praatMaar.git
+cd praatMaar
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python dictation.py
+```
+
+Zet daarna de TCC-permissies (zie hierboven). Build: [docs/release-macos.md](docs/release-macos.md).
+
+## Starten (Windows)
 
 Met console (handig bij problemen):
 
@@ -56,16 +82,15 @@ Zonder consolevenster (achtergrond):
 Of dubbelklik `start-praatMaar.vbs` (stil, geen zwarte cmd-flash).
 
 Bij de eerste start verschijnt een laadscherm terwijl het model wordt
-gedownload naar `%USERPROFILE%\.cache\huggingface`. Daarna: systeemvak-icoon
-+ status-pill.
+gedownload. Daarna: systeemvak-/menubalk-icoon + status-pill.
 
 ### Bediening (standaard)
 
 | Actie | Sneltoets |
 |--------|-----------|
-| Start/stop dicteren (toggle) | `Ctrl+Shift+Alt+Spatie` |
+| Start/stop dicteren (toggle) | `Ctrl+Shift+Alt+Spatie` (op Mac: Control+Shift+Option+Spatie) |
 | Annuleren tijdens opname | `Esc` |
-| Instellingen / Bestemmingen / Help / afsluiten | Rechtsklik systeemvak-icoon |
+| Instellingen / Bestemmingen / Help / afsluiten | Rechtsklik systeemvak-icoon (Mac: menubalk) |
 
 Sneltoets, modus (toggle of push-to-talk), microfoon en model zijn aanpasbaar
 via **Instellingen** in het systeemvak-menu. **Bestemmingen** beheren sticky
@@ -79,32 +104,28 @@ lokale gebruikersdocumentatie (nl/en/de).
 - Bij de **eerste** (of bij modelwissel) wordt het Whisper-model gedownload van
   Hugging Face.
 - De app gebruikt een **globale sneltoets** (pynput) en kan tekst op het
-  **klembord** zetten en plakken (`Ctrl+V`).
-- Gebruikersdata onder `%APPDATA%\praatMaar\`:
-  - `config.json` — instellingen
-  - `transcripts\` — recente transcripts (max. 50)
-  - `recovery\` — audio van mislukte transcripties (niet automatisch opgeruimd)
-  - `praatMaar.log` — diagnostisch logbestand
+  **klembord** zetten en plakken (Ctrl+V / Cmd+V).
+- Gebruikersdata:
+  - Windows: `%APPDATA%\praatMaar\`
+  - macOS: `~/Library/Application Support/praatMaar/`
+  - `config.json`, `transcripts\`, `recovery\`, `praatMaar.log`
 
 Zie ook [SECURITY.md](SECURITY.md).
 
 ## Logs bij problemen
 
-Als “er niets gebeurt” (vaak bij `pythonw` / gebouwde exe): open
-
-`%APPDATA%\praatMaar\praatMaar.log`
+- Windows: `%APPDATA%\praatMaar\praatMaar.log`
+- macOS: `~/Library/Application Support/praatMaar/praatMaar.log`
 
 ## Builden / release (optioneel)
 
-Zie [docs/release-windows.md](docs/release-windows.md). Kort:
+- Windows: [docs/release-windows.md](docs/release-windows.md)
+- macOS: [docs/release-macos.md](docs/release-macos.md)
 
-```powershell
-python -m pip install -e ".[build]"
-.\scripts\build-windows.ps1
+```text
+pyinstaller praatMaar.spec --clean
 ```
 
-Artefacten in `release\` (zip + Setup.exe). PyInstaller alleen:
-`pyinstaller praatMaar.spec --clean` → `dist\praatMaar\praatMaar.exe`.
 Het model wordt **niet** meegebundeld.
 
 ## Ontwikkeling

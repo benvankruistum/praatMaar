@@ -12,6 +12,7 @@ zodat tests een `FakeHost` kunnen steken.
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -126,11 +127,13 @@ class Opnamesessie:
         """
         Opent de microfoonstream alvast (na model-load).
 
-        Alleen als `warm_microphone` aan staat. Zonder warmup kost de eerste
-        InputStream.open op Windows vaak 0,5–2 s (zeker Bluetooth).
+        Alleen als `warm_microphone` aan staat (en niet op macOS). Zonder
+        warmup kost de eerste InputStream.open op Windows vaak 0,5–2 s
+        (zeker Bluetooth). Op macOS nooit warm: anders blijft de systeembrede
+        mic-indicator permanent in de menubalk staan.
         """
 
-        if not self.warm_microphone:
+        if not self._keep_stream_warm():
             return
 
         try:
@@ -139,10 +142,15 @@ class Opnamesessie:
         except Exception as exc:
             print(i18n.t("mic.warm_failed", error=exc))
 
+    def _keep_stream_warm(self) -> bool:
+        """Effectief warm houden: user-optie, nooit op macOS (menubalk-indicator)."""
+
+        return bool(self.warm_microphone) and sys.platform != "darwin"
+
     def _release_stream_if_cold(self) -> None:
         """Sluit de stream na een sessie tenzij warm houden aan staat."""
 
-        if not self.warm_microphone:
+        if not self._keep_stream_warm():
             self.stop_audio_stream()
 
     def refresh_input_device(self) -> None:
@@ -382,9 +390,8 @@ class Opnamesessie:
             self.on_ready()
             return
 
-        # Koude modus: stream mag dicht zodra de chunks veilig gekopieerd zijn.
+        # Koude modus / macOS: stream mag dicht zodra de chunks veilig gekopieerd zijn.
         self._release_stream_if_cold()
-
         self._notify(RecordingState.TRANSCRIBING, self.mode)
 
         thread = threading.Thread(

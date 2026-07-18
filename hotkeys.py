@@ -12,6 +12,7 @@ eerst `init(keyboard)` aan zodra pynput beschikbaar is.
 
 from __future__ import annotations
 
+import sys
 from typing import Any, Iterable
 
 _keyboard: Any = None
@@ -20,14 +21,15 @@ _keyboard: Any = None
 CTRL_KEYS: set = set()
 SHIFT_KEYS: set = set()
 ALT_KEYS: set = set()
+CMD_KEYS: set = set()
 
-MODIFIER_TOKENS = ("ctrl", "shift", "alt")
+MODIFIER_TOKENS = ("ctrl", "shift", "alt", "cmd")
 
 # De standaard-sneltoets als de gebruiker (nog) niets heeft ingesteld.
 DEFAULT_HOTKEY = ["ctrl", "shift", "alt", "space"]
 
-# Nette weergave per token; overige tokens worden generiek opgemaakt.
-_DISPLAY_NAMES = {
+# Nette weergave per token (Windows-default); macOS overschrijft via _display_names().
+_DISPLAY_NAMES_WIN = {
     "ctrl": "Ctrl",
     "shift": "Shift",
     "alt": "Alt",
@@ -45,29 +47,110 @@ _DISPLAY_NAMES = {
     "end": "End",
     "page_up": "PageUp",
     "page_down": "PageDown",
+    "left": "←",
+    "right": "→",
+    "up": "↑",
+    "down": "↓",
+    "section": "<>",
 }
+
+_DISPLAY_NAMES_MAC = {
+    **_DISPLAY_NAMES_WIN,
+    "ctrl": "Control",
+    "alt": "Option",
+    # Win-toets op een PC-board = Command op macOS.
+    "cmd": "Command (Win)",
+    "cmd_l": "Command (Win)",
+    "cmd_r": "Command (Win)",
+}
+
+# Tk keysym → token (Instellingen-opname op macOS; PC-/Windows-boards).
+_TK_KEYSYM_TOKENS: dict[str, str] = {
+    "Control_L": "ctrl",
+    "Control_R": "ctrl",
+    "Shift_L": "shift",
+    "Shift_R": "shift",
+    "Alt_L": "alt",
+    "Alt_R": "alt",
+    "Option_L": "alt",
+    "Option_R": "alt",
+    "Meta_L": "cmd",
+    "Meta_R": "cmd",
+    "Super_L": "cmd",
+    "Super_R": "cmd",
+    "Command": "cmd",
+    "Command_L": "cmd",
+    "Command_R": "cmd",
+    "Win_L": "cmd",
+    "Win_R": "cmd",
+    "space": "space",
+    "Return": "enter",
+    "KP_Enter": "num_enter",
+    "Tab": "tab",
+    "Escape": "esc",
+    "BackSpace": "backspace",
+    "Delete": "delete",
+    "Insert": "insert",
+    "Home": "home",
+    "End": "end",
+    "Prior": "page_up",
+    "Next": "page_down",
+    "Left": "left",
+    "Right": "right",
+    "Up": "up",
+    "Down": "down",
+    "plus": "=",
+    "minus": "-",
+    "equal": "=",
+    "comma": ",",
+    "period": ".",
+    "slash": "/",
+    "backslash": "\\",
+    "bracketleft": "[",
+    "bracketright": "]",
+    "semicolon": ";",
+    "apostrophe": "'",
+    "grave": "`",
+    "less": "section",
+    "greater": "section",
+}
+
+
+def _display_names() -> dict[str, str]:
+    if sys.platform == "darwin":
+        return _DISPLAY_NAMES_MAC
+    return _DISPLAY_NAMES_WIN
 
 
 def init(keyboard_module: Any) -> None:
     """Koppelt het (lazy geladen) pynput.keyboard en bouwt de modifier-sets."""
 
-    global _keyboard, CTRL_KEYS, SHIFT_KEYS, ALT_KEYS
+    global _keyboard, CTRL_KEYS, SHIFT_KEYS, ALT_KEYS, CMD_KEYS
 
     _keyboard = keyboard_module
     key = keyboard_module.Key
     CTRL_KEYS = {key.ctrl, key.ctrl_l, key.ctrl_r}
     SHIFT_KEYS = {key.shift, key.shift_l, key.shift_r}
     ALT_KEYS = {key.alt, key.alt_l, key.alt_r}
+    CMD_KEYS = set()
+    for name in ("cmd", "cmd_l", "cmd_r", "command", "command_l", "command_r"):
+        if hasattr(key, name):
+            CMD_KEYS.add(getattr(key, name))
 
 
 def key_to_token(key: Any) -> str | None:
     """
-    Zet een pynput-toets om naar een stabiel token.
+    Zet een pynput-toets (of macOS `MacKey`) om naar een stabiel token.
 
-    Modifiers worden samengevouwen tot 'ctrl'/'shift'/'alt'. Letters en cijfers
-    gaan via hun virtuele toetscode, zodat het token hetzelfde blijft ongeacht of
-    Shift het teken verandert (Shift+r levert anders 'R', Shift+1 een '!').
+    Modifiers worden samengevouwen tot 'ctrl'/'shift'/'alt'/'cmd'. Letters en
+    cijfers gaan via hun virtuele toetscode, zodat het token hetzelfde blijft
+    ongeacht of Shift het teken verandert.
     """
+
+    # mac_input.MacKey (Quartz/NSEvent) — geen pynput nodig.
+    token = getattr(key, "praatmaar_token", None)
+    if isinstance(token, str) and token:
+        return token
 
     if _keyboard is None:
         return None
@@ -78,9 +161,14 @@ def key_to_token(key: Any) -> str | None:
         return "shift"
     if key in ALT_KEYS:
         return "alt"
+    if key in CMD_KEYS:
+        return "cmd"
 
     if isinstance(key, _keyboard.Key):
-        return key.name  # bijv. space, f9, esc, home
+        name = key.name
+        if name in ("cmd", "cmd_l", "cmd_r", "command", "command_l", "command_r"):
+            return "cmd"
+        return name
 
     if isinstance(key, _keyboard.KeyCode):
         vk = key.vk
@@ -92,6 +180,43 @@ def key_to_token(key: Any) -> str | None:
             return f"vk{vk}"
 
     return None
+
+
+def tk_keysym_to_token(keysym: str) -> str | None:
+    """Zet een Tk ``event.keysym`` om naar een hotkey-token."""
+
+    if not keysym:
+        return None
+    mapped = _TK_KEYSYM_TOKENS.get(keysym)
+    if mapped is not None:
+        return mapped
+    if len(keysym) == 1:
+        return keysym.lower()
+    if keysym.startswith("F") and keysym[1:].isdigit():
+        return keysym.lower()  # F1 → f1
+    if keysym.startswith("KP_") and len(keysym) == 4 and keysym[3].isdigit():
+        return f"num{keysym[3]}"
+    # Onbekende keysym: toch vastleggen zodat PC-boards niet stil falen.
+    safe = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in keysym)
+    return f"tk_{safe.lower()}" if safe else None
+
+
+def tk_event_modifier_tokens(state: int) -> set[str]:
+    """Modifiers uit Tk ``event.state`` (bitmasks; platformonafhankelijk genoeg)."""
+
+    mods: set[str] = set()
+    # Tk: Shift=0x0001, Control=0x0004, Mod1/Alt=0x0008, Mod4/Super=0x0040,
+    # Mod2 vaak NumLock; Meta/Command op macOS vaak 0x0010 (Mod2) of 0x0080.
+    if state & 0x0001:
+        mods.add("shift")
+    if state & 0x0004:
+        mods.add("ctrl")
+    if state & 0x0008:
+        mods.add("alt")
+    if state & (0x0010 | 0x0040 | 0x0080):
+        # Meta / Super / Command — Win-toets op PC-board onder macOS.
+        mods.add("cmd")
+    return mods
 
 
 def normalize(tokens: Iterable[str]) -> list[str]:
@@ -112,12 +237,13 @@ def format_hotkey(tokens: Iterable[str]) -> str:
     if not parts:
         return "(geen)"
 
+    names = _display_names()
     labels: list[str] = []
     for token in parts:
         if token == "space":
             labels.append(i18n.t("key.space"))
-        elif token in _DISPLAY_NAMES and _DISPLAY_NAMES[token] is not None:
-            labels.append(_DISPLAY_NAMES[token])  # type: ignore[arg-type]
+        elif token in names and names[token] is not None:
+            labels.append(names[token])
         elif len(token) == 1:
             labels.append(token.upper())
         elif token.startswith("f") and token[1:].isdigit():

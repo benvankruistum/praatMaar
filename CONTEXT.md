@@ -38,9 +38,14 @@ klembord/plakken via geïnjecteerde `Host` en recovery-hooks. Module:
 ### indicator (pill)
 
 De kleine, altijd-zichtbare status-pill die de dicteercyclus toont zonder de focus
-te stelen van het actieve invoerveld (`indicator.py`). Op Windows via een
-`WS_EX_NOACTIVATE`-shim; de macOS-tegenhanger is nog een open vraag (zie
-`docs/archive/HANDOFF-mac-port.md` en `docs/STATUS.md`).
+te stelen van het actieve invoerveld. Package `indicator/`:
+
+- **Contract:** `RecordingState`, `notify_state` / `push_level` / `reset_levels`
+  (`indicator._contract`) — platform-neutraal.
+- **Windows:** tkinter + `WS_EX_NOACTIVATE` (`indicator._win`).
+- **macOS:** native overlay via AppKit `NSPanel` / `nonactivatingPanel` (PyObjC,
+  `indicator._mac`) — [ADR-0002](docs/adr/0002-macos-native-overlay-indicator.md).
+- **Façade:** `indicator.RecordingIndicator` lazy per `sys.platform`.
 
 ### i18n (UI-taal)
 
