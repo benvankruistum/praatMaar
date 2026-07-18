@@ -102,5 +102,8 @@
   "rec.transcribe_error": "Er is een fout opgetreden tijdens de transcriptie.",
   "rec.recovery_saved": "De opname is bewaard voor herstel: {path}",
   "rec.device_invalid": "Microfoon-apparaat {device} is ongeldig ({error}); val terug op Windows-standaard.",
-  "rec.device_no_input": "Apparaat {device} ({name}) heeft geen microfooningang; val terug op Windows-standaard."
+  "rec.device_no_input": "Apparaat {device} ({name}) heeft geen microfooningang; val terug op Windows-standaard.",
+
+  "destination.switched": "Bestemming gewijzigd naar: {name}.",
+  "destination.reset": "Bestemming teruggezet naar standaard."
 }

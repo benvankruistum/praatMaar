@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Callable, Protocol
 
 import i18n
+from destinations import match_command
 from indicator import (
     RecordingState,
     notify_state as default_notify_state,
@@ -64,6 +65,8 @@ class Opnamesessie:
         copy_text: Callable[[str], None] | None = None,
         save_transcript: Callable[[str], Path] | None = None,
         preserve_audio: Callable[[Path], Path] | None = None,
+        on_destination_command: Callable[[str, str | None], None] | None = None,
+        get_destinations: Callable[[], list[dict[str, str]]] | None = None,
     ) -> None:
         self.host = host
         self.sample_rate = sample_rate
@@ -85,6 +88,8 @@ class Opnamesessie:
         self._copy_text = copy_text
         self._save_transcript = save_transcript
         self._preserve_audio = preserve_audio
+        self._on_destination_command = on_destination_command
+        self._get_destinations = get_destinations
 
         self._lock = threading.RLock()
         self._recording = False
@@ -461,6 +466,17 @@ class Opnamesessie:
             if not transcript:
                 print()
                 print(i18n.t("rec.no_speech"))
+                return
+
+            dests = self._get_destinations() if self._get_destinations else []
+            kind, name = match_command(transcript, dests)
+            if kind in ("set", "reset"):
+                if self._on_destination_command:
+                    self._on_destination_command(kind, name)
+                if kind == "set":
+                    print(i18n.t("destination.switched", name=name))
+                else:
+                    print(i18n.t("destination.reset"))
                 return
 
             print()

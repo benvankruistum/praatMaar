@@ -102,5 +102,8 @@
   "rec.transcribe_error": "An error occurred during transcription.",
   "rec.recovery_saved": "Recording kept for recovery: {path}",
   "rec.device_invalid": "Microphone device {device} is invalid ({error}); falling back to Windows default.",
-  "rec.device_no_input": "Device {device} ({name}) has no microphone input; falling back to Windows default."
+  "rec.device_no_input": "Device {device} ({name}) has no microphone input; falling back to Windows default.",
+
+  "destination.switched": "Destination switched to: {name}.",
+  "destination.reset": "Destination reset to default."
 }

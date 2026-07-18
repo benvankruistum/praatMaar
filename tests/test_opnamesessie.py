@@ -301,3 +301,120 @@ def test_transcribe_pastes_and_copies(session: Opnamesessie, host: FakeHost, sta
     assert host.paste_calls == 1
     assert session._clipboard == ["hallo wereld"]  # type: ignore[attr-defined]
     assert states[-1] == RecordingState.IDLE
+
+
+def _wait_for_processing(session: Opnamesessie) -> None:
+    import time
+
+    for _ in range(50):
+        if not session.is_processing:
+            break
+        time.sleep(0.05)
+
+
+def _record_short_audio(session: Opnamesessie, sd: FakeSoundDevice) -> None:
+    session.minimum_recording_seconds = 0.0
+    session.start()
+    assert sd.last_callback is not None
+    chunk = np.zeros((1600, 1), dtype=np.float32)
+    sd.last_callback(chunk, 1600, None, None)
+    session.stop_and_transcribe()
+    _wait_for_processing(session)
+
+
+def test_destination_command_skips_paste_and_save(
+    host: FakeHost,
+    sd: FakeSoundDevice,
+    states: list[RecordingState],
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import recovery
+
+    monkeypatch.setattr(recovery, "config_dir", lambda: tmp_path)
+
+    command_calls: list[tuple[str, str | None]] = []
+    save_calls: list[str] = []
+    clipboard: list[str] = []
+    dests = [{"name": "Boodschappenlijst", "path": str(tmp_path / "boodschappen")}]
+
+    sess = Opnamesessie(
+        host=host,
+        sample_rate=16000,
+        channels=1,
+        minimum_recording_seconds=0.05,
+        auto_paste=True,
+        paste_delay_seconds=0.0,
+        language="nl",
+        delete_temp_audio=True,
+        mode="toggle",
+        warm_microphone=False,
+        wait_until_modifiers_clear=lambda: None,
+        on_ready=lambda: None,
+        notify=lambda state, mode=None: states.append(state),
+        push_level=lambda _level: None,
+        reset_levels=lambda: None,
+        copy_text=clipboard.append,
+        save_transcript=lambda text: (save_calls.append(text), recovery.save_transcript(text))[1],
+        preserve_audio=recovery.preserve_audio,
+        on_destination_command=lambda kind, name: command_calls.append((kind, name)),
+        get_destinations=lambda: dests,
+    )
+    sess.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=_write_wav)
+    sess.model = FakeModel(text="boodschappenlijst")
+
+    _record_short_audio(sess, sd)
+
+    assert not sess.is_processing
+    assert host.paste_calls == 0
+    assert clipboard == []
+    assert save_calls == []
+    assert command_calls == [("set", "Boodschappenlijst")]
+    assert states[-1] == RecordingState.IDLE
+
+
+def test_reset_command_skips_paste(
+    host: FakeHost,
+    sd: FakeSoundDevice,
+    states: list[RecordingState],
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import recovery
+
+    monkeypatch.setattr(recovery, "config_dir", lambda: tmp_path)
+
+    command_calls: list[tuple[str, str | None]] = []
+    clipboard: list[str] = []
+
+    sess = Opnamesessie(
+        host=host,
+        sample_rate=16000,
+        channels=1,
+        minimum_recording_seconds=0.05,
+        auto_paste=True,
+        paste_delay_seconds=0.0,
+        language="nl",
+        delete_temp_audio=True,
+        mode="toggle",
+        warm_microphone=False,
+        wait_until_modifiers_clear=lambda: None,
+        on_ready=lambda: None,
+        notify=lambda state, mode=None: states.append(state),
+        push_level=lambda _level: None,
+        reset_levels=lambda: None,
+        copy_text=clipboard.append,
+        save_transcript=recovery.save_transcript,
+        preserve_audio=recovery.preserve_audio,
+        on_destination_command=lambda kind, name: command_calls.append((kind, name)),
+        get_destinations=lambda: [],
+    )
+    sess.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=_write_wav)
+    sess.model = FakeModel(text="standaard")
+
+    _record_short_audio(sess, sd)
+
+    assert host.paste_calls == 0
+    assert clipboard == []
+    assert command_calls == [("reset", None)]
+    assert states[-1] == RecordingState.IDLE

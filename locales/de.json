@@ -102,5 +102,8 @@
   "rec.transcribe_error": "Bei der Transkription ist ein Fehler aufgetreten.",
   "rec.recovery_saved": "Aufnahme zur Wiederherstellung behalten: {path}",
   "rec.device_invalid": "Mikrofon {device} ist ungültig ({error}); Fallback auf Windows-Standard.",
-  "rec.device_no_input": "Gerät {device} ({name}) hat keinen Mikrofoneingang; Fallback auf Windows-Standard."
+  "rec.device_no_input": "Gerät {device} ({name}) hat keinen Mikrofoneingang; Fallback auf Windows-Standard.",
+
+  "destination.switched": "Ziel gewechselt zu: {name}.",
+  "destination.reset": "Ziel auf Standard zurückgesetzt."
 }
