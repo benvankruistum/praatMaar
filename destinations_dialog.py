@@ -193,23 +193,26 @@ def open_destinations_dialog(
         _refresh_active_label()
         _update_open_active_btn()
 
-    def _duplicate_name(name: str, skip_index: int | None = None) -> bool:
-        for index, item in enumerate(dest_list):
-            if skip_index is not None and index == skip_index:
-                continue
-            if item["name"] == name:
-                return True
-        return False
+    def _validate_name(name: str, skip_index: int | None = None) -> str | None:
+        if destinations.is_reserved_name(name):
+            return i18n.t("destinations.error.reserved_name")
+        collision = destinations.find_normalized_collision(
+            name, dest_list, exclude_index=skip_index
+        )
+        if collision is not None:
+            return i18n.t("destinations.error.name_collision", existing=collision)
+        return None
 
     def add_item() -> None:
         result = _edit_destination(win, i18n.t("destinations.add"))
         if result is None:
             return
         name, path = result
-        if _duplicate_name(name):
+        error = _validate_name(name)
+        if error is not None:
             messagebox.showwarning(
                 i18n.t("destinations.title"),
-                i18n.t("destinations.error.duplicate_name"),
+                error,
                 parent=win,
             )
             return
@@ -235,10 +238,11 @@ def open_destinations_dialog(
         if result is None:
             return
         name, path = result
-        if _duplicate_name(name, skip_index=index):
+        error = _validate_name(name, skip_index=index)
+        if error is not None:
             messagebox.showwarning(
                 i18n.t("destinations.title"),
-                i18n.t("destinations.error.duplicate_name"),
+                error,
                 parent=win,
             )
             return

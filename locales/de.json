@@ -129,6 +129,8 @@
   "destinations.error.name_required": "Geben Sie einen Namen ein.",
   "destinations.error.path_required": "Wählen Sie einen Ordner.",
   "destinations.error.duplicate_name": "Dieser Name existiert bereits.",
+  "destinations.error.reserved_name": "Dieser Name ist für den Sprachbefehl \"standaard\" reserviert.",
+  "destinations.error.name_collision": "Dieser Name kollidiert mit \"{existing}\" (gleicher Sprachbefehl).",
   "destinations.error.select_first": "Wählen Sie zuerst ein Ziel in der Liste.",
 
   "help.title": "praatMaar — Hilfe",

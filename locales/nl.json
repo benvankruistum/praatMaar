@@ -129,6 +129,8 @@
   "destinations.error.name_required": "Vul een naam in.",
   "destinations.error.path_required": "Kies een map.",
   "destinations.error.duplicate_name": "Deze naam bestaat al.",
+  "destinations.error.reserved_name": "Deze naam is gereserveerd voor de spraakopdracht \"standaard\".",
+  "destinations.error.name_collision": "Deze naam botst met \"{existing}\" (zelfde spraakopdracht).",
   "destinations.error.select_first": "Selecteer eerst een bestemming in de lijst.",
 
   "help.title": "praatMaar — Help",

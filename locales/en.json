@@ -129,6 +129,8 @@
   "destinations.error.name_required": "Enter a name.",
   "destinations.error.path_required": "Choose a folder.",
   "destinations.error.duplicate_name": "This name already exists.",
+  "destinations.error.reserved_name": "This name is reserved for the voice command \"standaard\".",
+  "destinations.error.name_collision": "This name collides with \"{existing}\" (same voice command).",
   "destinations.error.select_first": "Select a destination in the list first.",
 
   "help.title": "praatMaar — Help",
