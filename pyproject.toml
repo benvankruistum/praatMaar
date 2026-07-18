@@ -49,6 +49,7 @@ py-modules = [
     "dictation",
     "config",
     "destinations",
+    "destinations_dialog",
     "hotkeys",
     "indicator",
     "recovery",

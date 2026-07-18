@@ -4,6 +4,7 @@
   "lang.de": "Deutsch",
 
   "tray.settings": "Instellingen",
+  "tray.destinations": "Bestemmingen",
   "tray.quit": "Afsluiten",
   "tray.tooltip.idle": "praatMaar — gereed",
   "tray.tooltip.recording": "praatMaar — opname",
@@ -105,5 +106,27 @@
   "rec.device_no_input": "Apparaat {device} ({name}) heeft geen microfooningang; val terug op Windows-standaard.",
 
   "destination.switched": "Bestemming gewijzigd naar: {name}.",
-  "destination.reset": "Bestemming teruggezet naar standaard."
+  "destination.reset": "Bestemming teruggezet naar standaard.",
+
+  "destinations.title": "praatMaar — Bestemmingen",
+  "destinations.name": "Naam",
+  "destinations.path": "Map",
+  "destinations.column.name": "Naam",
+  "destinations.column.path": "Map",
+  "destinations.add": "Toevoegen",
+  "destinations.edit": "Wijzigen",
+  "destinations.delete": "Verwijderen",
+  "destinations.set_active": "Actief zetten",
+  "destinations.clear_active": "Wissen actief (standaard)",
+  "destinations.open_transcripts": "Transcriptmap openen",
+  "destinations.open_active": "Actieve map openen",
+  "destinations.browse": "Bladeren…",
+  "destinations.active.default": "Actief: standaard (default transcriptmap)",
+  "destinations.active.named": "Actief: {name}",
+  "destinations.cancel": "Annuleren",
+  "destinations.save": "Opslaan",
+  "destinations.error.name_required": "Vul een naam in.",
+  "destinations.error.path_required": "Kies een map.",
+  "destinations.error.duplicate_name": "Deze naam bestaat al.",
+  "destinations.error.select_first": "Selecteer eerst een bestemming in de lijst."
 }

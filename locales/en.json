@@ -4,6 +4,7 @@
   "lang.de": "Deutsch",
 
   "tray.settings": "Settings",
+  "tray.destinations": "Destinations",
   "tray.quit": "Quit",
   "tray.tooltip.idle": "praatMaar — ready",
   "tray.tooltip.recording": "praatMaar — recording",
@@ -105,5 +106,27 @@
   "rec.device_no_input": "Device {device} ({name}) has no microphone input; falling back to Windows default.",
 
   "destination.switched": "Destination switched to: {name}.",
-  "destination.reset": "Destination reset to default."
+  "destination.reset": "Destination reset to default.",
+
+  "destinations.title": "praatMaar — Destinations",
+  "destinations.name": "Name",
+  "destinations.path": "Folder",
+  "destinations.column.name": "Name",
+  "destinations.column.path": "Folder",
+  "destinations.add": "Add",
+  "destinations.edit": "Edit",
+  "destinations.delete": "Delete",
+  "destinations.set_active": "Set active",
+  "destinations.clear_active": "Clear active (default)",
+  "destinations.open_transcripts": "Open transcript folder",
+  "destinations.open_active": "Open active folder",
+  "destinations.browse": "Browse…",
+  "destinations.active.default": "Active: default (transcript folder)",
+  "destinations.active.named": "Active: {name}",
+  "destinations.cancel": "Cancel",
+  "destinations.save": "Save",
+  "destinations.error.name_required": "Enter a name.",
+  "destinations.error.path_required": "Choose a folder.",
+  "destinations.error.duplicate_name": "This name already exists.",
+  "destinations.error.select_first": "Select a destination in the list first."
 }

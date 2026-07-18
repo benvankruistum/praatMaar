@@ -79,9 +79,11 @@ class TrayIcon:
         self,
         on_quit: Callable[[], None],
         on_settings: Callable[[], None],
+        on_destinations: Callable[[], None],
     ) -> None:
         self._on_quit = on_quit
         self._on_settings = on_settings
+        self._on_destinations = on_destinations
         self._state = RecordingState.IDLE
 
         self._icons = {
@@ -98,6 +100,7 @@ class TrayIcon:
     def _build_menu(self) -> Menu:
         return Menu(
             MenuItem(i18n.t("tray.settings"), self._handle_settings, default=True),
+            MenuItem(i18n.t("tray.destinations"), self._handle_destinations),
             Menu.SEPARATOR,
             MenuItem(i18n.t("tray.quit"), self._handle_quit),
         )
@@ -114,6 +117,9 @@ class TrayIcon:
 
     def _handle_settings(self, icon: "pystray.Icon", item: "MenuItem") -> None:
         self._on_settings()
+
+    def _handle_destinations(self, icon: "pystray.Icon", item: "MenuItem") -> None:
+        self._on_destinations()
 
     def _handle_quit(self, icon: "pystray.Icon", item: "MenuItem") -> None:
         self._on_quit()

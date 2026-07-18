@@ -42,6 +42,8 @@ for _pkg in _COLLECT:
 hiddenimports += [
     "app_logging",
     "config",
+    "destinations",
+    "destinations_dialog",
     "recovery",
     "settings",
     "splash",

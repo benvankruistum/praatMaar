@@ -868,9 +868,21 @@ def main() -> None:
             )
         )
 
+    def open_destinations() -> None:
+        from destinations_dialog import open_destinations_dialog
+
+        indicator.call_on_main(
+            lambda: open_destinations_dialog(
+                indicator.root,
+                current_settings(),
+                lambda new: apply_settings(new, indicator),
+            )
+        )
+
     tray = TrayIcon(
         on_quit=indicator.request_stop,
         on_settings=open_settings,
+        on_destinations=open_destinations,
     )
     _tray = tray
 

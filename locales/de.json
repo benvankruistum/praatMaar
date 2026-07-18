@@ -4,6 +4,7 @@
   "lang.de": "Deutsch",
 
   "tray.settings": "Einstellungen",
+  "tray.destinations": "Ziele",
   "tray.quit": "Beenden",
   "tray.tooltip.idle": "praatMaar — bereit",
   "tray.tooltip.recording": "praatMaar — Aufnahme",
@@ -105,5 +106,27 @@
   "rec.device_no_input": "Gerät {device} ({name}) hat keinen Mikrofoneingang; Fallback auf Windows-Standard.",
 
   "destination.switched": "Ziel gewechselt zu: {name}.",
-  "destination.reset": "Ziel auf Standard zurückgesetzt."
+  "destination.reset": "Ziel auf Standard zurückgesetzt.",
+
+  "destinations.title": "praatMaar — Ziele",
+  "destinations.name": "Name",
+  "destinations.path": "Ordner",
+  "destinations.column.name": "Name",
+  "destinations.column.path": "Ordner",
+  "destinations.add": "Hinzufügen",
+  "destinations.edit": "Bearbeiten",
+  "destinations.delete": "Löschen",
+  "destinations.set_active": "Als aktiv setzen",
+  "destinations.clear_active": "Aktiv löschen (Standard)",
+  "destinations.open_transcripts": "Transkriptordner öffnen",
+  "destinations.open_active": "Aktiven Ordner öffnen",
+  "destinations.browse": "Durchsuchen…",
+  "destinations.active.default": "Aktiv: Standard (Transkriptordner)",
+  "destinations.active.named": "Aktiv: {name}",
+  "destinations.cancel": "Abbrechen",
+  "destinations.save": "Speichern",
+  "destinations.error.name_required": "Geben Sie einen Namen ein.",
+  "destinations.error.path_required": "Wählen Sie einen Ordner.",
+  "destinations.error.duplicate_name": "Dieser Name existiert bereits.",
+  "destinations.error.select_first": "Wählen Sie zuerst ein Ziel in der Liste."
 }
