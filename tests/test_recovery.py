@@ -35,6 +35,7 @@ def test_prune_keeps_newest(tmp_path: Path, monkeypatch) -> None:
 
 def test_save_transcript_custom_dir_skips_prune(tmp_path: Path, monkeypatch) -> None:
     _patch_dirs(tmp_path, monkeypatch)
+    monkeypatch.setattr(recovery, "MAX_TRANSCRIPTS", 2)
     custom = tmp_path / "project"
     path = recovery.save_transcript("hallo", directory=custom)
     assert path.parent == custom
@@ -53,6 +54,9 @@ def test_save_transcript_custom_dir_skips_prune(tmp_path: Path, monkeypatch) -> 
     assert len(list(default.glob("*.txt"))) == 3
     assert path.exists()
     assert len(list(custom.glob("*.txt"))) == 2
+
+    recovery.save_transcript("derde")
+    assert len(list(default.glob("*.txt"))) == 2
 
 
 def test_preserve_audio_moves_wav(tmp_path: Path, monkeypatch) -> None:
