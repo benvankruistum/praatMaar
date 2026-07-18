@@ -1,0 +1,15 @@
+---
+description: Werk altijd op een feature-branch; nooit direct op main committen of pushen.
+alwaysApply: true
+---
+
+# Git: alleen via branches
+
+- **Nooit** commits of pushes op `main` (of `master`).
+- Start werk altijd vanaf een actuele `main` op een **eigen branch**
+  (bijv. `cursor/<onderwerp>` of `feat/...`).
+- Lever via PR terug naar `main`; rebase/merge op `main` alleen via PR.
+- Zit je per ongeluk op `main` met lokale wijzigingen: maak meteen een
+  branch (`git switch -c …`) vóór je commit.
+- Force-push alleen op **eigen** feature-branches (`--force-with-lease`),
+  nooit op `main`.

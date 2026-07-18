@@ -29,12 +29,26 @@ beslissingen staan in `docs/adr/`.
   niet verspreid door `dictation.py`.
 - Voeg tests toe voor pure logica (`hotkeys`, `config`, `recovery`, …).
 
+## Git-workflow
+
+We werken **altijd via feature-branches**. Direct op `main` committen of
+pushen is niet toegestaan (niet voor mensen, niet voor agents).
+
+1. Update `main` (`git checkout main && git pull`).
+2. Maak een branch vanaf `main` (bijv. `feat/…`, `fix/…`, `cursor/…`).
+3. Commit alleen op die branch; open een PR naar `main`.
+4. Rebase op `main` vóór merge als `main` is vooruitgelopen.
+5. Force-push alleen op **jouw** feature-branch (`--force-with-lease`), nooit op `main`.
+
+Zit je per ongeluk op `main` met lokale wijzigingen: meteen
+`git switch -c <branch>` vóór je commit.
+
 ## Pull requests
 
-1. Fork / branch vanaf `main`.
+1. Branch vanaf `main` (zie hierboven) — geen commits op `main`.
 2. Kleine, reviewbare PR’s met een korte uitleg van **waarom**.
 3. Zorg dat `pytest` groen is.
-4. Vermeld Windows-teststappen als je UI, hotkeys of packaging raakt.
+4. Vermeld Windows-/macOS-teststappen als je UI, hotkeys of packaging raakt.
 
 ## Issues
 
