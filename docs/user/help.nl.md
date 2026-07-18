@@ -22,7 +22,8 @@ woorden ervoor of erna. praatMaar vergelijkt de hele take met je opgeslagen name
 - **Geen match:** normale dicteerflow — tekst plakken en opslaan in de huidige map.
 
 **Terug naar standaard:** zeg alleen het woord **standaard** (één take, exact). De
-actieve bestemming wordt gewist.
+actieve bestemming wordt gewist. (Het resetwoord is altijd *standaard*, ongeacht de
+taal van de interface.)
 
 ## Waar landen je bestanden?
 
@@ -41,12 +42,12 @@ Recovery-audiobestanden (bij mislukte opnames) blijven altijd in
 
 Rechtsklik op het praatMaar-icoon in het systeemvak:
 
-1. **Bestemmingen** — voeg namen en mappen toe, wijzig of verwijder ze, stel de actieve
-   bestemming in of wis die.
-2. **Transcriptmap openen** — opent de standaardmap (`transcripts`).
-3. **Actieve map openen** — beschikbaar als er een bestemming actief is.
-
-Algemene opties (microfoon, sneltoets, talen) staan onder **Instellingen**.
+- **Instellingen** — microfoon, sneltoets, talen
+- **Bestemmingen** — dialoog om namen en mappen toe te voegen, te wijzigen of te
+  verwijderen, en de actieve bestemming in te stellen of te wissen. In die dialoog
+  vind je ook knoppen om de transcriptmap of de actieve map te openen.
+- **Help** — deze gebruikershandleiding
+- **Afsluiten**
 
 ## Risico's en tips
 

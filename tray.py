@@ -3,7 +3,8 @@ Systeemvak-icoon voor praatMaar (pystray).
 
 Toont een microfoon-icoon dat per dicteertoestand kleurt (donker = gereed,
 rood = opname, amber = transcriberen), met een rechtsklik-menu (Instellingen,
-Afsluiten). Draait op een **eigen thread** via `Icon.run_detached()`; de
+Bestemmingen, Help, Afsluiten). Draait op een **eigen thread** via
+`Icon.run_detached()`; de
 tkinter-mainloop houdt de hoofdthread.
 
 Regel: menu-callbacks draaien op de tray-thread en doen géén tkinter-werk. Ze

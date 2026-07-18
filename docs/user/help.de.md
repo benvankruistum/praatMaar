@@ -43,12 +43,12 @@ Recovery-Audiodateien (bei fehlgeschlagenen Aufnahmen) bleiben immer in
 
 Rechtsklick auf das praatMaar-Symbol im Infobereich:
 
-1. **Ziele** — Namen und Ordner hinzufügen, ändern oder entfernen; aktives Ziel setzen
-   oder löschen.
-2. **Transkriptordner öffnen** — öffnet den Standardordner `transcripts`.
-3. **Aktiven Ordner öffnen** — verfügbar, wenn ein Ziel aktiv ist.
-
-Allgemeine Optionen (Mikrofon, Hotkey, Sprachen) finden Sie unter **Einstellungen**.
+- **Einstellungen** — Mikrofon, Hotkey, Sprachen
+- **Ziele** — Dialog zum Hinzufügen, Ändern oder Entfernen von Namen und Ordnern sowie
+  zum Setzen oder Löschen des aktiven Ziels. In diesem Dialog finden Sie auch
+  Schaltflächen zum Öffnen des Transkriptordners oder des aktiven Ordners.
+- **Hilfe** — diese Benutzeranleitung
+- **Beenden**
 
 ## Risiken und Tipps
 

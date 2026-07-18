@@ -42,12 +42,12 @@ Recovery audio files (from failed recordings) always stay in
 
 Right-click the praatMaar icon in the system tray:
 
-1. **Destinations** — add, edit, or remove names and folders; set or clear the active
-   destination.
-2. **Open transcript folder** — opens the default `transcripts` folder.
-3. **Open active folder** — available when a destination is active.
-
-General options (microphone, hotkey, languages) are under **Settings**.
+- **Settings** — microphone, hotkey, languages
+- **Destinations** — dialog to add, edit, or remove names and folders, and set or
+  clear the active destination. In that dialog you also find buttons to open the
+  transcript folder or the active folder.
+- **Help** — this user guide
+- **Quit**
 
 ## Risks and tips
 
