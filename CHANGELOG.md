@@ -16,6 +16,7 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 - Basis-pytest suite en GitHub Actions (Windows)
 - `docs/STATUS.md`; verouderde handoffs gearchiveerd
 - `Opnamesessie` (`opnamesessie.py`) — dicteercyclus los van `dictation.py`
+- Windows indie-release: Inno Setup-script, `scripts/build-windows.ps1`, Release-workflow
 
 ### Changed
 

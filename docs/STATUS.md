@@ -24,7 +24,8 @@ Laatst bijgewerkt: 2026-07-18.
 1. macOS-port — zie [archive/HANDOFF-mac-port.md](archive/HANDOFF-mac-port.md)
    (indicator no-activate + tray-main-thread zijn de blockers).
 2. Recovery-audio opruimen / UI.
-3. Formele releases / binaries via CI (optioneel).
+3. Formele releases: tag `v0.1.0` → GitHub Actions bouwt Setup.exe + zip
+   (unsigned; zie [release-windows.md](release-windows.md)).
 
 ## Historische handoffs
 

@@ -5,9 +5,11 @@ __pycache__/
 # Virtual environment
 .venv/
 
-# PyInstaller build-output
+# PyInstaller / release-output
 build/
 dist/
+release/
+installer/Output/
 *.log
 
 # IDE

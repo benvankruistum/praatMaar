@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e ".[build]"
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build (PyInstaller + installer + zip)
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart("v")
+          .\scripts\build-windows.ps1 -Version $ver
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## Downloads
+            - **Setup** — `praatMaar-Setup-*.exe` (aanbevolen)
+            - **Portable zip** — uitpakken en `praatMaar.exe` starten
+
+            Unsigned indie-build: SmartScreen kan waarschuwen → Meer info → Toch uitvoeren.
+            Zie [docs/release-windows.md](docs/release-windows.md).
+
+            Eerste start downloadt het Whisper-model (eenmalig, lokaal daarna).
+          files: |
+            release/*
+            installer/Output/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

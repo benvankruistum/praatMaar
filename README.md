@@ -16,6 +16,21 @@ sneltoets, transcribeert lokaal met [Faster-Whisper](https://github.com/SYSTRAN/
 
 ## Installatie
 
+### Kant-en-klare build (aanbevolen)
+
+Download de nieuwste release op
+[GitHub Releases](https://github.com/benvankruistum/praatMaar/releases):
+
+- **Setup** (`praatMaar-Setup-*.exe`) — installeert naar `%LOCALAPPDATA%\praatMaar`
+- **Portable zip** — uitpakken en `praatMaar.exe` starten
+
+Builds zijn **niet digitaal ondertekend** (indie/OSS). Als Windows waarschuwt
+(“Windows beschermde je pc”): **Meer info** → **Toch uitvoeren**.
+
+Details: [docs/release-windows.md](docs/release-windows.md).
+
+### Vanuit broncode
+
 ```powershell
 git clone https://github.com/benvankruistum/praatMaar.git
 cd praatMaar
@@ -77,16 +92,18 @@ Als “er niets gebeurt” (vaak bij `pythonw` / gebouwde exe): open
 
 `%APPDATA%\praatMaar\praatMaar.log`
 
-## Builden (optioneel)
+## Builden / release (optioneel)
 
-PyInstaller onedir, windowed:
+Zie [docs/release-windows.md](docs/release-windows.md). Kort:
 
 ```powershell
 python -m pip install -e ".[build]"
-.\.venv\Scripts\pyinstaller.exe praatMaar.spec --clean
+.\scripts\build-windows.ps1
 ```
 
-Resultaat: `dist\praatMaar\praatMaar.exe`. Het model wordt **niet** meegebundeld.
+Artefacten in `release\` (zip + Setup.exe). PyInstaller alleen:
+`pyinstaller praatMaar.spec --clean` → `dist\praatMaar\praatMaar.exe`.
+Het model wordt **niet** meegebundeld.
 
 ## Ontwikkeling
 
