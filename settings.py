@@ -200,7 +200,16 @@ def open_settings_dialog(
             win.after_cancel(capture["poll_id"])
             capture["poll_id"] = None
         if confirm and capture["best"]:
-            hotkey_tokens[:] = hotkeys.normalize(capture["best"])
+            normalized = hotkeys.normalize(capture["best"])
+            # Alleen modifiers (Ctrl+Shift+Alt) is geen bruikbare sneltoets —
+            # die gaat af bij elke willekeurige toetscombinatie met die mods.
+            if any(token not in hotkeys.MODIFIER_TOKENS for token in normalized):
+                hotkey_tokens[:] = normalized
+            else:
+                print(
+                    "Sneltoets genegeerd: voeg minstens één gewone toets toe "
+                    "(bijv. Spatie of een letter)."
+                )
         hk_var.set(hotkeys.format_hotkey(hotkey_tokens))
         record_btn.config(text="Opnemen…")
 

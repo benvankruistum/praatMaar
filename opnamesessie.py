@@ -144,6 +144,38 @@ class Opnamesessie:
         if is_recording and frames > 0 and np is not None:
             self._push_level(float(np.sqrt(np.mean(np.square(indata)))))
 
+    def _resolve_input_device(self, sd: Any) -> int | None:
+        """
+        Geeft een bruikbaar input-device terug, of None (= Windows-standaard).
+
+        Device-indexen op Windows schuiven (Bluetooth, docks). Een oude index
+        kan later een pure output zijn → PortAudio -9996 Invalid device.
+        """
+
+        chosen = self.microphone_device
+        if chosen is None:
+            return None
+
+        try:
+            info = sd.query_devices(chosen)
+        except Exception as exc:
+            print(
+                f"Microfoon-apparaat {chosen} is ongeldig ({exc}); "
+                "val terug op Windows-standaard."
+            )
+            self.microphone_device = None
+            return None
+
+        if int(info.get("max_input_channels", 0) or 0) <= 0:
+            print(
+                f"Apparaat {chosen} ({info.get('name', '?')}) heeft geen "
+                "microfooningang; val terug op Windows-standaard."
+            )
+            self.microphone_device = None
+            return None
+
+        return chosen
+
     def start(self) -> None:
         """Start een nieuwe microfoonopname."""
 
@@ -159,6 +191,7 @@ class Opnamesessie:
 
             self._audio_chunks = []
             self._recording_started_at = time.monotonic()
+            device = self._resolve_input_device(sd)
 
             try:
                 stream = sd.InputStream(
@@ -166,7 +199,7 @@ class Opnamesessie:
                     channels=self.channels,
                     dtype="float32",
                     callback=self.audio_callback,
-                    device=self.microphone_device,
+                    device=device,
                 )
                 self._audio_stream = stream
                 self._recording = True
@@ -175,15 +208,22 @@ class Opnamesessie:
                 self._recording = False
                 self._recording_started_at = None
                 self._audio_stream = None
-                print()
-                print("De microfoonopname kon niet worden gestart.")
-                print(f"Foutmelding: {exc}")
-                print()
-                print("Controleer:")
-                print("- of Windows microfoontoegang toestaat;")
-                print("- of de juiste standaardmicrofoon is geselecteerd;")
-                print("- of de microfoon in Instellingen correct is ingesteld.")
-                return
+                mic_error = exc
+            else:
+                mic_error = None
+
+        if mic_error is not None:
+            print()
+            print("De microfoonopname kon niet worden gestart.")
+            print(f"Foutmelding: {mic_error}")
+            print()
+            print("Controleer:")
+            print("- of Windows microfoontoegang toestaat;")
+            print("- of de juiste standaardmicrofoon is geselecteerd;")
+            print("- of de microfoon in Instellingen correct is ingesteld.")
+            # Zonder dit blijft het tray-icoon grijs alsof er niets gebeurde.
+            self._notify(RecordingState.ERROR)
+            return
 
         self._reset_levels()
         self._notify(RecordingState.RECORDING, self.mode)

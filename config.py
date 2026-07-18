@@ -34,7 +34,8 @@ def load_config() -> dict[str, Any]:
 
     path = config_path()
     try:
-        with path.open("r", encoding="utf-8") as handle:
+        # utf-8-sig: tolereert een BOM (bijv. na bewerken in Notepad/PowerShell).
+        with path.open("r", encoding="utf-8-sig") as handle:
             data = json.load(handle)
         if isinstance(data, dict):
             return data
