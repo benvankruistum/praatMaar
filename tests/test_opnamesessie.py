@@ -53,8 +53,10 @@ class FakeSoundDevice:
     def __init__(self) -> None:
         self.last_callback: Any = None
         self.stream = FakeStream()
+        self.input_stream_calls = 0
 
     def InputStream(self, **kwargs: Any) -> FakeStream:
+        self.input_stream_calls += 1
         self.last_callback = kwargs.get("callback")
         return self.stream
 
@@ -136,6 +138,17 @@ def test_start_while_recording_is_noop(session: Opnamesessie, sd: FakeSoundDevic
     first = sd.stream
     session.start()
     assert sd.stream is first
+
+
+def test_stop_keeps_stream_warm(session: Opnamesessie, sd: FakeSoundDevice) -> None:
+    session.start()
+    assert sd.input_stream_calls == 1
+    session.stop_and_transcribe()
+    assert sd.stream.started
+    assert not sd.stream.stopped
+    assert not sd.stream.closed
+    session.start()
+    assert sd.input_stream_calls == 1
 
 
 def test_cancel_clears_recording(session: Opnamesessie, states: list) -> None:

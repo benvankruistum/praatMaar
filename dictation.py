@@ -634,9 +634,12 @@ def apply_settings(
         HOTKEY_TOKENS = {str(token) for token in new_hotkey}
 
     # Houd de Opnamesessie synchroon met live-instellingen.
+    old_mic = session.microphone_device
     session.microphone_device = MICROPHONE_DEVICE
     session.auto_paste = AUTO_PASTE
     session.mode = MODE
+    if old_mic != MICROPHONE_DEVICE:
+        session.refresh_input_device()
 
     config.save_config(
         {
@@ -705,6 +708,8 @@ def main() -> None:
     session.model = model
 
     print("Model geladen. Klaar voor gebruik.")
+    # Microfoon al openen: anders kost de eerste opname 0,5–2 s (Bluetooth).
+    session.warmup_microphone()
     print(
         f"Bediening ({MODE}): {hotkeys.format_hotkey(HOTKEY_TOKENS)} "
         "(of Esc) om te starten/stoppen."

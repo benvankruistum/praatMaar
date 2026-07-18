@@ -108,6 +108,25 @@ class Opnamesessie:
         self._sd = sounddevice_mod
         self._write_wav = write_wav
 
+    def warmup_microphone(self) -> None:
+        """
+        Opent de microfoonstream alvast (na model-load).
+
+        Zonder dit kost de eerste InputStream.open op Windows vaak 0,5–2 s
+        (zeker Bluetooth), terwijl je al praat. Warm houden = opname start meteen.
+        """
+
+        try:
+            self._ensure_stream()
+            print("Microfoon warm — opname start zonder wachttijd.")
+        except Exception as exc:
+            print(f"Microfoon-warmup mislukt (opname probeert het later opnieuw): {exc}")
+
+    def refresh_input_device(self) -> None:
+        """Sluit de warme stream zodat een gewijzigde microfoon opnieuw opent."""
+
+        self.stop_audio_stream()
+
     @property
     def is_recording(self) -> bool:
         with self._lock:
@@ -123,6 +142,38 @@ class Opnamesessie:
             raise RuntimeError("Audio-libraries zijn nog niet gekoppeld (bind_audio).")
         return self._np, self._sd, self._write_wav
 
+    def _ensure_stream(self) -> None:
+        """Start één InputStream als die nog niet loopt. Open gebeurt buiten de lock."""
+
+        with self._lock:
+            if self._audio_stream is not None:
+                return
+
+        _, sd, _ = self._require_audio()
+        device = self._resolve_input_device(sd)
+
+        # latency='low': kleinere buffers, snellere eerste callback na start.
+        stream = sd.InputStream(
+            samplerate=self.sample_rate,
+            channels=self.channels,
+            dtype="float32",
+            callback=self.audio_callback,
+            device=device,
+            latency="low",
+        )
+        stream.start()
+
+        with self._lock:
+            if self._audio_stream is not None:
+                # Parallel geopend — onze stream is overbodig.
+                try:
+                    stream.stop()
+                    stream.close()
+                except Exception:
+                    pass
+                return
+            self._audio_stream = stream
+
     def audio_callback(
         self,
         indata: Any,
@@ -130,7 +181,7 @@ class Opnamesessie:
         time_info: Any,
         status: Any,
     ) -> None:
-        """sounddevice-callback: buffer + RMS voor de indicator."""
+        """sounddevice-callback: buffer + RMS voor de indicator (alleen tijdens opname)."""
 
         np = self._np
         if status:
@@ -177,9 +228,7 @@ class Opnamesessie:
         return chosen
 
     def start(self) -> None:
-        """Start een nieuwe microfoonopname."""
-
-        _, sd, _ = self._require_audio()
+        """Start een nieuwe microfoonopname (stream blijft warm tussen sessies)."""
 
         with self._lock:
             if self._recording:
@@ -190,43 +239,30 @@ class Opnamesessie:
                 return
 
             self._audio_chunks = []
+            self._recording = True
             self._recording_started_at = time.monotonic()
-            device = self._resolve_input_device(sd)
 
-            try:
-                stream = sd.InputStream(
-                    samplerate=self.sample_rate,
-                    channels=self.channels,
-                    dtype="float32",
-                    callback=self.audio_callback,
-                    device=device,
-                )
-                self._audio_stream = stream
-                self._recording = True
-                stream.start()
-            except Exception as exc:
+        # UI meteen rood — vóór eventuele (her)open van de stream.
+        self._reset_levels()
+        self._notify(RecordingState.RECORDING, self.mode)
+
+        try:
+            self._ensure_stream()
+        except Exception as exc:
+            with self._lock:
                 self._recording = False
                 self._recording_started_at = None
-                self._audio_stream = None
-                mic_error = exc
-            else:
-                mic_error = None
-
-        if mic_error is not None:
+                self._audio_chunks.clear()
             print()
             print("De microfoonopname kon niet worden gestart.")
-            print(f"Foutmelding: {mic_error}")
+            print(f"Foutmelding: {exc}")
             print()
             print("Controleer:")
             print("- of Windows microfoontoegang toestaat;")
             print("- of de juiste standaardmicrofoon is geselecteerd;")
             print("- of de microfoon in Instellingen correct is ingesteld.")
-            # Zonder dit blijft het tray-icoon grijs alsof er niets gebeurde.
             self._notify(RecordingState.ERROR)
             return
-
-        self._reset_levels()
-        self._notify(RecordingState.RECORDING, self.mode)
 
         print()
         print("● OPNAME GESTART")
@@ -234,7 +270,7 @@ class Opnamesessie:
         print("  Stop met de sneltoets of met Esc.")
 
     def stop_audio_stream(self) -> None:
-        """Stopt en sluit de actieve microfoonstream."""
+        """Stopt en sluit de warme microfoonstream (alleen bij afsluiten / mic-wissel)."""
 
         with self._lock:
             stream = self._audio_stream
@@ -254,7 +290,7 @@ class Opnamesessie:
             print(f"Waarschuwing bij sluiten microfoon: {exc}")
 
     def stop_and_transcribe(self) -> None:
-        """Stopt de opname en start de transcriptie in een aparte thread."""
+        """Stopt de opname en start de transcriptie; microfoonstream blijft open."""
 
         with self._lock:
             if not self._recording:
@@ -263,8 +299,6 @@ class Opnamesessie:
             self._recording = False
             started_at = self._recording_started_at
             self._recording_started_at = None
-
-        self.stop_audio_stream()
 
         duration = 0.0
         if started_at is not None:
@@ -302,7 +336,7 @@ class Opnamesessie:
         thread.start()
 
     def cancel(self) -> None:
-        """Annuleert de opname zonder transcriptie of plakken."""
+        """Annuleert de opname zonder transcriptie of plakken; stream blijft warm."""
 
         with self._lock:
             if not self._recording:
@@ -312,7 +346,6 @@ class Opnamesessie:
             self._recording_started_at = None
             self._audio_chunks.clear()
 
-        self.stop_audio_stream()
         self._notify(RecordingState.CANCELLED)
 
         print()
