@@ -407,6 +407,14 @@ class RecordingIndicator:
         self.root.withdraw()
         self._visible = False
 
+    def _apply_idle_visibility(self) -> None:
+        """In idle: pill zichtbaar houden als er een sticky bestemming actief is."""
+
+        if self._destination:
+            self._show_window()
+        else:
+            self._hide_window()
+
     # ----- statusverwerking -----
 
     def _cancel_hide_timer(self) -> None:
@@ -423,7 +431,9 @@ class RecordingIndicator:
         self._cancel_hide_timer()
 
         if state == RecordingState.IDLE:
-            self._hide_window()
+            self._apply_idle_visibility()
+            if self._visible:
+                self._render()
             return
 
         self._show_window()
@@ -442,7 +452,9 @@ class RecordingIndicator:
         self._hide_after_id = None
         self._state = RecordingState.IDLE
         self._notify_listener(RecordingState.IDLE, self._mode)
-        self._hide_window()
+        self._apply_idle_visibility()
+        if self._visible:
+            self._render()
 
     def _notify_listener(self, state: RecordingState, mode: str) -> None:
         if self.state_listener is not None:
@@ -463,9 +475,13 @@ class RecordingIndicator:
         self._place_window(position)
 
     def set_destination(self, name: str | None) -> None:
-        """Onthoudt de actieve bestemming; idle-rendering volgt in Task 5."""
+        """Zet de sticky bestemming en werkt idle-weergave direct bij."""
 
         self._destination = name
+        if self._state == RecordingState.IDLE:
+            self._apply_idle_visibility()
+            if self._visible:
+                self._render()
 
     # ----- de poll-tick (GUI-thread) -----
 
@@ -505,8 +521,19 @@ class RecordingIndicator:
         cy = INDICATOR_HEIGHT / 2
         color = STATE_COLORS.get(state, MUTED_COLOR)
 
+        # Idle met sticky bestemming: alleen de (gedempte) naam tonen.
+        if state == RecordingState.IDLE and self._destination:
+            c.itemconfigure(
+                self._label, text=self._destination, fill=MUTED_COLOR
+            )
+            c.itemconfigure(self._dot, state="hidden")
+            self._render_waveform(False, MUTED_COLOR, cy)
+            self._render_marching_dots(False, cy)
+            c.itemconfigure(self._tag, text="", state="hidden")
+            return
+
         # Label.
-        c.itemconfigure(self._label, text=state_label(state))
+        c.itemconfigure(self._label, text=state_label(state), fill=TEXT_COLOR)
 
         # Statuspuntje — pulserend bij opname, anders statisch.
         if state == RecordingState.RECORDING:
@@ -518,7 +545,7 @@ class RecordingIndicator:
             self._dot,
             self._dot_cx - r, cy - r, self._dot_cx + r, cy + r,
         )
-        c.itemconfigure(self._dot, fill=color)
+        c.itemconfigure(self._dot, state="normal", fill=color)
 
         # Waveform (alleen opname).
         recording = state == RecordingState.RECORDING
