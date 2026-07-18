@@ -5,6 +5,11 @@ lokaal met Faster-Whisper (geen cloud) en plakt de tekst in het actieve invoerve
 
 **Gebruikersdocs:** [README.md](README.md) · status: [docs/STATUS.md](docs/STATUS.md)
 
+## Git-workflow
+
+Altijd via feature-branches; **geen commits of pushes op `main`**.
+Details: [CONTRIBUTING.md](CONTRIBUTING.md) · Cursor-rule: `.cursor/rules/git-branches.mdc`.
+
 ## Agent skills
 
 ### Issue tracker
