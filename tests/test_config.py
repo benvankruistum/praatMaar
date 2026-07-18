@@ -21,9 +21,7 @@ def test_save_and_load_roundtrip(tmp_path: Path, monkeypatch) -> None:
     assert config.load_config() == settings
 
 
-def test_load_config_invalid_json_returns_empty(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_load_config_invalid_json_returns_empty(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(config, "config_dir", lambda: tmp_path)
     (tmp_path / "config.json").write_text("{niet-json", encoding="utf-8")
     assert config.load_config() == {}

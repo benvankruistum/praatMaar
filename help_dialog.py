@@ -14,7 +14,7 @@ from tkinter import scrolledtext, ttk
 
 import i18n
 
-_open_dialog: "tk.Toplevel | None" = None
+_open_dialog: tk.Toplevel | None = None
 
 
 def user_docs_dir() -> Path:

@@ -44,8 +44,7 @@ def _select_indicator() -> Any:
         return RecordingIndicator
 
     raise RuntimeError(
-        f"Geen indicator voor platform {sys.platform!r} "
-        "(ondersteund: win32, darwin)."
+        f"Geen indicator voor platform {sys.platform!r} (ondersteund: win32, darwin)."
     )
 
 

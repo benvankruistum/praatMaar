@@ -20,7 +20,7 @@ Icoon-/tooltip-updates komen van de pill via `set_state`.
 from __future__ import annotations
 
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 import pystray
 from PIL import Image, ImageDraw
@@ -33,11 +33,11 @@ from indicator import RecordingState
 # Idle is bewust donker (niet lichtgrijs): op de Windows-taakbalk oogt
 # lichtgrijs als "uitgeschakeld", terwijl de app wél draait.
 _STATE_COLORS: dict[RecordingState, tuple[int, int, int, int]] = {
-    RecordingState.IDLE: (32, 33, 36, 255),          # #202124 donker — gereed
-    RecordingState.RECORDING: (255, 82, 82, 255),     # #ff5252 rood
+    RecordingState.IDLE: (32, 33, 36, 255),  # #202124 donker — gereed
+    RecordingState.RECORDING: (255, 82, 82, 255),  # #ff5252 rood
     RecordingState.TRANSCRIBING: (255, 176, 32, 255),  # #ffb020 amber
-    RecordingState.CANCELLED: (154, 160, 166, 255),   # #9aa0a6 grijs
-    RecordingState.ERROR: (255, 82, 82, 255),         # rood
+    RecordingState.CANCELLED: (154, 160, 166, 255),  # #9aa0a6 grijs
+    RecordingState.ERROR: (255, 82, 82, 255),  # rood
 }
 
 _TOOLTIP_KEYS: dict[RecordingState, str] = {
@@ -64,9 +64,7 @@ def _make_icon(color: tuple[int, int, int, int]) -> Image.Image:
 
     width = max(1, int(s(2)))
 
-    draw.rounded_rectangle(
-        [s(9), s(3), s(15), s(14)], radius=s(3), fill=color
-    )
+    draw.rounded_rectangle([s(9), s(3), s(15), s(14)], radius=s(3), fill=color)
     draw.arc([s(6), s(5), s(18), s(17)], start=0, end=180, fill=color, width=width)
     draw.line([s(12), s(17), s(12), s(20)], fill=color, width=width)
     draw.line([s(9), s(20), s(15), s(20)], fill=color, width=width)
@@ -95,9 +93,7 @@ class TrayIcon:
         self._state = RecordingState.IDLE
         self._running_main = False
 
-        self._icons = {
-            state: _make_icon(color) for state, color in _STATE_COLORS.items()
-        }
+        self._icons = {state: _make_icon(color) for state, color in _STATE_COLORS.items()}
 
         self._icon = pystray.Icon(
             "praatMaar",
@@ -131,16 +127,16 @@ class TrayIcon:
 
         return sys.platform == "darwin"
 
-    def _handle_settings(self, icon: "pystray.Icon", item: "MenuItem") -> None:
+    def _handle_settings(self, icon: pystray.Icon, item: MenuItem) -> None:
         self._on_settings()
 
-    def _handle_destinations(self, icon: "pystray.Icon", item: "MenuItem") -> None:
+    def _handle_destinations(self, icon: pystray.Icon, item: MenuItem) -> None:
         self._on_destinations()
 
-    def _handle_help(self, icon: "pystray.Icon", item: "MenuItem") -> None:
+    def _handle_help(self, icon: pystray.Icon, item: MenuItem) -> None:
         self._on_help()
 
-    def _handle_quit(self, icon: "pystray.Icon", item: "MenuItem") -> None:
+    def _handle_quit(self, icon: pystray.Icon, item: MenuItem) -> None:
         self._on_quit()
         # Zorg dat een blokkerende `run()` (Darwin) terugkeert.
         try:
@@ -180,9 +176,7 @@ class TrayIcon:
     def set_state(self, state: RecordingState, mode: str = "toggle") -> None:
         self._state = state
         try:
-            self._icon.icon = self._icons.get(
-                state, self._icons[RecordingState.IDLE]
-            )
+            self._icon.icon = self._icons.get(state, self._icons[RecordingState.IDLE])
             self._icon.title = _tooltip(state)
         except Exception:
             pass

@@ -43,7 +43,7 @@ def _run_dialog_subprocess(
     current: dict[str, Any],
     *,
     expect_result: bool,
-) -> "dict[str, Any] | None":
+) -> dict[str, Any] | None:
     """Open een Tk-dialoog in een apart proces. Blokkeert tot het kind eindigt."""
 
     with tempfile.TemporaryDirectory(prefix=f"praatmaar-{kind}-") as tmp:
@@ -85,7 +85,7 @@ def _run_dialog_subprocess(
         return data if isinstance(data, dict) else None
 
 
-def run_settings_subprocess(current: dict[str, Any]) -> "dict[str, Any] | None":
+def run_settings_subprocess(current: dict[str, Any]) -> dict[str, Any] | None:
     """Open Instellingen in een apart proces; return nieuwe settings of None."""
 
     return _run_dialog_subprocess("settings", current, expect_result=True)
@@ -93,7 +93,7 @@ def run_settings_subprocess(current: dict[str, Any]) -> "dict[str, Any] | None":
 
 def run_destinations_subprocess(
     current: dict[str, Any],
-) -> "dict[str, Any] | None":
+) -> dict[str, Any] | None:
     """Open Bestemmingen in een apart proces; return nieuwe settings of None."""
 
     return _run_dialog_subprocess("destinations", current, expect_result=True)
@@ -197,7 +197,7 @@ def _run_help_child(in_path: Path) -> int:
     return 0
 
 
-def main(argv: "list[str] | None" = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
         print(
@@ -221,8 +221,7 @@ def main(argv: "list[str] | None" = None) -> int:
     if flag == "--praatmaar-destinations-ui":
         if len(rest) != 2:
             print(
-                "Gebruik: settings_process.py --praatmaar-destinations-ui "
-                "<in.json> <out.json>",
+                "Gebruik: settings_process.py --praatmaar-destinations-ui <in.json> <out.json>",
                 file=sys.stderr,
             )
             return 2

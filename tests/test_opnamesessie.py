@@ -96,7 +96,9 @@ def states() -> list[RecordingState]:
 
 
 @pytest.fixture
-def session(host: FakeHost, sd: FakeSoundDevice, states: list[RecordingState], tmp_path: Path, monkeypatch) -> Opnamesessie:
+def session(
+    host: FakeHost, sd: FakeSoundDevice, states: list[RecordingState], tmp_path: Path, monkeypatch
+) -> Opnamesessie:
     import recovery
 
     monkeypatch.setattr(recovery, "config_dir", lambda: tmp_path)
@@ -133,7 +135,9 @@ def _write_wav(path: Path, rate: int, data: np.ndarray) -> None:
     path.write_bytes(b"RIFF" + data.tobytes()[:8])
 
 
-def test_start_sets_recording_and_notifies(session: Opnamesessie, sd: FakeSoundDevice, states: list) -> None:
+def test_start_sets_recording_and_notifies(
+    session: Opnamesessie, sd: FakeSoundDevice, states: list
+) -> None:
     assert not session.is_recording
     session.start()
     assert session.is_recording
@@ -166,9 +170,7 @@ def test_stop_keeps_stream_warm(
     assert sd.input_stream_calls == 1
 
 
-def test_stop_closes_stream_when_warm_disabled(
-    session: Opnamesessie, sd: FakeSoundDevice
-) -> None:
+def test_stop_closes_stream_when_warm_disabled(session: Opnamesessie, sd: FakeSoundDevice) -> None:
     session.warm_microphone = False
     sd._fresh_stream_each_open = True
     session.start()
@@ -194,9 +196,7 @@ def test_cancel_closes_stream_when_warm_disabled(
     assert session._audio_stream is None
 
 
-def test_warmup_is_noop_when_warm_disabled(
-    session: Opnamesessie, sd: FakeSoundDevice
-) -> None:
+def test_warmup_is_noop_when_warm_disabled(session: Opnamesessie, sd: FakeSoundDevice) -> None:
     session.warm_microphone = False
     session.warmup_microphone()
     assert sd.input_stream_calls == 0
@@ -285,7 +285,9 @@ def test_short_recording_does_not_process(session: Opnamesessie, states: list) -
     assert session.model.calls == []  # type: ignore[union-attr]
 
 
-def test_transcribe_pastes_and_copies(session: Opnamesessie, host: FakeHost, states: list, sd: FakeSoundDevice) -> None:
+def test_transcribe_pastes_and_copies(
+    session: Opnamesessie, host: FakeHost, states: list, sd: FakeSoundDevice
+) -> None:
     session.minimum_recording_seconds = 0.0
     session.start()
     # Simuleer één audioblok via de callback.

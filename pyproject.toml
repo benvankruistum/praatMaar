@@ -39,6 +39,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest==9.1.1",
+    "ruff==0.14.14",
 ]
 build = [
     "pyinstaller>=6.0",
@@ -72,3 +73,37 @@ packages = ["host", "indicator"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = [".", "tests"]
+exclude = [
+    ".venv",
+    "build",
+    "dist",
+    ".scratch",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear (duidelijke bugs)
+    "UP",  # pyupgrade (licht)
+]
+ignore = [
+    "E501",   # line length: format regelt stijl; lange NL-strings ok
+    "B008",   # function calls in defaults (tkinter/callbacks)
+    "UP007",  # Optional[X] vs X | None — bestaande annotations laten
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]  # assert False in tests ok
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

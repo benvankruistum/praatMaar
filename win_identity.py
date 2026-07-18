@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import sys
 
-
 APP_USER_MODEL_ID = "benvankruistum.praatMaar"
 
 
@@ -26,8 +25,6 @@ def apply_windows_app_identity() -> None:
     try:
         import ctypes
 
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            APP_USER_MODEL_ID
-        )
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
     except (AttributeError, OSError):
         pass

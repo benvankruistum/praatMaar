@@ -29,14 +29,14 @@ from ._contract import (
     PILL_BG,
     POLL_INTERVAL_MS,
     STATE_COLORS,
-    mode_tag,
-    state_label,
     TEXT_COLOR,
     WAVEFORM_GAIN,
     WINDOW_ALPHA,
     RecordingState,
     drain_status_queue,
+    mode_tag,
     snapshot_levels,
+    state_label,
 )
 
 
@@ -61,8 +61,7 @@ class RecordingIndicator:
     def __init__(self, position: str = "boven-midden") -> None:
         if sys.platform != "darwin":
             raise SystemExit(
-                "De macOS-indicator werkt alleen op darwin "
-                "(vereist NSPanel / PyObjC)."
+                "De macOS-indicator werkt alleen op darwin (vereist NSPanel / PyObjC)."
             )
 
         try:
@@ -97,9 +96,7 @@ class RecordingIndicator:
         self._NSView = NSView
         self._NSPanel = NSPanel
         self._NSBackingStoreBuffered = NSBackingStoreBuffered
-        self._style_mask = (
-            NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
-        )
+        self._style_mask = NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
 
         self._state = RecordingState.IDLE
         self._mode = "toggle"
@@ -119,15 +116,11 @@ class RecordingIndicator:
             self._build_panel()
             self.set_position(position)
         except Exception as exc:
-            raise SystemExit(
-                f"De opname-indicator kon niet worden geïnitialiseerd: {exc}"
-            ) from exc
+            raise SystemExit(f"De opname-indicator kon niet worden geïnitialiseerd: {exc}") from exc
 
     def _ns_color(self, hex_color: str, alpha: float = 1.0) -> Any:
         r, g, b = _hex_to_rgb(hex_color)
-        return self._NSColor.colorWithCalibratedRed_green_blue_alpha_(
-            r, g, b, alpha
-        )
+        return self._NSColor.colorWithCalibratedRed_green_blue_alpha_(r, g, b, alpha)
 
     def _build_panel(self) -> None:
         # Zorg dat er een shared application is (pystray doet dit ook).
@@ -159,9 +152,7 @@ class RecordingIndicator:
 
         # Labels als NSTextField bovenop de custom view (eenvoudiger dan Core Text).
         self._label_field = self._make_label(44, 18, 110, 24, bold=True)
-        self._tag_field = self._make_label(
-            INDICATOR_WIDTH - 120, 18, 100, 24, align_right=True
-        )
+        self._tag_field = self._make_label(INDICATOR_WIDTH - 120, 18, 100, 24, align_right=True)
         content.addSubview_(self._label_field)
         content.addSubview_(self._tag_field)
 
@@ -175,18 +166,14 @@ class RecordingIndicator:
         bold: bool = False,
         align_right: bool = False,
     ) -> Any:
-        field = self._NSTextField.alloc().initWithFrame_(
-            self._NSMakeRect(x, y, w, h)
-        )
+        field = self._NSTextField.alloc().initWithFrame_(self._NSMakeRect(x, y, w, h))
         field.setBezeled_(False)
         field.setDrawsBackground_(False)
         field.setEditable_(False)
         field.setSelectable_(False)
         field.setTextColor_(self._ns_color(TEXT_COLOR if bold else MUTED_COLOR))
         font = (
-            self._NSFont.boldSystemFontOfSize_(13)
-            if bold
-            else self._NSFont.systemFontOfSize_(11)
+            self._NSFont.boldSystemFontOfSize_(13) if bold else self._NSFont.systemFontOfSize_(11)
         )
         field.setFont_(font)
         if align_right:
@@ -343,12 +330,14 @@ class RecordingIndicator:
             return
         self._ticks_started = True
         interval = POLL_INTERVAL_MS / 1000.0
-        self._timer = self._NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-            interval,
-            self._content,
-            b"praatMaarTick:",
-            None,
-            True,
+        self._timer = (
+            self._NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+                interval,
+                self._content,
+                b"praatMaarTick:",
+                None,
+                True,
+            )
         )
 
     def prepare_external_runloop(self) -> None:
@@ -437,9 +426,7 @@ def _make_pill_view_class() -> Any:
 
             color_hex = STATE_COLORS.get(state, MUTED_COLOR)
             cr, cg, cb = _hex_to_rgb(color_hex)
-            color = NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                cr, cg, cb, 1.0
-            )
+            color = NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, 1.0)
 
             # Statuspuntje.
             cy = INDICATOR_HEIGHT / 2.0
@@ -488,13 +475,9 @@ def _make_pill_view_class() -> Any:
             for i in range(3):
                 hex_c = COLOR_TRANSCRIBING if i == active else MUTED_COLOR
                 r, g, b = _hex_to_rgb(hex_c)
-                NSColor.colorWithCalibratedRed_green_blue_alpha_(
-                    r, g, b, 1.0
-                ).setFill()
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(r, g, b, 1.0).setFill()
                 mx = 190 + i * 18
-                NSBezierPath.bezierPathWithOvalInRect_(
-                    owner._NSMakeRect(mx, cy - 4, 8, 8)
-                ).fill()
+                NSBezierPath.bezierPathWithOvalInRect_(owner._NSMakeRect(mx, cy - 4, 8, 8)).fill()
 
     # Houd NSObject-referentie levend voor PyObjC-registratie.
     _ = NSObject

@@ -9,20 +9,18 @@ from __future__ import annotations
 
 import copy
 import tkinter as tk
-from pathlib import Path
+from collections.abc import Callable
 from tkinter import filedialog, messagebox, ttk
-from typing import Any, Callable
+from typing import Any
 
 import destinations
 import i18n
 import recovery
 
-_open_dialog: "tk.Toplevel | None" = None
+_open_dialog: tk.Toplevel | None = None
 
 
-def _revalidate_active(
-    dest_list: list[dict[str, str]], active: str | None
-) -> str | None:
+def _revalidate_active(dest_list: list[dict[str, str]], active: str | None) -> str | None:
     if active is None:
         return None
     if any(d["name"] == active for d in dest_list):
@@ -101,9 +99,7 @@ def _edit_destination(
     ttk.Button(buttons, text=i18n.t("destinations.cancel"), command=cancel).grid(
         row=0, column=0, padx=(0, 8)
     )
-    ttk.Button(buttons, text=i18n.t("destinations.save"), command=confirm).grid(
-        row=0, column=1
-    )
+    ttk.Button(buttons, text=i18n.t("destinations.save"), command=confirm).grid(row=0, column=1)
 
     dlg.protocol("WM_DELETE_WINDOW", cancel)
     dlg.update_idletasks()
@@ -155,9 +151,7 @@ def open_destinations_dialog(
     list_frame.rowconfigure(0, weight=1)
 
     columns = ("name", "path")
-    tree = ttk.Treeview(
-        list_frame, columns=columns, show="headings", selectmode="browse", height=8
-    )
+    tree = ttk.Treeview(list_frame, columns=columns, show="headings", selectmode="browse", height=8)
     tree.heading("name", text=i18n.t("destinations.column.name"))
     tree.heading("path", text=i18n.t("destinations.column.path"))
     tree.column("name", width=140, stretch=False)
@@ -171,9 +165,7 @@ def open_destinations_dialog(
     def _refresh_active_label() -> None:
         name = active_var.get().strip()
         if name:
-            active_label.config(
-                text=i18n.t("destinations.active.named", name=name)
-            )
+            active_label.config(text=i18n.t("destinations.active.named", name=name))
         else:
             active_label.config(text=i18n.t("destinations.active.default"))
 
@@ -302,9 +294,9 @@ def open_destinations_dialog(
     ttk.Button(crud, text=i18n.t("destinations.set_active"), command=set_active).grid(
         row=0, column=3, padx=(0, 6)
     )
-    ttk.Button(
-        crud, text=i18n.t("destinations.clear_active"), command=clear_active
-    ).grid(row=0, column=4)
+    ttk.Button(crud, text=i18n.t("destinations.clear_active"), command=clear_active).grid(
+        row=0, column=4
+    )
 
     folders = ttk.Frame(win)
     folders.grid(row=3, column=0, sticky="w", pady=(0, 12))
@@ -316,9 +308,7 @@ def open_destinations_dialog(
 
     def open_active_folder() -> None:
         name = active_var.get().strip() or None
-        path = destinations.resolve_save_dir(
-            name, dest_list, recovery.transcripts_dir()
-        )
+        path = destinations.resolve_save_dir(name, dest_list, recovery.transcripts_dir())
         destinations.open_in_explorer(path)
 
     def _update_open_active_btn() -> None:
@@ -342,9 +332,7 @@ def open_destinations_dialog(
         win.destroy()
 
     def save() -> None:
-        active_name = _revalidate_active(
-            dest_list, active_var.get().strip() or None
-        )
+        active_name = _revalidate_active(dest_list, active_var.get().strip() or None)
         merged = dict(current)
         merged["destinations"] = copy.deepcopy(dest_list)
         merged["active_destination"] = active_name
@@ -356,9 +344,7 @@ def open_destinations_dialog(
     ttk.Button(buttons, text=i18n.t("destinations.cancel"), command=close).grid(
         row=0, column=0, padx=(0, 8)
     )
-    ttk.Button(buttons, text=i18n.t("destinations.save"), command=save).grid(
-        row=0, column=1
-    )
+    ttk.Button(buttons, text=i18n.t("destinations.save"), command=save).grid(row=0, column=1)
 
     win.protocol("WM_DELETE_WINDOW", close)
 

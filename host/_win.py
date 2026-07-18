@@ -83,15 +83,11 @@ class WinHost:
 
         if enabled:
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, _RUN_KEY) as key:
-                winreg.SetValueEx(
-                    key, _VALUE_NAME, 0, winreg.REG_SZ, self._launch_command()
-                )
+                winreg.SetValueEx(key, _VALUE_NAME, 0, winreg.REG_SZ, self._launch_command())
             return
 
         try:
-            with winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_SET_VALUE
-            ) as key:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
                 winreg.DeleteValue(key, _VALUE_NAME)
         except FileNotFoundError:
             pass

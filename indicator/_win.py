@@ -100,8 +100,7 @@ class RecordingIndicator:
     def __init__(self, position: str = "boven-midden") -> None:
         if sys.platform != "win32":
             raise SystemExit(
-                "De Windows-indicator werkt alleen op win32 "
-                "(vereist de WS_EX_NOACTIVATE-shim)."
+                "De Windows-indicator werkt alleen op win32 (vereist de WS_EX_NOACTIVATE-shim)."
             )
 
         import tkinter as tk
@@ -118,18 +117,16 @@ class RecordingIndicator:
 
         # Wordt bij elke toestandswissel aangeroepen (op de hoofdthread); door
         # main() bedraad naar de tray zodat de pill de enige toestandseigenaar is.
-        self.state_listener: "Any | None" = None
+        self.state_listener: Any | None = None
 
         # Thread-veilige marshalling: andere threads (bijv. de tray) leggen hier
         # een callable neer; de poll-tick voert het uit op de hoofdthread.
-        self._main_calls: "queue.Queue[Any]" = queue.Queue()
+        self._main_calls: queue.Queue[Any] = queue.Queue()
 
         try:
             self._build_window(position)
         except Exception as exc:
-            raise SystemExit(
-                f"De opname-indicator kon niet worden geïnitialiseerd: {exc}"
-            ) from exc
+            raise SystemExit(f"De opname-indicator kon niet worden geïnitialiseerd: {exc}") from exc
 
     def _build_window(self, position: str) -> None:
         tk = self._tk
@@ -181,9 +178,7 @@ class RecordingIndicator:
         else:
             y = margin
 
-        self.root.geometry(
-            f"{INDICATOR_WIDTH}x{INDICATOR_HEIGHT}+{x}+{y}"
-        )
+        self.root.geometry(f"{INDICATOR_WIDTH}x{INDICATOR_HEIGHT}+{x}+{y}")
 
     def _build_canvas_items(self) -> None:
         c = self.canvas
@@ -202,9 +197,7 @@ class RecordingIndicator:
         self._dot_r = 7
         self._dot = c.create_oval(0, 0, 0, 0, fill=COLOR_RECORDING, outline="")
 
-        self._label = c.create_text(
-            44, cy, text="", anchor="w", fill=TEXT_COLOR, font=LABEL_FONT
-        )
+        self._label = c.create_text(44, cy, text="", anchor="w", fill=TEXT_COLOR, font=LABEL_FONT)
 
         self._wf_x1 = 150
         self._wf_x2 = 252
@@ -215,8 +208,13 @@ class RecordingIndicator:
         for i in range(NUM_BARS):
             bx = self._wf_x1 + i * bar_slot
             bar = c.create_rectangle(
-                bx, cy - 1, bx + bar_w, cy + 1,
-                fill=COLOR_RECORDING, outline="", state="hidden",
+                bx,
+                cy - 1,
+                bx + bar_w,
+                cy + 1,
+                fill=COLOR_RECORDING,
+                outline="",
+                state="hidden",
             )
             self._bars.append(bar)
 
@@ -224,24 +222,52 @@ class RecordingIndicator:
         for i in range(3):
             mx = 190 + i * 18
             dot = c.create_oval(
-                mx, cy - 4, mx + 8, cy + 4,
-                fill=MUTED_COLOR, outline="", state="hidden",
+                mx,
+                cy - 4,
+                mx + 8,
+                cy + 4,
+                fill=MUTED_COLOR,
+                outline="",
+                state="hidden",
             )
             self._mdots.append(dot)
 
         self._tag = c.create_text(
-            INDICATOR_WIDTH - 16, cy, text="", anchor="e",
-            fill=MUTED_COLOR, font=TAG_FONT,
+            INDICATOR_WIDTH - 16,
+            cy,
+            text="",
+            anchor="e",
+            fill=MUTED_COLOR,
+            font=TAG_FONT,
         )
 
     @staticmethod
-    def _round_rect_points(
-        x1: float, y1: float, x2: float, y2: float, r: float
-    ) -> list[float]:
+    def _round_rect_points(x1: float, y1: float, x2: float, y2: float, r: float) -> list[float]:
         return [
-            x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
-            x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
-            x1, y2, x1, y2 - r, x1, y1 + r, x1, y1,
+            x1 + r,
+            y1,
+            x2 - r,
+            y1,
+            x2,
+            y1,
+            x2,
+            y1 + r,
+            x2,
+            y2 - r,
+            x2,
+            y2,
+            x2 - r,
+            y2,
+            x1 + r,
+            y2,
+            x1,
+            y2,
+            x1,
+            y2 - r,
+            x1,
+            y1 + r,
+            x1,
+            y1,
         ]
 
     def _show_window(self) -> None:
@@ -251,7 +277,12 @@ class RecordingIndicator:
         self.root.deiconify()
         self.root.update_idletasks()
         self._user32.SetWindowPos(
-            self._hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+            self._hwnd,
+            HWND_TOPMOST,
+            0,
+            0,
+            0,
+            0,
             SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW,
         )
         self._visible = True
@@ -293,13 +324,9 @@ class RecordingIndicator:
         self._show_window()
 
         if state == RecordingState.CANCELLED:
-            self._hide_after_id = self.root.after(
-                CANCELLED_DURATION_MS, self._transient_expired
-            )
+            self._hide_after_id = self.root.after(CANCELLED_DURATION_MS, self._transient_expired)
         elif state == RecordingState.ERROR:
-            self._hide_after_id = self.root.after(
-                ERROR_DURATION_MS, self._transient_expired
-            )
+            self._hide_after_id = self.root.after(ERROR_DURATION_MS, self._transient_expired)
 
     def _transient_expired(self) -> None:
         self._hide_after_id = None
@@ -364,9 +391,7 @@ class RecordingIndicator:
 
         # Idle met sticky bestemming: alleen de (gedempte) naam tonen.
         if state == RecordingState.IDLE and self._destination:
-            c.itemconfigure(
-                self._label, text=self._destination, fill=MUTED_COLOR
-            )
+            c.itemconfigure(self._label, text=self._destination, fill=MUTED_COLOR)
             c.itemconfigure(self._dot, state="hidden")
             self._render_waveform(False, MUTED_COLOR, cy)
             self._render_marching_dots(False, cy)
@@ -383,7 +408,10 @@ class RecordingIndicator:
             r = self._dot_r
         c.coords(
             self._dot,
-            self._dot_cx - r, cy - r, self._dot_cx + r, cy + r,
+            self._dot_cx - r,
+            cy - r,
+            self._dot_cx + r,
+            cy + r,
         )
         c.itemconfigure(self._dot, state="normal", fill=color)
 
@@ -398,9 +426,7 @@ class RecordingIndicator:
         else:
             c.itemconfigure(self._tag, text="", state="hidden")
 
-    def _render_waveform(
-        self, visible: bool, color: str, cy: float
-    ) -> None:
+    def _render_waveform(self, visible: bool, color: str, cy: float) -> None:
         c = self.canvas
 
         if not visible:
