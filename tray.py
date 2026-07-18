@@ -1,7 +1,7 @@
 """
 Systeemvak-icoon voor praatMaar (pystray).
 
-Toont een microfoon-icoon dat per dicteertoestand kleurt (grijs = idle,
+Toont een microfoon-icoon dat per dicteertoestand kleurt (donker = gereed,
 rood = opname, amber = transcriberen), met een rechtsklik-menu (Instellingen,
 Afsluiten). Draait op een **eigen thread** via `Icon.run_detached()`; de
 tkinter-mainloop houdt de hoofdthread.
@@ -22,9 +22,11 @@ from pystray import Menu, MenuItem
 
 from indicator import RecordingState
 
-# Kleuren per toestand (RGBA), consistent met de pill.
+# Kleuren per toestand (RGBA), afgestemd op de pill.
+# Idle is bewust donker (niet lichtgrijs): op de Windows-taakbalk oogt
+# lichtgrijs als "uitgeschakeld", terwijl de app wél draait.
 _STATE_COLORS: dict[RecordingState, tuple[int, int, int, int]] = {
-    RecordingState.IDLE: (200, 204, 208, 255),        # #c8ccd0 grijs
+    RecordingState.IDLE: (32, 33, 36, 255),          # #202124 donker — gereed
     RecordingState.RECORDING: (255, 82, 82, 255),     # #ff5252 rood
     RecordingState.TRANSCRIBING: (255, 176, 32, 255),  # #ffb020 amber
     RecordingState.CANCELLED: (154, 160, 166, 255),   # #9aa0a6 grijs
