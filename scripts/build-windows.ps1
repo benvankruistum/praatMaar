@@ -68,7 +68,11 @@ if (-not $SkipInstaller) {
     }
 
     if (-not $Iscc) {
-        Write-Warning "Inno Setup (ISCC.exe) niet gevonden — sla installer over. Installeer: https://jrsoftware.org/isinfo.php"
+        $msg = "Inno Setup (ISCC.exe) niet gevonden. Installeer: https://jrsoftware.org/isinfo.php"
+        if ($env:CI -eq "true") {
+            throw $msg
+        }
+        Write-Warning "$msg — sla installer over."
     }
     else {
         Write-Host "==> Inno Setup: $Iscc"
@@ -76,10 +80,11 @@ if (-not $SkipInstaller) {
         if ($LASTEXITCODE -ne 0) { throw "ISCC mislukt ($LASTEXITCODE)" }
 
         $Setup = Join-Path $Root "installer\Output\praatMaar-Setup-$Version.exe"
-        if (Test-Path $Setup) {
-            Copy-Item $Setup -Destination $ReleaseDir -Force
-            Write-Host "==> Installer gekopieerd naar release\"
+        if (-not (Test-Path $Setup)) {
+            throw "Installer niet gevonden: $Setup"
         }
+        Copy-Item $Setup -Destination $ReleaseDir -Force
+        Write-Host "==> Installer gekopieerd naar release\"
     }
 }
 

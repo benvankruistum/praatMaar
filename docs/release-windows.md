@@ -42,16 +42,18 @@ Output: `release\` (zip + setup) en `dist\praatMaar\`.
 
 ## GitHub Release
 
-Push een versie-tag; de workflow `.github/workflows/release.yml` bouwt op
-`windows-latest` en hangt de artefacts aan de release:
+Push een versie-tag; Actions bouwt op `windows-latest` en zet Setup.exe + zip
+op de release-pagina:
 
 ```powershell
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Houd `MyAppVersion` in `installer/praatMaar.iss`, `version` in `pyproject.toml`
-en de tag in sync.
+Of: Actions → **Release** → Run workflow (handmatig, vul versie in).
+
+Houd `version` in `pyproject.toml` en de tag in sync (het build-script zet
+`MyAppVersion` via `/D` voor Inno).
 
 ## SmartScreen (“Windows beschermde je pc”)
 

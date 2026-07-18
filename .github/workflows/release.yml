@@ -1,9 +1,17 @@
 name: Release
 
+# Push een versie-tag → Windows-build → GitHub Release met Setup.exe + zip.
+# Voorbeeld: git tag v0.1.0 && git push origin v0.1.0
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versie zonder v (bijv. 0.1.0) — alleen bij handmatige run"
+        required: true
+        default: "0.1.0"
 
 permissions:
   contents: write
@@ -11,8 +19,22 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $v = "${{ inputs.version }}".TrimStart("v")
+          } else {
+            $v = "${{ github.ref_name }}".TrimStart("v")
+          }
+          if (-not $v) { throw "Geen versie gevonden" }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Building version $v"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -25,31 +47,43 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install -e ".[build]"
+          python -c "import PyInstaller; print(PyInstaller.__version__)"
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
 
       - name: Build (PyInstaller + installer + zip)
         shell: pwsh
+        env:
+          CI: "true"
         run: |
-          $ver = "${{ github.ref_name }}".TrimStart("v")
-          .\scripts\build-windows.ps1 -Version $ver
+          .\scripts\build-windows.ps1 -Version "${{ steps.ver.outputs.version }}"
 
-      - name: Upload release assets
+      - name: List artefacts
+        shell: pwsh
+        run: |
+          Get-ChildItem release -ErrorAction SilentlyContinue | Format-Table Name, Length -AutoSize
+          Get-ChildItem installer\Output -ErrorAction SilentlyContinue | Format-Table Name, Length -AutoSize
+
+      - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: praatMaar ${{ steps.ver.outputs.version }}
+          draft: false
           generate_release_notes: true
+          fail_on_unmatched_files: true
           body: |
             ## Downloads
-            - **Setup** — `praatMaar-Setup-*.exe` (aanbevolen)
+            - **Setup** (`praatMaar-Setup-*.exe`) — aanbevolen, installeert naar `%LOCALAPPDATA%\praatMaar`
             - **Portable zip** — uitpakken en `praatMaar.exe` starten
 
-            Unsigned indie-build: SmartScreen kan waarschuwen → Meer info → Toch uitvoeren.
-            Zie [docs/release-windows.md](docs/release-windows.md).
+            Unsigned indie-build: SmartScreen kan waarschuwen → **Meer info** → **Toch uitvoeren**.
+            Zie [docs/release-windows.md](https://github.com/benvankruistum/praatMaar/blob/main/docs/release-windows.md).
 
-            Eerste start downloadt het Whisper-model (eenmalig, lokaal daarna).
+            Eerste start downloadt het Whisper-model (eenmalig; daarna lokaal).
           files: |
-            release/*
-            installer/Output/*.exe
+            release/praatMaar-Setup-*.exe
+            release/praatMaar-*-windows-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
