@@ -49,6 +49,7 @@ hiddenimports += [
     "indicator",
     "hotkeys",
     "opnamesessie",
+    "win_identity",
     # Platform-seam: de adapters worden lazy (in host._select) geïmporteerd,
     # dus expliciet opnemen zodat ze zeker in de bundle zitten.
     "host",
@@ -97,6 +98,9 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    # FileDescription/ProductName → "praatMaar" i.p.v. generieke bootloader-naam
+    # in Windows-taakbalkhoek / systeempictogrammen-lijst.
+    version="version_info.txt",
 )
 
 coll = COLLECT(

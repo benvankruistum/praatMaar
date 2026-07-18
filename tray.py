@@ -94,7 +94,7 @@ class TrayIcon:
         )
 
         self._icon = pystray.Icon(
-            "praatmaar",
+            "praatMaar",
             icon=self._icons[RecordingState.IDLE],
             title=_STATE_TOOLTIPS[RecordingState.IDLE],
             menu=menu,

@@ -15,6 +15,7 @@ import config
 import hotkeys
 import host
 import recovery
+import win_identity
 from opnamesessie import Opnamesessie
 from splash import Splash
 
@@ -674,6 +675,9 @@ def main() -> None:
     """
 
     global model
+
+    # Vóór splash/tray: Windows-app-id (taakbalk-groep / identiteit).
+    win_identity.apply_windows_app_identity()
 
     # Bestandslog: onder pythonw / windowed exe is er geen console.
     log_file = app_logging.setup_logging()

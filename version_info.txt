@@ -1,0 +1,40 @@
+# UTF-8
+#
+# PyInstaller version resource — bepaalt wat Windows toont als app-naam
+# (o.a. taakbalk-hoek / "Andere pictogrammen op de taakbalk").
+# Alleen van toepassing op de gebouwde praatMaar.exe, niet op pythonw.exe.
+#
+# VSVersionInfo-formaat: zie PyInstaller docs / win32versionfile.
+
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(0, 1, 0, 0),
+    prodvers=(0, 1, 0, 0),
+    mask=0x3F,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0),
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          "040904B0",
+          [
+            StringStruct("CompanyName", "Ben van Kruistum"),
+            StringStruct("FileDescription", "praatMaar"),
+            StringStruct("FileVersion", "0.1.0"),
+            StringStruct("InternalName", "praatMaar"),
+            StringStruct("LegalCopyright", "Copyright (c) 2026 Ben van Kruistum"),
+            StringStruct("OriginalFilename", "praatMaar.exe"),
+            StringStruct("ProductName", "praatMaar"),
+            StringStruct("ProductVersion", "0.1.0"),
+          ],
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct("Translation", [1033, 1200])]),
+  ],
+)

@@ -55,7 +55,14 @@ Of: Actions → **Release** → Run workflow (handmatig, vul versie in).
 Houd `version` in `pyproject.toml` en de tag in sync (het build-script zet
 `MyAppVersion` via `/D` voor Inno).
 
-## SmartScreen (“Windows beschermde je pc”)
+## App-naam in Windows (“Python” i.p.v. praatMaar)
+
+De lijst *Andere pictogrammen op de taakbalk* toont de **FileDescription** van
+het draaiende `.exe`. Via `pythonw.exe` is dat altijd “Python”.
+
+De PyInstaller-build zet in `version_info.txt` ProductName/FileDescription op
+**praatMaar**. Gebruik dus de Setup.exe of `dist\praatMaar\praatMaar.exe`
+(of `start-praatMaar.bat`, die die exe prefereert) om de juiste naam te zien.
 
 Normaal voor unsigned indie-software:
 
