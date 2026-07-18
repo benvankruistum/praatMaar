@@ -17,6 +17,7 @@ from indicator import (
     reset_levels,
 )
 
+import app_logging
 import config
 import hotkeys
 import host
@@ -271,9 +272,33 @@ def _download_model_with_progress(
     import huggingface_hub
     from tqdm.auto import tqdm
 
-    from faster_whisper.utils import _MODELS
-
-    repo_id = _MODELS.get(model_name, model_name)
+    # Publieke fallback: private `_MODELS` kan in nieuwere faster-whisper
+    # verdwijnen. De repo-id's volgen de Systran faster-whisper-conventie.
+    _KNOWN_REPO_IDS = {
+        "tiny": "Systran/faster-whisper-tiny",
+        "tiny.en": "Systran/faster-whisper-tiny.en",
+        "base": "Systran/faster-whisper-base",
+        "base.en": "Systran/faster-whisper-base.en",
+        "small": "Systran/faster-whisper-small",
+        "small.en": "Systran/faster-whisper-small.en",
+        "medium": "Systran/faster-whisper-medium",
+        "medium.en": "Systran/faster-whisper-medium.en",
+        "large-v1": "Systran/faster-whisper-large-v1",
+        "large-v2": "Systran/faster-whisper-large-v2",
+        "large-v3": "Systran/faster-whisper-large-v3",
+        "large": "Systran/faster-whisper-large-v3",
+        "distil-large-v2": "Systran/faster-distil-whisper-large-v2",
+        "distil-medium.en": "Systran/faster-distil-whisper-medium.en",
+        "distil-small.en": "Systran/faster-distil-whisper-small.en",
+        "distil-large-v3": "Systran/faster-distil-whisper-large-v3",
+    }
+    try:
+        from faster_whisper.utils import _MODELS as _fw_models
+    except ImportError:
+        _fw_models = {}
+    repo_id = _fw_models.get(model_name) or _KNOWN_REPO_IDS.get(
+        model_name, model_name
+    )
 
     # Dezelfde bestandenselectie als faster_whisper.download_model.
     allow_patterns = [
@@ -1010,6 +1035,10 @@ def main() -> None:
     """
 
     global model
+
+    # Bestandslog: onder pythonw / windowed exe is er geen console.
+    log_file = app_logging.setup_logging()
+    print(f"Logbestand: {log_file}")
 
     # Slechts één instantie tegelijk. Een tweede start (bijv. autostart én een
     # handmatige start, of twee keer klikken) stopt hier — vóór het laadscherm en

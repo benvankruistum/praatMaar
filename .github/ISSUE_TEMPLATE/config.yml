@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security melding
+    url: https://github.com/benvankruistum/praatMaar/security/advisories/new
+    about: Gevoelige kwetsbaarheden — niet als publieke issue.
+  - name: Status & roadmap
+    url: https://github.com/benvankruistum/praatMaar/blob/main/docs/STATUS.md
+    about: Wat werkt, wat niet, en wat de roadmap is.

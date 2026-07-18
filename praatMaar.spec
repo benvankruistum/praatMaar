@@ -40,6 +40,7 @@ for _pkg in _COLLECT:
 # Lokale modules die pas lazy (binnen functies) geïmporteerd worden; expliciet
 # opnemen zodat ze zeker in de bundle zitten.
 hiddenimports += [
+    "app_logging",
     "config",
     "recovery",
     "settings",

@@ -1,5 +1,9 @@
 # Handoff — praatMaar opname-indicator
 
+> **Gearchiveerd (2026-07-18).** Historische sessienotitie. Huidige waarheid:
+> [docs/STATUS.md](../STATUS.md) en [README.md](../../README.md). Claims als
+> “Geen git-repo” zijn achterhaald.
+
 Geschreven 2026-07-15 om de sessie af te sluiten. Bedoeld om na een herstart naadloos
 verder te gaan. Werktaal: **Nederlands**.
 

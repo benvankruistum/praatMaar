@@ -1,0 +1,45 @@
+name: Bug report
+description: Meld een fout of onverwacht gedrag
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Dank je. Vul zo veel mogelijk in. Security-issues: zie SECURITY.md (niet hier).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Wat gebeurde er?
+      description: Verwacht vs. werkelijk gedrag.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Stappen om te reproduceren
+      placeholder: |
+        1. Start …
+        2. Druk …
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versie / commit
+      placeholder: "bijv. main @ abc1234 of 0.1.0"
+  - type: dropdown
+    id: os
+    attributes:
+      label: Windows-versie
+      options:
+        - Windows 11
+        - Windows 10
+        - Anders / weet niet
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevante logregels
+      description: Uit %APPDATA%\praatMaar\praatMaar.log (gevoelige tekst weglaten).
+      render: shell

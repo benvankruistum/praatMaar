@@ -1,0 +1,15 @@
+# Runtime-dependencies (gelocked). Installeer met:
+#   python -m pip install -r requirements.txt
+#
+# Ontwikkeling (tests): pip install -r requirements-dev.txt
+# Of: pip install -e ".[dev]"
+
+faster-whisper==1.2.1
+sounddevice==0.5.5
+pynput==1.8.2
+pystray==0.19.5
+Pillow==12.3.0
+pyautogui==0.9.54
+pyperclip==1.11.0
+numpy==2.5.1
+scipy==1.18.0

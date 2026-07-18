@@ -1,5 +1,9 @@
 # Handoff — praatMaar naar macOS porten
 
+> **Gearchiveerd (2026-07-18).** Historische analyse. Actuele status:
+> [docs/STATUS.md](../STATUS.md). Let op: paste/autostart/config-dir zitten
+> inmiddels achter `host/`; `requirements.txt` bestaat wel; dit is een git-repo.
+
 Geschreven 2026-07-17. Werktaal: **Nederlands**. Doel: een verse agent kan hiermee
 naadloos verder met het onderzoek naar draaien/bouwen van praatMaar op een Mac.
 

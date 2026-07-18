@@ -16,5 +16,10 @@ dist/
 # Interne werkdocumenten (issues/specs)
 .scratch/
 
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
 # App-runtime config (staat normaal in %APPDATA%, hier voor de zekerheid)
 config.json
