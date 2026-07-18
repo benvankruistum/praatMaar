@@ -434,7 +434,7 @@ def wait_until_modifier_keys_released(
     Ctrl+Shift+V wordt uitgevoerd in plaats van Ctrl+V.
     """
 
-    relevant = {"ctrl", "shift", "alt"} | HOTKEY_TOKENS
+    relevant = {"ctrl", "shift", "alt", "cmd"} | HOTKEY_TOKENS
     started = time.monotonic()
 
     while True:
@@ -597,7 +597,11 @@ def on_press(
             pressed_tokens.add(token)
 
     # Escape afhandelen voordat de sneltoets wordt gecontroleerd.
-    if key == keyboard.Key.esc:
+    # Token-check (macOS MacKey) én pynput-Key.esc (Windows).
+    is_esc = token == "esc" or (
+        keyboard is not None and key == keyboard.Key.esc
+    )
+    if is_esc:
         if not session.is_recording:
             return
 
@@ -905,10 +909,17 @@ def main() -> None:
     indicator.state_listener = tray.set_state
     tray.start()
 
-    listener = keyboard.Listener(
-        on_press=on_press,
-        on_release=on_release,
-    )
+    # macOS 26+: géén pynput.Listener (TSM-crash op achtergrondthread).
+    # NSEvent-monitor op de Cocoa-mainloop i.p.v. pynput.
+    if tray.owns_main_thread:
+        from mac_input import QuartzKeyListener
+
+        listener = QuartzKeyListener(on_press=on_press, on_release=on_release)
+    else:
+        listener = keyboard.Listener(
+            on_press=on_press,
+            on_release=on_release,
+        )
     listener.start()
 
     # Ctrl+C in de console laat de mainloop netjes eindigen.
@@ -916,7 +927,8 @@ def main() -> None:
 
     try:
         if tray.owns_main_thread:
-            # macOS: NSTimer op de Cocoa-runloop, pystray blokkeert met NSApp.
+            # macOS: NSTimer + NSEvent-monitor op de Cocoa-runloop; pystray
+            # blokkeert met NSApp (menubalk-icoon rechtsboven).
             indicator.prepare_external_runloop()
             tray.run()
         else:

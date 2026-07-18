@@ -13,5 +13,6 @@ pyautogui==0.9.54
 pyperclip==1.11.0
 numpy==2.5.1
 scipy==1.18.0
-# Alleen op macOS (native overlay-indicator, ADR-0002):
+# Alleen op macOS (native overlay-indicator + Quartz-paste, ADR-0002):
 pyobjc-framework-Cocoa>=10.0; sys_platform == "darwin"
+pyobjc-framework-Quartz>=10.0; sys_platform == "darwin"

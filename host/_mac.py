@@ -25,10 +25,11 @@ class MacHost:
     """De `Host`-implementatie voor macOS."""
 
     def paste(self) -> None:
-        import pyautogui
+        # Quartz CGEvents i.p.v. pyautogui/pynput: die raken TSM en crashen
+        # op macOS 26+ vanaf een niet-main-thread.
+        from mac_input import paste_command_v
 
-        # pyautogui gebruikt "command" voor de Cmd-toets op macOS.
-        pyautogui.hotkey("command", "v")
+        paste_command_v()
 
     def app_dir(self) -> Path:
         return Path.home() / "Library" / "Application Support" / APP_NAME

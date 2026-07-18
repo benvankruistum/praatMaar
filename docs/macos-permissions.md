@@ -6,8 +6,8 @@ mic, geen plakken).
 | Permissie | Waarom | Waar in Systeeminstellingen |
 |-----------|--------|-----------------------------|
 | **Microfoon** | Opname via sounddevice | Privacy en beveiliging → Microfoon |
-| **Input Monitoring** | Globale sneltoets (pynput listener) | Privacy en beveiliging → Invoercontrole |
-| **Accessibility** | Cmd+V sturen (pynput/pyautogui) | Privacy en beveiliging → Toegankelijkheid |
+| **Input Monitoring** | Globale events (sommige macOS-versies) | Privacy en beveiliging → Invoercontrole |
+| **Accessibility** | Globale sneltoets (NSEvent) + Cmd+V (Quartz) | Privacy en beveiliging → Toegankelijkheid |
 
 ## Dev (vanuit bron / Terminal)
 
@@ -18,6 +18,15 @@ Permissies hechten aan de host-app:
 
 Zet de drie toggles aan voor die host. Herstart de host-app na de eerste grant
 als de hotkey nog niet werkt.
+
+**Toegankelijkheid is verplicht** voor de globale sneltoets (NSEvent-monitor).
+Zonder die toggle start de app wel, maar hoort ze geen hotkeys.
+
+### macOS 26+ (Tahoe)
+
+Apple dwingt af dat TSM/HIToolbox alleen op de main thread mag. `pynput` doet
+dat vanaf een achtergrondthread en **crasht** (SIGTRAP). praatMaar gebruikt
+daarom op Mac `mac_input.QuartzKeyListener` (AppKit) i.p.v. pynput.
 
 ## `.app`-bundle
 

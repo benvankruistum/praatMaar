@@ -83,12 +83,17 @@ def init(keyboard_module: Any) -> None:
 
 def key_to_token(key: Any) -> str | None:
     """
-    Zet een pynput-toets om naar een stabiel token.
+    Zet een pynput-toets (of macOS `MacKey`) om naar een stabiel token.
 
     Modifiers worden samengevouwen tot 'ctrl'/'shift'/'alt'/'cmd'. Letters en
     cijfers gaan via hun virtuele toetscode, zodat het token hetzelfde blijft
     ongeacht of Shift het teken verandert.
     """
+
+    # mac_input.MacKey (Quartz/NSEvent) — geen pynput nodig.
+    token = getattr(key, "praatmaar_token", None)
+    if isinstance(token, str) and token:
+        return token
 
     if _keyboard is None:
         return None

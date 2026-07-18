@@ -33,6 +33,7 @@ dependencies = [
     "numpy==2.5.1",
     "scipy==1.18.0",
     "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
 ]
 
 [project.optional-dependencies]
@@ -63,6 +64,7 @@ py-modules = [
     "opnamesessie",
     "win_identity",
     "i18n",
+    "mac_input",
 ]
 packages = ["host", "indicator"]
 

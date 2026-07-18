@@ -65,6 +65,7 @@ hiddenimports += [
     "indicator._mac",
     "hotkeys",
     "opnamesessie",
+    "mac_input",
     "win_identity",
     "i18n",
     # Platform-seam: de adapters worden lazy (in host._select) geïmporteerd,
