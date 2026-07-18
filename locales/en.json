@@ -5,6 +5,7 @@
 
   "tray.settings": "Settings",
   "tray.destinations": "Destinations",
+  "tray.help": "Help",
   "tray.quit": "Quit",
   "tray.tooltip.idle": "praatMaar — ready",
   "tray.tooltip.recording": "praatMaar — recording",
@@ -128,5 +129,9 @@
   "destinations.error.name_required": "Enter a name.",
   "destinations.error.path_required": "Choose a folder.",
   "destinations.error.duplicate_name": "This name already exists.",
-  "destinations.error.select_first": "Select a destination in the list first."
+  "destinations.error.select_first": "Select a destination in the list first.",
+
+  "help.title": "praatMaar — Help",
+  "help.close": "Close",
+  "help.fallback": "Help is temporarily unavailable. Open Destinations from the system tray to manage destinations, or see docs/user/ in the project."
 }

@@ -5,6 +5,7 @@
 
   "tray.settings": "Einstellungen",
   "tray.destinations": "Ziele",
+  "tray.help": "Hilfe",
   "tray.quit": "Beenden",
   "tray.tooltip.idle": "praatMaar — bereit",
   "tray.tooltip.recording": "praatMaar — Aufnahme",
@@ -128,5 +129,9 @@
   "destinations.error.name_required": "Geben Sie einen Namen ein.",
   "destinations.error.path_required": "Wählen Sie einen Ordner.",
   "destinations.error.duplicate_name": "Dieser Name existiert bereits.",
-  "destinations.error.select_first": "Wählen Sie zuerst ein Ziel in der Liste."
+  "destinations.error.select_first": "Wählen Sie zuerst ein Ziel in der Liste.",
+
+  "help.title": "praatMaar — Hilfe",
+  "help.close": "Schließen",
+  "help.fallback": "Hilfe ist vorübergehend nicht verfügbar. Öffnen Sie Ziele über das Infobereich-Symbol oder lesen Sie docs/user/ in der Dokumentation."
 }

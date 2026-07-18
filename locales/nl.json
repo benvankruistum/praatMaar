@@ -5,6 +5,7 @@
 
   "tray.settings": "Instellingen",
   "tray.destinations": "Bestemmingen",
+  "tray.help": "Help",
   "tray.quit": "Afsluiten",
   "tray.tooltip.idle": "praatMaar — gereed",
   "tray.tooltip.recording": "praatMaar — opname",
@@ -128,5 +129,9 @@
   "destinations.error.name_required": "Vul een naam in.",
   "destinations.error.path_required": "Kies een map.",
   "destinations.error.duplicate_name": "Deze naam bestaat al.",
-  "destinations.error.select_first": "Selecteer eerst een bestemming in de lijst."
+  "destinations.error.select_first": "Selecteer eerst een bestemming in de lijst.",
+
+  "help.title": "praatMaar — Help",
+  "help.close": "Sluiten",
+  "help.fallback": "Help is tijdelijk niet beschikbaar. Open Bestemmingen via het systeemvak voor bestemmingsbeheer, of raadpleeg de documentatie in docs/user/."
 }

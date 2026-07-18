@@ -12,7 +12,7 @@ Het Whisper-model wordt NIET meegebundeld: het wordt bij de eerste start
 
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('locales', 'locales')]
+datas = [('locales', 'locales'), ('docs/user', 'docs/user')]
 binaries = []
 hiddenimports = []
 
@@ -44,6 +44,7 @@ hiddenimports += [
     "config",
     "destinations",
     "destinations_dialog",
+    "help_dialog",
     "recovery",
     "settings",
     "splash",

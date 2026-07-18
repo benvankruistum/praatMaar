@@ -879,10 +879,16 @@ def main() -> None:
             )
         )
 
+    def open_help() -> None:
+        from help_dialog import open_help as show_help
+
+        indicator.call_on_main(lambda: show_help(indicator.root))
+
     tray = TrayIcon(
         on_quit=indicator.request_stop,
         on_settings=open_settings,
         on_destinations=open_destinations,
+        on_help=open_help,
     )
     _tray = tray
 
