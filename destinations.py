@@ -1,3 +1,4 @@
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,12 @@ def resolve_save_dir(active_name: str | None, destinations: list[dict[str, str]]
             if item.get("name") == active_name:
                 return Path(item["path"])
     return default_dir
+
+def open_in_explorer(path: Path) -> None:
+    """Opent een map in Verkenner (Windows: os.startfile)."""
+
+    os.startfile(path)
+
 
 def sanitize_destinations(raw: Any) -> list[dict[str, str]]:
     if not isinstance(raw, list):

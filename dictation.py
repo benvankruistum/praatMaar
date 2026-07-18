@@ -4,6 +4,7 @@ import signal
 import sys
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 from indicator import (
@@ -12,6 +13,7 @@ from indicator import (
 
 import app_logging
 import config
+import destinations
 import hotkeys
 import host
 import i18n
@@ -131,6 +133,16 @@ _ui = i18n.normalize_language(
 )
 i18n.set_ui_language(_ui)
 
+DESTINATIONS = destinations.sanitize_destinations(_user_config.get("destinations"))
+_active_raw = _user_config.get("active_destination")
+if _active_raw is None:
+    ACTIVE_DESTINATION: str | None = None
+else:
+    _active_name = str(_active_raw).strip() or None
+    if _active_name and any(d["name"] == _active_name for d in DESTINATIONS):
+        ACTIVE_DESTINATION = _active_name
+    else:
+        ACTIVE_DESTINATION = None
 
 
 # =========================================================
@@ -157,6 +169,9 @@ _capture_cb: "Any | None" = None
 
 # Systeemvak (gezet in main); nodig voor live UI-taalwissel.
 _tray = None
+
+# Opname-indicator (gezet in main); nodig voor bestemmings-pill-updates.
+_indicator: RecordingIndicator | None = None
 
 
 # =========================================================
@@ -450,6 +465,59 @@ def _copy_to_clipboard(text: str) -> None:
     pyperclip.copy(text)
 
 
+def _user_config_dict() -> dict[str, Any]:
+    """Snapshot van alle persistente gebruikersinstellingen."""
+
+    return {
+        "model": MODEL_NAME,
+        "microphone_device": MICROPHONE_DEVICE,
+        "auto_paste": AUTO_PASTE,
+        "warm_microphone": WARM_MICROPHONE,
+        "indicator_position": INDICATOR_POSITION,
+        "mode": MODE,
+        "hotkey": hotkeys.normalize(HOTKEY_TOKENS),
+        "speech_language": LANGUAGE,
+        "ui_language": i18n.ui_language(),
+        "destinations": DESTINATIONS,
+        "active_destination": ACTIVE_DESTINATION,
+    }
+
+
+def _save_transcript_routed(text: str) -> Path:
+    """Slaat transcript op in de actieve bestemmingsmap of de defaultmap."""
+
+    directory = destinations.resolve_save_dir(
+        ACTIVE_DESTINATION,
+        DESTINATIONS,
+        recovery.transcripts_dir(),
+    )
+    return recovery.save_transcript(text, directory=directory)
+
+
+def _handle_destination_command(kind: str, name: str | None) -> None:
+    """Werkt sticky bestemming bij na een stem-commando."""
+
+    global ACTIVE_DESTINATION
+
+    if kind == "set":
+        ACTIVE_DESTINATION = name
+    elif kind == "reset":
+        ACTIVE_DESTINATION = None
+
+    config.save_config(_user_config_dict())
+
+    indicator = _indicator
+    if indicator is not None:
+        active = ACTIVE_DESTINATION
+        indicator.call_on_main(lambda: indicator.set_destination(active))
+
+
+def open_folder(path: Path) -> None:
+    """Opent een map in Verkenner (Windows)."""
+
+    destinations.open_in_explorer(path)
+
+
 def _build_session() -> Opnamesessie:
     """Bouwt de Opnamesessie met de huidige config en geïnjecteerde seams."""
 
@@ -468,8 +536,10 @@ def _build_session() -> Opnamesessie:
         wait_until_modifiers_clear=wait_until_modifier_keys_released,
         on_ready=print_ready_message,
         copy_text=_copy_to_clipboard,
-        save_transcript=recovery.save_transcript,
+        save_transcript=_save_transcript_routed,
         preserve_audio=recovery.preserve_audio,
+        on_destination_command=_handle_destination_command,
+        get_destinations=lambda: DESTINATIONS,
     )
 
 
@@ -622,6 +692,8 @@ def current_settings() -> dict[str, Any]:
         "speech_language": LANGUAGE,
         "ui_language": i18n.ui_language(),
         "autostart": host.is_autostart_enabled(),
+        "destinations": list(DESTINATIONS),
+        "active_destination": ACTIVE_DESTINATION,
     }
 
 
@@ -639,6 +711,7 @@ def apply_settings(
 
     global MODEL_NAME, MICROPHONE_DEVICE, AUTO_PASTE, INDICATOR_POSITION
     global MODE, HOTKEY_TOKENS, LANGUAGE, WARM_MICROPHONE
+    global DESTINATIONS, ACTIVE_DESTINATION
 
     new_model = str(new_settings.get("model", MODEL_NAME))
     model_changed = new_model != MODEL_NAME
@@ -669,6 +742,21 @@ def apply_settings(
         )
     )
 
+    if "destinations" in new_settings:
+        DESTINATIONS = destinations.sanitize_destinations(
+            new_settings["destinations"]
+        )
+    if "active_destination" in new_settings:
+        raw_active = new_settings["active_destination"]
+        if raw_active is None:
+            ACTIVE_DESTINATION = None
+        else:
+            candidate = str(raw_active).strip() or None
+            if candidate and any(d["name"] == candidate for d in DESTINATIONS):
+                ACTIVE_DESTINATION = candidate
+            else:
+                ACTIVE_DESTINATION = None
+
     # Houd de Opnamesessie synchroon met live-instellingen.
     old_mic = session.microphone_device
     old_warm = session.warm_microphone
@@ -684,19 +772,7 @@ def apply_settings(
     elif (not old_warm) and WARM_MICROPHONE:
         session.warmup_microphone()
 
-    config.save_config(
-        {
-            "model": MODEL_NAME,
-            "microphone_device": MICROPHONE_DEVICE,
-            "auto_paste": AUTO_PASTE,
-            "warm_microphone": WARM_MICROPHONE,
-            "indicator_position": INDICATOR_POSITION,
-            "mode": MODE,
-            "hotkey": hotkeys.normalize(HOTKEY_TOKENS),
-            "speech_language": LANGUAGE,
-            "ui_language": ui,
-        }
-    )
+    config.save_config(_user_config_dict())
 
     # Automatisch meestarten staat buiten config.json (register op Windows,
     # LaunchAgent op macOS) — geregeld via de platform-seam.
@@ -706,6 +782,8 @@ def apply_settings(
     # Live toepassen waar mogelijk.
     if position_changed:
         indicator.set_position(new_position)
+
+    indicator.set_destination(ACTIVE_DESTINATION)
 
     if _tray is not None:
         _tray.refresh_language()
@@ -726,7 +804,7 @@ def main() -> None:
     draaien op eigen threads.
     """
 
-    global model, _tray
+    global model, _tray, _indicator
 
     # Vóór splash/tray: Windows-app-id (taakbalk-groep / identiteit).
     win_identity.apply_windows_app_identity()
@@ -771,6 +849,8 @@ def main() -> None:
     # Harde afhankelijkheid: kan de indicator niet initialiseren, dan stopt de
     # app (RecordingIndicator gooit SystemExit — net als een mislukte model-load).
     indicator = RecordingIndicator(position=INDICATOR_POSITION)
+    _indicator = indicator
+    indicator.set_destination(ACTIVE_DESTINATION)
 
     # Systeemvak-icoon. "Afsluiten" en Ctrl+C funnelen beide naar request_stop();
     # "Instellingen" wordt naar de hoofdthread gemarshald (tkinter-eis).

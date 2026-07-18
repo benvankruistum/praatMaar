@@ -48,6 +48,7 @@ Issues = "https://github.com/benvankruistum/praatMaar/issues"
 py-modules = [
     "dictation",
     "config",
+    "destinations",
     "hotkeys",
     "indicator",
     "recovery",

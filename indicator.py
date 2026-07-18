@@ -232,6 +232,7 @@ class RecordingIndicator:
         self._hide_after_id: str | None = None
         self._stop_requested = False
         self._position = position
+        self._destination: str | None = None
 
         # Wordt bij elke toestandswissel aangeroepen (op de hoofdthread); door
         # main() bedraad naar de tray zodat de pill de enige toestandseigenaar is.
@@ -460,6 +461,11 @@ class RecordingIndicator:
 
         self._position = position
         self._place_window(position)
+
+    def set_destination(self, name: str | None) -> None:
+        """Onthoudt de actieve bestemming; idle-rendering volgt in Task 5."""
+
+        self._destination = name
 
     # ----- de poll-tick (GUI-thread) -----
 
