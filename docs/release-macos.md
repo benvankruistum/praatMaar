@@ -7,6 +7,24 @@ Mac van de ontwikkelaar sterk aanbevolen (Gatekeeper).
 Zie ook [ADR-0002](adr/0002-macos-native-overlay-indicator.md) (native overlay)
 en [macos-permissions.md](macos-permissions.md) (TCC).
 
+Windows-builds: [release-windows.md](release-windows.md).
+
+## Versie
+
+Gebruik dezelfde versiestring als Windows (`pyproject.toml`, CHANGELOG, git-tag).
+Huidige gepubliceerde tag: **v0.1.0**. Volgende geplande: **v0.2.0** (nog
+Unreleased — macOS-port zit in die lijn).
+
+Zip-naamvoorbeeld:
+
+```bash
+VERSION=0.2.0   # gelijk aan pyproject.toml
+cd dist && zip -r "praatMaar-${VERSION}-macos-arm64.zip" praatMaar.app
+```
+
+Er is nog **geen** automatische GitHub Actions macOS-release; artefacten
+handmatig uploaden of later een `macos-latest`-job toevoegen.
+
 ## Vereisten op de bouw-Mac
 
 - macOS op Apple Silicon (arm64 eerst; universal2 niet gegarandeerd door CTranslate2)
@@ -32,10 +50,11 @@ pyinstaller praatMaar.spec --clean
 
 Resultaat: `dist/praatMaar.app`.
 
-Optioneel zippen:
+Optioneel zippen (versie gelijk aan `pyproject.toml`):
 
 ```bash
-cd dist && zip -r praatMaar-0.1.0-macos-arm64.zip praatMaar.app
+VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+cd dist && zip -r "praatMaar-${VERSION}-macos-arm64.zip" praatMaar.app
 ```
 
 Het Whisper-model zit **niet** in de bundle; eerste start downloadt het naar

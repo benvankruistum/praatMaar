@@ -67,3 +67,12 @@ bestemmingsnaam; reset-frase **`standaard`** zet terug naar de defaultmap
 - **Logica:** `destinations.py` (normaliseren, matchen, padresolutie);
   wiring in `dictation.py`; commando-check in `Opnamesessie` vóór plakken.
 - **Opslaan:** `recovery.save_transcript` naar actieve map; prune alleen default.
+
+### herstel-audio
+
+WAV’s van mislukte transcripties onder `recovery_dir()` (`%APPDATA%\praatMaar\recovery\`
+of macOS Application Support). Beheer + opnieuw transcriberen via sectie
+**Herstel-audio** in Instellingen (`settings.py`); transcriptie via
+`dictation.retranscribe_recovery_wav` (geladen Whisper-model). Op macOS schrijft
+het settings-kind `_recovery_retranscribe` terug zodat de parent (met model)
+uitvoert.

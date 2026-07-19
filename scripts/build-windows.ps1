@@ -13,7 +13,8 @@
   Geen portable zip maken.
 
 .PARAMETER Version
-  Versiestring in bestandsnamen (default 0.1.0). Houd gelijk aan pyproject / .iss.
+  Versiestring in bestandsnamen. Houd gelijk aan pyproject.toml / git-tag
+  (zonder "v"). Zie docs/release-windows.md. Voorbeeld: 0.2.0
 #>
 
 param(

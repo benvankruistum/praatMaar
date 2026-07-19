@@ -37,6 +37,9 @@ ERROR_DURATION_MS = 4000
 NUM_BARS = 18
 WAVEFORM_GAIN = 9.0
 
+# Max. tekens voor sticky bestemmingsnaam in de pill (voorkomt knippen).
+MAX_DESTINATION_DISPLAY_CHARS = 24
+
 PILL_BG = "#202124"
 TEXT_COLOR = "#f1f3f4"
 MUTED_COLOR = "#9aa0a6"
@@ -75,6 +78,18 @@ def mode_tag(mode: str) -> str:
     if mode == "ptt":
         return f"● {i18n.t('state.tag.ptt')}"
     return f"↔ {i18n.t('state.tag.toggle')}"
+
+
+def destination_display_name(name: str | None) -> str:
+    """Kort een bestemmingsnaam in zodat die in de pill past."""
+
+    if not name:
+        return ""
+    cleaned = name.strip()
+    limit = MAX_DESTINATION_DISPLAY_CHARS
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 1] + "…"
 
 
 # =========================================================

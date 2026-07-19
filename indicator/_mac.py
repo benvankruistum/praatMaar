@@ -33,6 +33,7 @@ from ._contract import (
     WAVEFORM_GAIN,
     WINDOW_ALPHA,
     RecordingState,
+    destination_display_name,
     drain_status_queue,
     mode_tag,
     snapshot_levels,
@@ -306,7 +307,7 @@ class RecordingIndicator:
         state = self._state
 
         if state == RecordingState.IDLE and self._destination:
-            self._label_field.setStringValue_(self._destination)
+            self._label_field.setStringValue_(destination_display_name(self._destination))
             self._label_field.setTextColor_(self._ns_color(MUTED_COLOR))
             self._tag_field.setStringValue_("")
             self._tag_field.setHidden_(True)

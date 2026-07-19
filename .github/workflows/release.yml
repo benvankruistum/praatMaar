@@ -1,7 +1,8 @@
 name: Release
 
 # Push een versie-tag → Windows-build → GitHub Release met Setup.exe + zip.
-# Voorbeeld: git tag v0.1.0 && git push origin v0.1.0
+# Voorbeeld: git tag v0.2.0 && git push origin v0.2.0
+# Versie-checklist: docs/release-windows.md
 on:
   push:
     tags:
@@ -9,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Versie zonder v (bijv. 0.1.0) — alleen bij handmatige run"
+        description: "Versie zonder v (bijv. 0.2.0) — alleen bij handmatige run"
         required: true
-        default: "0.1.0"
+        default: "0.2.0"
 
 permissions:
   contents: write

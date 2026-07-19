@@ -34,6 +34,8 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
+import i18n
+
 # =========================================================
 # UITERLIJK (constanten — bedoeld om te tunen)
 # =========================================================
@@ -142,7 +144,7 @@ class Splash:
         self._status_item = c.create_text(
             SPLASH_WIDTH / 2,
             74,
-            text="Bezig met opstarten…",
+            text=i18n.t("splash.starting"),
             fill=MUTED_COLOR,
             font=STATUS_FONT,
         )
@@ -178,7 +180,7 @@ class Splash:
         # (een overrideredirect-venster heeft geen eigen sluitknop).
         self._close_button = tk.Button(
             self.root,
-            text="Sluiten",
+            text=i18n.t("splash.close"),
             command=self.root.quit,
             relief="flat",
             bg=TRACK_COLOR,
@@ -299,7 +301,7 @@ class Splash:
 
         c.itemconfigure(
             self._status_item,
-            text="Het model kon niet worden geladen.",
+            text=i18n.t("splash.model_failed"),
             fill=ERROR_COLOR,
         )
         c.itemconfigure(self._detail_item, text=_shorten(text), fill=MUTED_COLOR)

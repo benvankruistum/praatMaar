@@ -36,13 +36,14 @@ In the default folder, praatMaar automatically keeps only the newest transcripts
 (retention). Destination folders are not pruned.
 
 Recovery audio files (from failed recordings) always stay in
-`%APPDATA%\praatMaar\recovery\`, regardless of the active destination.
+`%APPDATA%\praatMaar\recovery\`, regardless of the active destination. In
+**Settings** → **Recovery audio** you can list, delete, or re-transcribe them.
 
 ## Managing via the system tray
 
 Right-click the praatMaar icon in the system tray:
 
-- **Settings** — microphone, hotkey, languages
+- **Settings** — microphone, hotkey, languages, recovery audio
 - **Destinations** — dialog to add, edit, or remove names and folders, and set or
   clear the active destination. In that dialog you also find buttons to open the
   transcript folder or the active folder.

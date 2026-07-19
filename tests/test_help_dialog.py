@@ -1,9 +1,9 @@
-"""Tests voor help_dialog — padresolutie en tekst laden."""
+"""Tests voor help_dialog — padresolutie, markdown→plain en tekst laden."""
 
 from __future__ import annotations
 
 import i18n
-from help_dialog import help_file_path, load_help_text, user_docs_dir
+from help_dialog import help_file_path, load_help_text, markdown_to_plain, user_docs_dir
 
 
 def test_user_docs_dir_exists() -> None:
@@ -22,6 +22,35 @@ def test_load_help_text_nl_contains_destinations() -> None:
     text = load_help_text()
     assert "bestemming" in text.lower()
     assert "standaard" in text.lower()
+    assert "##" not in text
+    assert "**" not in text
+    assert "`" not in text
+
+
+def test_markdown_to_plain_basics() -> None:
+    source = """# Titel
+
+## Sectie
+
+Een **vet** woord en `code`.
+
+- item één
+- item twee
+
+| A | B |
+|---|---|
+| 1 | 2 |
+"""
+    plain = markdown_to_plain(source)
+    assert "Titel" in plain
+    assert "Sectie" in plain
+    assert "vet" in plain
+    assert "code" in plain
+    assert "• item één" in plain
+    assert "A — B" in plain
+    assert "1 — 2" in plain
+    assert "#" not in plain
+    assert "**" not in plain
 
 
 def test_load_help_text_fallback_when_missing(monkeypatch) -> None:

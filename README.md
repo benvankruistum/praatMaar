@@ -120,8 +120,9 @@ Zie ook [SECURITY.md](SECURITY.md).
 
 ## Builden / release (optioneel)
 
-- Windows: [docs/release-windows.md](docs/release-windows.md)
+- Windows: [docs/release-windows.md](docs/release-windows.md) (versie-checklist + tag)
 - macOS: [docs/release-macos.md](docs/release-macos.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md) — gepubliceerd `v0.1.0`; volgende lijn `v0.2.0` onder Unreleased
 
 ```text
 pyinstaller praatMaar.spec --clean

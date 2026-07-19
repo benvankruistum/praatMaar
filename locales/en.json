@@ -42,6 +42,21 @@
   "settings.saved": "Settings saved.",
   "settings.model_restart_note": "Note: the new model only works after restart.",
 
+  "recovery.section": "Recovery audio",
+  "recovery.empty": "No recovery recordings.",
+  "recovery.open_folder": "Open folder",
+  "recovery.delete": "Delete",
+  "recovery.delete_all": "Delete all",
+  "recovery.retranscribe": "Re-transcribe",
+  "recovery.select_first": "Select a recovery recording first.",
+  "recovery.confirm_delete": "Delete file “{name}”?",
+  "recovery.confirm_delete_all": "Delete all {count} recovery recordings?",
+  "recovery.ask_delete_after": "Transcription succeeded. Delete recording “{name}”?",
+  "recovery.busy_status": "Transcribing…",
+  "recovery.busy": "A recording or transcription is already running. Try again later.",
+  "recovery.invalid_file": "Not a valid recovery audio file.",
+  "recovery.unavailable": "Re-transcribe is not available here.",
+
   "key.space": "Space",
 
   "ready": "Ready. Press {hotkey} to start recording.",
@@ -63,6 +78,9 @@
   "splash.part": "step {index} of {total}",
   "splash.download": "Downloading model (one-time)…",
   "splash.loading": "Loading model…",
+  "splash.starting": "Starting up…",
+  "splash.close": "Close",
+  "splash.model_failed": "The model could not be loaded.",
 
   "dictation.busy": "A previous recording is still being processed.",
   "dictation.ptt_started": "Dictation (push-to-talk) started.",
@@ -99,6 +117,11 @@
   "rec.and_saved": "And was saved as: {path}",
   "rec.transcribe_error": "An error occurred during transcription.",
   "rec.recovery_saved": "Recording kept for recovery: {path}",
+  "rec.recovery_preserve_warn": "Warning: audio could not be kept for recovery: {error}",
+  "rec.temp_delete_warn": "Warning: temporary audio file could not be deleted: {error}",
+  "rec.audio_warning": "Audio warning: {status}",
+  "rec.mic_stop_warn": "Warning while stopping microphone: {error}",
+  "rec.mic_close_warn": "Warning while closing microphone: {error}",
   "rec.device_invalid": "Microphone device {device} is invalid ({error}); falling back to Windows default.",
   "rec.device_no_input": "Device {device} ({name}) has no microphone input; falling back to Windows default.",
 
