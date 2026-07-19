@@ -175,6 +175,7 @@
   "modules.incremental": "Inkrementelle Transkription während der Aufnahme (Zwischenstände als Partial-Events)",
   "modules.list_heading": "Eingebaute Module",
   "modules.enabled": "Aktiviert",
+  "modules.manage": "Module verwalten…",
   "modules.cancel": "Abbrechen",
   "modules.save": "Speichern",
   "modules.inbox_mirror.name": "Inbox-Spiegel",

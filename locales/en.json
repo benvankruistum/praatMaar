@@ -175,6 +175,7 @@
   "modules.incremental": "Incremental transcription during recording (interim partial events)",
   "modules.list_heading": "Built-in modules",
   "modules.enabled": "Enabled",
+  "modules.manage": "Manage modules…",
   "modules.cancel": "Cancel",
   "modules.save": "Save",
   "modules.inbox_mirror.name": "Inbox mirror",

@@ -175,6 +175,7 @@
   "modules.incremental": "Incrementele transcriptie tijdens opname (tussentijdse partial-events)",
   "modules.list_heading": "Ingebouwde modules",
   "modules.enabled": "Ingeschakeld",
+  "modules.manage": "Modules beheren…",
   "modules.cancel": "Annuleren",
   "modules.save": "Opslaan",
   "modules.inbox_mirror.name": "Inbox-spiegel",

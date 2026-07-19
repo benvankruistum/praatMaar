@@ -1,7 +1,8 @@
 """
 Modules-dialoog voor praatMaar (tkinter `Toplevel`).
 
-Overzicht van ingebouwde modules (aan/uit) en incrementele transcriptie.
+Overzicht van ingebouwde modules (aan/uit), incrementele transcriptie en
+optionele module-acties (knoppen per ingeschakelde module).
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from tkinter import ttk
 from typing import Any
 
 import i18n
+from modules._contract import module_actions
 from modules.registry import all_builtin_modules, modules_config_for_settings
 
 _open_dialog: tk.Toplevel | None = None
@@ -23,6 +25,8 @@ def open_modules_dialog(
     on_apply: Callable[[dict[str, Any]], None],
     *,
     wait: bool = False,
+    on_module_action: Callable[[str, str], None] | None = None,
+    enabled_module_ids: set[str] | None = None,
 ) -> None:
     """Opent het modules-overzicht; bij Opslaan roept `on_apply` de bijgewerkte settings aan."""
 
@@ -35,6 +39,7 @@ def open_modules_dialog(
 
     modules_config = modules_config_for_settings(current.get("modules") or {})
     incremental = bool(current.get("incremental_transcription", False))
+    running_ids = enabled_module_ids or set()
 
     dlg = tk.Toplevel(parent)
     _open_dialog = dlg
@@ -85,6 +90,18 @@ def open_modules_dialog(
             wraplength=400,
             foreground="#5f6368",
         ).grid(row=1, column=0, sticky="w", pady=(4, 0))
+
+        actions = module_actions(module)
+        if actions and on_module_action is not None and module.id in running_ids:
+            action_row = ttk.Frame(box)
+            action_row.grid(row=2, column=0, sticky="w", pady=(8, 0))
+            for col, action in enumerate(actions):
+                ttk.Button(
+                    action_row,
+                    text=i18n.t(action.label_key),
+                    command=lambda mid=module.id, aid=action.id: on_module_action(mid, aid),
+                ).grid(row=0, column=col, padx=(0, 8) if col == 0 else (0, 8))
+
         row += 1
 
     def save() -> None:

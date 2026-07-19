@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from modules._builtin.inbox_mirror import InboxMirrorModule
-from modules._contract import CycleEvent, CycleEventType, ModuleContext
+from modules._contract import CycleEvent, CycleEventType, ModuleContext, noop_ui_dispatch
 
 
 def test_inbox_mirror_copies_saved_transcript(tmp_path: Path) -> None:
@@ -15,7 +15,7 @@ def test_inbox_mirror_copies_saved_transcript(tmp_path: Path) -> None:
     transcript.write_text("hallo wereld", encoding="utf-8")
 
     module = InboxMirrorModule()
-    module.on_app_start(ModuleContext(app_dir=tmp_path))
+    module.on_app_start(ModuleContext(app_dir=tmp_path, ui_dispatch=noop_ui_dispatch))
 
     module.on_event(
         CycleEvent(

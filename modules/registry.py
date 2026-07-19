@@ -1,14 +1,24 @@
 """
-ModuleRegistry — ingebouwde modules en enabled-state uit config.json.
+ModuleRegistry — ingebouwde modules, lifecycle en enabled-state uit config.json.
 """
 
 from __future__ import annotations
 
+import traceback
 from typing import Any
 
 import host
 from modules._builtin.inbox_mirror import InboxMirrorModule
-from modules._contract import ModuleContext, PraatMaarModule
+from modules._contract import (
+    ModuleAction,
+    ModuleContext,
+    ModuleWithShutdown,
+    PraatMaarModule,
+    UiDispatch,
+    module_actions,
+    module_tray_actions,
+    noop_ui_dispatch,
+)
 
 
 def all_builtin_modules() -> list[PraatMaarModule]:
@@ -24,11 +34,16 @@ def module_enabled(module: PraatMaarModule, modules_config: dict[str, Any]) -> b
     return module.default_enabled()
 
 
-def load_enabled_modules(modules_config: dict[str, Any] | None = None) -> list[PraatMaarModule]:
-    """Geeft enabled modules terug, na `on_app_start`."""
+def load_enabled_modules(
+    modules_config: dict[str, Any] | None = None,
+    *,
+    ui_dispatch: UiDispatch | None = None,
+) -> list[PraatMaarModule]:
+    """Geeft enabled modules terug, na ``on_app_start``."""
 
     config = modules_config if modules_config is not None else {}
-    ctx = ModuleContext(app_dir=host.app_dir())
+    dispatch = ui_dispatch if ui_dispatch is not None else noop_ui_dispatch
+    ctx = ModuleContext(app_dir=host.app_dir(), ui_dispatch=dispatch)
     enabled: list[PraatMaarModule] = []
 
     for module in all_builtin_modules():
@@ -38,6 +53,48 @@ def load_enabled_modules(modules_config: dict[str, Any] | None = None) -> list[P
         enabled.append(module)
 
     return enabled
+
+
+def shutdown_modules(modules: list[PraatMaarModule]) -> None:
+    """Roept ``on_app_shutdown`` aan op modules die dat ondersteunen."""
+
+    for module in modules:
+        if not isinstance(module, ModuleWithShutdown):
+            continue
+        try:
+            module.on_app_shutdown()
+        except Exception:
+            print(f"Module {module.id} faalde bij afsluiten:")
+            traceback.print_exc()
+
+
+def run_module_action(modules: list[PraatMaarModule], module_id: str, action_id: str) -> bool:
+    """Voert één module-actie uit. Retourneert True bij succes."""
+
+    for module in modules:
+        if module.id != module_id:
+            continue
+        for action in module_actions(module):
+            if action.id == action_id:
+                try:
+                    action.handler()
+                except Exception:
+                    print(f"Module {module_id} actie {action_id} faalde:")
+                    traceback.print_exc()
+                return True
+    return False
+
+
+def tray_action_entries(
+    modules: list[PraatMaarModule],
+) -> list[tuple[PraatMaarModule, ModuleAction]]:
+    """Alle tray-zichtbare acties van ingeschakelde modules."""
+
+    entries: list[tuple[PraatMaarModule, ModuleAction]] = []
+    for module in modules:
+        for action in module_tray_actions(module):
+            entries.append((module, action))
+    return entries
 
 
 def sanitize_modules_config(raw: Any) -> dict[str, dict[str, bool]]:
