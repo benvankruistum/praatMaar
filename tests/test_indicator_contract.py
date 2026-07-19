@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from indicator import RecordingState, notify_state, push_level, reset_levels
 from indicator._contract import (
+    DestinationPillModel,
     destination_display_name,
     drain_status_queue,
     snapshot_levels,
@@ -47,3 +48,54 @@ def test_destination_display_name_truncates() -> None:
     shown = destination_display_name(long)
     assert shown.endswith("…")
     assert len(shown) == 24
+
+
+def test_destination_pill_visible_when_active() -> None:
+    model = DestinationPillModel()
+    assert not model.idle_visible
+    model.set_destination("Boodschappen")
+    assert model.idle_visible
+    assert model.name == "Boodschappen"
+
+
+def test_destination_pill_dismiss_hides_but_keeps_name() -> None:
+    model = DestinationPillModel()
+    model.set_destination("Notities")
+    model.dismiss()
+    assert not model.idle_visible
+    assert model.name == "Notities"
+
+
+def test_destination_pill_reshown_on_recording_started() -> None:
+    model = DestinationPillModel()
+    model.set_destination("Werk")
+    model.dismiss()
+    model.on_recording_started()
+    assert model.idle_visible
+    assert model.name == "Werk"
+
+
+def test_destination_pill_reshown_on_set_destination() -> None:
+    model = DestinationPillModel()
+    model.set_destination("A")
+    model.dismiss()
+    model.set_destination("A")  # opnieuw dezelfde ook
+    assert model.idle_visible
+    model.dismiss()
+    model.set_destination("B")
+    assert model.idle_visible
+    assert model.name == "B"
+
+
+def test_destination_pill_clear_hides() -> None:
+    model = DestinationPillModel()
+    model.set_destination("X")
+    model.set_destination(None)
+    assert not model.idle_visible
+    assert model.name is None
+
+
+def test_destination_pill_dismiss_noop_without_destination() -> None:
+    model = DestinationPillModel()
+    model.dismiss()
+    assert not model.idle_visible

@@ -32,6 +32,7 @@ from ._contract import (
     TEXT_COLOR,
     WAVEFORM_GAIN,
     WINDOW_ALPHA,
+    DestinationPillModel,
     RecordingState,
     destination_display_name,
     drain_status_queue,
@@ -70,6 +71,7 @@ class RecordingIndicator:
                 NSApplication,
                 NSBackingStoreBuffered,
                 NSBezierPath,
+                NSButton,
                 NSColor,
                 NSFont,
                 NSPanel,
@@ -94,6 +96,7 @@ class RecordingIndicator:
         self._NSTimer = NSTimer
         self._NSScreen = NSScreen
         self._NSTextField = NSTextField
+        self._NSButton = NSButton
         self._NSView = NSView
         self._NSPanel = NSPanel
         self._NSBackingStoreBuffered = NSBackingStoreBuffered
@@ -107,7 +110,7 @@ class RecordingIndicator:
         self._hide_elapsed_ms = 0.0
         self._stop_requested = False
         self._position = position
-        self._destination: str | None = None
+        self._dest_pill = DestinationPillModel()
         self.state_listener: Any | None = None
         self._main_calls: queue.Queue[Any] = queue.Queue()
         self._timer: Any = None
@@ -156,6 +159,21 @@ class RecordingIndicator:
         self._tag_field = self._make_label(INDICATOR_WIDTH - 120, 18, 100, 24, align_right=True)
         content.addSubview_(self._label_field)
         content.addSubview_(self._tag_field)
+
+        self._dismiss_btn = self._make_dismiss_button()
+        content.addSubview_(self._dismiss_btn)
+        self._dismiss_btn.setHidden_(True)
+
+    def _make_dismiss_button(self) -> Any:
+        btn = self._NSButton.alloc().initWithFrame_(
+            self._NSMakeRect(INDICATOR_WIDTH - 36, 16, 28, 28)
+        )
+        btn.setBordered_(False)
+        btn.setTitle_("×")
+        btn.setFont_(self._NSFont.systemFontOfSize_(16))
+        btn.setTarget_(self._content)
+        btn.setAction_(b"dismissClicked:")
+        return btn
 
     def _make_label(
         self,
@@ -213,12 +231,19 @@ class RecordingIndicator:
         self._visible = False
 
     def _apply_idle_visibility(self) -> None:
-        """In idle: pill zichtbaar houden als er een sticky bestemming actief is."""
+        """In idle: pill zichtbaar als sticky bestemming actief én niet weggeklikt."""
 
-        if self._destination:
+        if self._dest_pill.idle_visible:
             self._show_window()
         else:
             self._hide_window()
+        self._sync_mouse_events()
+
+    def _sync_mouse_events(self) -> None:
+        """Klikken alleen doorlaten als de × zichtbaar is (anders pass-through)."""
+
+        allow = self._state == RecordingState.IDLE and self._dest_pill.idle_visible
+        self._panel.setIgnoresMouseEvents_(not allow)
 
     def _apply_state(self, state: RecordingState, mode: str) -> None:
         self._mode = mode
@@ -227,12 +252,16 @@ class RecordingIndicator:
         self._hide_deadline_ms = None
         self._hide_elapsed_ms = 0.0
 
+        if state == RecordingState.RECORDING:
+            self._dest_pill.on_recording_started()
+
         if state == RecordingState.IDLE:
             self._apply_idle_visibility()
             self._content.setNeedsDisplay_(True)
             return
 
         self._show_window()
+        self._sync_mouse_events()
         self._content.setNeedsDisplay_(True)
 
         if state == RecordingState.CANCELLED:
@@ -265,12 +294,19 @@ class RecordingIndicator:
     def set_destination(self, name: str | None) -> None:
         """Zet de sticky bestemming en werkt idle-weergave direct bij."""
 
-        self._destination = name
+        self._dest_pill.set_destination(name)
         if self._state == RecordingState.IDLE:
             self._apply_idle_visibility()
             if self._visible:
                 self._render_labels()
                 self._content.setNeedsDisplay_(True)
+
+    def _on_dismiss_click(self) -> None:
+        self._dest_pill.dismiss()
+        self._apply_idle_visibility()
+        if self._visible:
+            self._render_labels()
+            self._content.setNeedsDisplay_(True)
 
     def _tick(self) -> None:
         if self._stop_requested:
@@ -306,13 +342,15 @@ class RecordingIndicator:
     def _render_labels(self) -> None:
         state = self._state
 
-        if state == RecordingState.IDLE and self._destination:
-            self._label_field.setStringValue_(destination_display_name(self._destination))
+        if state == RecordingState.IDLE and self._dest_pill.idle_visible:
+            self._label_field.setStringValue_(destination_display_name(self._dest_pill.name))
             self._label_field.setTextColor_(self._ns_color(MUTED_COLOR))
             self._tag_field.setStringValue_("")
             self._tag_field.setHidden_(True)
+            self._dismiss_btn.setHidden_(False)
             return
 
+        self._dismiss_btn.setHidden_(True)
         self._label_field.setStringValue_(state_label(state))
         color = STATE_COLORS.get(state, MUTED_COLOR)
         self._label_field.setTextColor_(self._ns_color(color))
@@ -410,6 +448,11 @@ def _make_pill_view_class() -> Any:
             if owner is not None:
                 owner._tick()
 
+        def dismissClicked_(self, _sender: Any) -> None:  # noqa: N802
+            owner = self._owner
+            if owner is not None:
+                owner._on_dismiss_click()
+
         def drawRect_(self, _rect: Any) -> None:  # noqa: N802
             owner = self._owner
             if owner is None:
@@ -425,12 +468,18 @@ def _make_pill_view_class() -> Any:
             NSColor.colorWithCalibratedRed_green_blue_alpha_(r, g, b, 1.0).setFill()
             path.fill()
 
+            cy = INDICATOR_HEIGHT / 2.0
+
+            # Idle + bestemming: map-icoon i.p.v. statuspuntje.
+            if state == RecordingState.IDLE and owner._dest_pill.idle_visible:
+                self._draw_folder_icon(owner, cy)
+                return
+
             color_hex = STATE_COLORS.get(state, MUTED_COLOR)
             cr, cg, cb = _hex_to_rgb(color_hex)
             color = NSColor.colorWithCalibratedRed_green_blue_alpha_(cr, cg, cb, 1.0)
 
             # Statuspuntje.
-            cy = INDICATOR_HEIGHT / 2.0
             if state == RecordingState.RECORDING:
                 pulse = 0.5 + 0.5 * math.sin(owner._frame * 0.35)
                 radius = 7.0 * (0.7 + 0.3 * pulse)
@@ -446,6 +495,22 @@ def _make_pill_view_class() -> Any:
                 self._draw_waveform(owner, color, cy)
             elif state == RecordingState.TRANSCRIBING:
                 self._draw_marching_dots(owner, cy)
+
+        def _draw_folder_icon(self, owner: Any, cy: float) -> None:
+            from AppKit import NSBezierPath, NSColor  # type: ignore[import-not-found]
+
+            r, g, b = _hex_to_rgb(MUTED_COLOR)
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(r, g, b, 1.0).setFill()
+            left = 18.0
+            tab = NSBezierPath.bezierPath()
+            tab.moveToPoint_((left, cy - 5))
+            tab.lineToPoint_((left + 6, cy - 5))
+            tab.lineToPoint_((left + 8, cy - 2))
+            tab.lineToPoint_((left, cy - 2))
+            tab.closePath()
+            tab.fill()
+            body = NSBezierPath.bezierPathWithRect_(owner._NSMakeRect(left, cy - 2, 16, 8))
+            body.fill()
 
         def _draw_waveform(self, owner: Any, color: Any, cy: float) -> None:
             from AppKit import NSBezierPath  # type: ignore[import-not-found]

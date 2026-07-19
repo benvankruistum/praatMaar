@@ -30,6 +30,7 @@ from ._contract import (
     TEXT_COLOR,
     WAVEFORM_GAIN,
     WINDOW_ALPHA,
+    DestinationPillModel,
     RecordingState,
     destination_display_name,
     drain_status_queue,
@@ -114,7 +115,7 @@ class RecordingIndicator:
         self._hide_after_id: str | None = None
         self._stop_requested = False
         self._position = position
-        self._destination: str | None = None
+        self._dest_pill = DestinationPillModel()
 
         # Wordt bij elke toestandswissel aangeroepen (op de hoofdthread); door
         # main() bedraad naar de tray zodat de pill de enige toestandseigenaar is.
@@ -198,6 +199,9 @@ class RecordingIndicator:
         self._dot_r = 7
         self._dot = c.create_oval(0, 0, 0, 0, fill=COLOR_RECORDING, outline="")
 
+        # Map-icoon (idle + bestemming); geometrie i.p.v. emoji.
+        self._folder_items = self._create_folder_icon(18, cy)
+
         self._label = c.create_text(44, cy, text="", anchor="w", fill=TEXT_COLOR, font=LABEL_FONT)
 
         self._wf_x1 = 150
@@ -241,6 +245,69 @@ class RecordingIndicator:
             fill=MUTED_COLOR,
             font=TAG_FONT,
         )
+
+        # Sluitknop (×) — alleen idle + bestemming; ruime hit-area.
+        self._dismiss_hit = c.create_rectangle(
+            INDICATOR_WIDTH - 40,
+            8,
+            INDICATOR_WIDTH - 8,
+            h - 8,
+            fill="",
+            outline="",
+            tags=("dismiss",),
+            state="hidden",
+        )
+        self._dismiss_btn = c.create_text(
+            INDICATOR_WIDTH - 22,
+            cy,
+            text="×",
+            anchor="center",
+            fill=MUTED_COLOR,
+            font=("Segoe UI", 14),
+            tags=("dismiss",),
+            state="hidden",
+        )
+        c.tag_bind("dismiss", "<Button-1>", self._on_dismiss_click)
+
+    def _create_folder_icon(self, left: float, cy: float) -> list[int]:
+        """Tekent een klein map-icoon; items starten hidden."""
+
+        c = self.canvas
+        # Tab + body (eenvoudige geometrie, ~16×12).
+        tab = c.create_polygon(
+            left,
+            cy - 5,
+            left + 6,
+            cy - 5,
+            left + 8,
+            cy - 2,
+            left,
+            cy - 2,
+            fill=MUTED_COLOR,
+            outline="",
+            tags=("folder",),
+            state="hidden",
+        )
+        body = c.create_rectangle(
+            left,
+            cy - 2,
+            left + 16,
+            cy + 6,
+            fill=MUTED_COLOR,
+            outline="",
+            tags=("folder",),
+            state="hidden",
+        )
+        return [tab, body]
+
+    def _on_dismiss_click(self, _event: Any = None) -> str:
+        """Verberg de bestemmingspill; sticky bestemming blijft actief."""
+
+        self._dest_pill.dismiss()
+        self._apply_idle_visibility()
+        if self._visible:
+            self._render()
+        return "break"
 
     @staticmethod
     def _round_rect_points(x1: float, y1: float, x2: float, y2: float, r: float) -> list[float]:
@@ -296,9 +363,9 @@ class RecordingIndicator:
         self._visible = False
 
     def _apply_idle_visibility(self) -> None:
-        """In idle: pill zichtbaar houden als er een sticky bestemming actief is."""
+        """In idle: pill zichtbaar als sticky bestemming actief én niet weggeklikt."""
 
-        if self._destination:
+        if self._dest_pill.idle_visible:
             self._show_window()
         else:
             self._hide_window()
@@ -315,6 +382,9 @@ class RecordingIndicator:
         self._state = state
         self._notify_listener(state, mode)
         self._cancel_hide_timer()
+
+        if state == RecordingState.RECORDING:
+            self._dest_pill.on_recording_started()
 
         if state == RecordingState.IDLE:
             self._apply_idle_visibility()
@@ -354,7 +424,7 @@ class RecordingIndicator:
     def set_destination(self, name: str | None) -> None:
         """Zet de sticky bestemming en werkt idle-weergave direct bij."""
 
-        self._destination = name
+        self._dest_pill.set_destination(name)
         if self._state == RecordingState.IDLE:
             self._apply_idle_visibility()
             if self._visible:
@@ -390,18 +460,27 @@ class RecordingIndicator:
         cy = INDICATOR_HEIGHT / 2
         color = STATE_COLORS.get(state, MUTED_COLOR)
 
-        # Idle met sticky bestemming: alleen de (gedempte) naam tonen.
-        if state == RecordingState.IDLE and self._destination:
+        # Idle met sticky bestemming: map-icoon + naam + ×.
+        if state == RecordingState.IDLE and self._dest_pill.idle_visible:
             c.itemconfigure(
                 self._label,
-                text=destination_display_name(self._destination),
+                text=destination_display_name(self._dest_pill.name),
                 fill=MUTED_COLOR,
             )
             c.itemconfigure(self._dot, state="hidden")
+            for item in self._folder_items:
+                c.itemconfigure(item, state="normal")
+            c.itemconfigure(self._dismiss_hit, state="normal")
+            c.itemconfigure(self._dismiss_btn, state="normal")
             self._render_waveform(False, MUTED_COLOR, cy)
             self._render_marching_dots(False, cy)
             c.itemconfigure(self._tag, text="", state="hidden")
             return
+
+        for item in self._folder_items:
+            c.itemconfigure(item, state="hidden")
+        c.itemconfigure(self._dismiss_hit, state="hidden")
+        c.itemconfigure(self._dismiss_btn, state="hidden")
 
         # Label.
         c.itemconfigure(self._label, text=state_label(state), fill=TEXT_COLOR)

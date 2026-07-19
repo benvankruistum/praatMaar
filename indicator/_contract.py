@@ -92,6 +92,34 @@ def destination_display_name(name: str | None) -> str:
     return cleaned[: limit - 1] + "…"
 
 
+class DestinationPillModel:
+    """
+    Zichtbaarheid van de sticky-bestemmingspill (geen GUI).
+
+    × verbergt de pill; sticky naam blijft. Weer tonen na nieuwe opname of
+    bestemmingswissel (ook opnieuw dezelfde actief zetten).
+    """
+
+    def __init__(self) -> None:
+        self.name: str | None = None
+        self._dismissed = False
+
+    @property
+    def idle_visible(self) -> bool:
+        return bool(self.name) and not self._dismissed
+
+    def set_destination(self, name: str | None) -> None:
+        self.name = name
+        self._dismissed = False
+
+    def dismiss(self) -> None:
+        if self.name:
+            self._dismissed = True
+
+    def on_recording_started(self) -> None:
+        self._dismissed = False
+
+
 # =========================================================
 # STATUSDOORGIFTE (thread-safe, producent -> GUI)
 # =========================================================
