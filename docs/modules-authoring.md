@@ -233,7 +233,8 @@ Gedeelde protocollen: `modules/capabilities/<naam>.py`. Concrete implementatie:
 `modules/_builtin/`. Bij afsluiten verwijdert de registry automatisch alle
 capabilities van de module (`unregister_owner`) — ook als `on_app_shutdown` faalt.
 
-Zie [capability-registry design](superpowers/specs/2026-07-19-capability-registry-design.md).
+Zie [capability-registry design](superpowers/specs/2026-07-19-capability-registry-design.md)
+en [speaker-detection design](superpowers/specs/2026-07-19-speaker-detection-design.md).
 
 ## UI
 

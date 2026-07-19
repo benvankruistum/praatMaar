@@ -6,7 +6,7 @@ Capability: ``audio.speaker_detection``. Geen diarization of stemprofielen.
 
 from __future__ import annotations
 
-from modules._contract import CycleEvent, ModuleContext
+from modules._contract import CycleEvent, CycleEventType, ModuleContext
 from modules.capabilities.speaker_detection import (
     CAPABILITY_ID,
     CONTRACT_VERSION,
@@ -15,6 +15,16 @@ from modules.capabilities.speaker_detection import (
     SpeakerRole,
     TranscriptSegment,
 )
+
+
+def audio_source_from_cycle(source: str) -> AudioSource:
+    """Map dicteercyclus ``CycleEvent.source`` naar ``AudioSource`` (v1)."""
+
+    if source == "live":
+        return AudioSource.MICROPHONE
+    if source == "system":
+        return AudioSource.SYSTEM
+    return AudioSource.UNKNOWN
 
 
 class SourceBasedSpeakerDetection:
@@ -81,7 +91,17 @@ class SpeakerDetectionModule:
         )
 
     def on_event(self, event: CycleEvent) -> None:
-        return
+        if self._service is None:
+            return
+
+        if event.type == CycleEventType.CYCLE_STARTED:
+            self._service.start_session(event.session_id)
+            self._service.observe_audio(
+                event.session_id,
+                audio_source_from_cycle(event.source),
+            )
+        elif event.type == CycleEventType.CYCLE_IDLE:
+            self._service.stop_session(event.session_id)
 
     def on_app_shutdown(self) -> None:
         self._service = None
