@@ -5,8 +5,8 @@ een sneltoets, transcribeert lokaal met
 [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)
 (geen cloud-API) en plakt de tekst in het actieve invoerveld.
 
-> **Platform:** Windows 10/11 is primair ondersteund. **macOS** heeft een
-> native overlay-port (NSPanel); runtime-verificatie op een Mac staat nog open —
+> **Platform:** Windows 10/11 is primair ondersteund. **macOS** (Apple Silicon)
+> werkt met native NSPanel-overlay; runtime geverifieerd —
 > zie [docs/STATUS.md](docs/STATUS.md).
 
 ## Vereisten

@@ -1,13 +1,13 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-07-18.
+Laatst bijgewerkt: 2026-07-19.
 
 ## Ondersteund
 
 | Platform | Status |
 |----------|--------|
 | Windows 10/11 | Ondersteund (primair doel) |
-| macOS | Port geïmplementeerd — op een Mac verifiëren |
+| macOS | Ondersteund (Apple Silicon; runtime geverifieerd) |
 | Linux | Niet ondersteund |
 
 ## Werkt op Windows
@@ -22,27 +22,37 @@ Laatst bijgewerkt: 2026-07-18.
 - Platform-seam: paste, autostart, app-dir, single-instance (`host/`)
 - Windows-release: Inno Setup + CI (tag `v0.1.0`)
 
-## macOS (nieuw)
+## macOS
 
-Geïmplementeerd (code); runtime-verificatie op een Mac staat nog open:
+Geïmplementeerd én runtime-geverifieerd op Apple Silicon (macOS 26.x):
 
 - `host._mac` — Cmd+V, Application Support, LaunchAgent, flock
 - Tray op main thread (`TrayIcon.owns_main_thread` + `run()`)
 - Native overlay-indicator (`indicator._mac`, NSPanel / ADR-0002)
 - UI-polish (fonts, Control/Option/Command-labels, settings-teksten)
 - Instellingen in apart Tk-proces (voorkomt Cocoa/Tk SIGABRT bij sluiten)
-- TCC-docs: [macos-permissions.md](macos-permissions.md)
+- TCC: Microfoon + Toegankelijkheid verplicht —
+  [macos-permissions.md](macos-permissions.md)
 - Build-docs: [release-macos.md](release-macos.md), `packaging/macos/entitlements.plist`
 
-Handmatige checklist op de Mac: zie [release-macos.md](release-macos.md) +
-permissies-doc. Eerste prioriteit: dicteercyclus + geen focus-diefstal + paste.
+### Runtime-check (2026-07-18 / 2026-07-19)
+
+Op een echte Mac (arm64), vanuit bron (`python dictation.py` via Cursor):
+
+- [x] App start, model laadt, tray aanwezig
+- [x] Toegankelijkheid (`AXIsProcessTrusted`) nodig voor hotkeys
+- [x] Dicteercyclus: hotkey → opname → Faster-Whisper → klembord + plakken
+- [x] Unit-smoke: host/mac_input/indicator/hotkeys/settings (23 tests)
+
+Nog niet formeel als distributie-build geverifieerd: gesigneerde `.app` /
+Gatekeeper (zie roadmap).
 
 ## Open / roadmap
 
-1. macOS runtime-verificatie + eventuele fixes na eerste Mac-run.
-2. Recovery-audio opruimen / UI.
-3. Formele releases: Windows Setup.exe + zip; macOS `.app` (signing later).
+1. Recovery-audio opruimen / UI.
+2. Formele releases: Windows Setup.exe + zip; macOS `.app` (signing later).
    CHANGELOG `[Unreleased]` bevat o.a. i18n, warm mic, bestemmingen, Help.
+3. macOS: eventuele Gatekeeper/signing-check op een schone Mac zonder TCC-dev-host.
 
 ## Historische handoffs
 
