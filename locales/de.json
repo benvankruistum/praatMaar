@@ -78,6 +78,9 @@
   "splash.part": "Schritt {index} von {total}",
   "splash.download": "Modell wird heruntergeladen (einmalig)…",
   "splash.loading": "Modell wird geladen…",
+  "splash.starting": "Wird gestartet…",
+  "splash.close": "Schließen",
+  "splash.model_failed": "Das Modell konnte nicht geladen werden.",
 
   "dictation.busy": "Eine vorherige Aufnahme wird noch verarbeitet.",
   "dictation.ptt_started": "Diktat (Push-to-talk) gestartet.",
@@ -114,6 +117,11 @@
   "rec.and_saved": "Und wurde gespeichert als: {path}",
   "rec.transcribe_error": "Bei der Transkription ist ein Fehler aufgetreten.",
   "rec.recovery_saved": "Aufnahme zur Wiederherstellung behalten: {path}",
+  "rec.recovery_preserve_warn": "Warnung: Audio konnte nicht zur Wiederherstellung behalten werden: {error}",
+  "rec.temp_delete_warn": "Warnung: temporäre Audiodatei konnte nicht gelöscht werden: {error}",
+  "rec.audio_warning": "Audio-Warnung: {status}",
+  "rec.mic_stop_warn": "Warnung beim Stoppen des Mikrofons: {error}",
+  "rec.mic_close_warn": "Warnung beim Schließen des Mikrofons: {error}",
   "rec.device_invalid": "Mikrofon {device} ist ungültig ({error}); Fallback auf Windows-Standard.",
   "rec.device_no_input": "Gerät {device} ({name}) hat keinen Mikrofoneingang; Fallback auf Windows-Standard.",
 

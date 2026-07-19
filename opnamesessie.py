@@ -250,7 +250,7 @@ class Opnamesessie:
 
         np = self._np
         if status:
-            print(f"\nAudio-waarschuwing: {status}")
+            print("\n" + i18n.t("rec.audio_warning", status=status))
 
         with self._lock:
             is_recording = self._recording
@@ -349,12 +349,12 @@ class Opnamesessie:
         try:
             stream.stop()
         except Exception as exc:
-            print(f"Waarschuwing bij stoppen microfoon: {exc}")
+            print(i18n.t("rec.mic_stop_warn", error=exc))
 
         try:
             stream.close()
         except Exception as exc:
-            print(f"Waarschuwing bij sluiten microfoon: {exc}")
+            print(i18n.t("rec.mic_close_warn", error=exc))
 
     def stop_and_transcribe(self) -> None:
         """Stopt de opname en start de transcriptie."""
@@ -546,17 +546,12 @@ class Opnamesessie:
                             kept = self._preserve_audio(temporary_path)
                             print(i18n.t("rec.recovery_saved", path=kept))
                         except OSError as exc:
-                            print(
-                                f"Waarschuwing: audio kon niet worden bewaard voor herstel: {exc}"
-                            )
+                            print(i18n.t("rec.recovery_preserve_warn", error=exc))
                 elif self.delete_temp_audio:
                     try:
                         os.remove(temporary_path)
                     except OSError as exc:
-                        print(
-                            "Waarschuwing: tijdelijk audiobestand "
-                            f"kon niet worden verwijderd: {exc}"
-                        )
+                        print(i18n.t("rec.temp_delete_warn", error=exc))
 
             with self._lock:
                 self._processing = False

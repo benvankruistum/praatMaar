@@ -78,6 +78,9 @@
   "splash.part": "onderdeel {index} van {total}",
   "splash.download": "Model wordt gedownload (eenmalig)…",
   "splash.loading": "Model wordt geladen…",
+  "splash.starting": "Bezig met opstarten…",
+  "splash.close": "Sluiten",
+  "splash.model_failed": "Het model kon niet worden geladen.",
 
   "dictation.busy": "Er wordt nog een vorige opname verwerkt.",
   "dictation.ptt_started": "Dicteren (push-to-talk) gestart.",
@@ -114,6 +117,11 @@
   "rec.and_saved": "En is bewaard als: {path}",
   "rec.transcribe_error": "Er is een fout opgetreden tijdens de transcriptie.",
   "rec.recovery_saved": "De opname is bewaard voor herstel: {path}",
+  "rec.recovery_preserve_warn": "Waarschuwing: audio kon niet worden bewaard voor herstel: {error}",
+  "rec.temp_delete_warn": "Waarschuwing: tijdelijk audiobestand kon niet worden verwijderd: {error}",
+  "rec.audio_warning": "Audio-waarschuwing: {status}",
+  "rec.mic_stop_warn": "Waarschuwing bij stoppen microfoon: {error}",
+  "rec.mic_close_warn": "Waarschuwing bij sluiten microfoon: {error}",
   "rec.device_invalid": "Microfoon-apparaat {device} is ongeldig ({error}); val terug op Windows-standaard.",
   "rec.device_no_input": "Apparaat {device} ({name}) heeft geen microfooningang; val terug op Windows-standaard.",
 

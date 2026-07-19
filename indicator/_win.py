@@ -31,6 +31,7 @@ from ._contract import (
     WAVEFORM_GAIN,
     WINDOW_ALPHA,
     RecordingState,
+    destination_display_name,
     drain_status_queue,
     mode_tag,
     snapshot_levels,
@@ -391,7 +392,11 @@ class RecordingIndicator:
 
         # Idle met sticky bestemming: alleen de (gedempte) naam tonen.
         if state == RecordingState.IDLE and self._destination:
-            c.itemconfigure(self._label, text=self._destination, fill=MUTED_COLOR)
+            c.itemconfigure(
+                self._label,
+                text=destination_display_name(self._destination),
+                fill=MUTED_COLOR,
+            )
             c.itemconfigure(self._dot, state="hidden")
             self._render_waveform(False, MUTED_COLOR, cy)
             self._render_marching_dots(False, cy)

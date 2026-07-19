@@ -1,12 +1,14 @@
 """
 Help-venster voor praatMaar (tkinter `Toplevel`).
 
-Laadt gebruikersdocumentatie uit `docs/user/help.<taal>.md` en toont die in een
-readonly ScrolledText. Geopend vanuit het systeemvak-menu.
+Laadt gebruikersdocumentatie uit `docs/user/help.<taal>.md`, zet een beperkt
+markdown-subset om naar leesbare tekst, en toont die in een readonly
+ScrolledText. Geopend vanuit het systeemvak-menu.
 """
 
 from __future__ import annotations
 
+import re
 import sys
 import tkinter as tk
 from pathlib import Path
@@ -15,6 +17,11 @@ from tkinter import scrolledtext, ttk
 import i18n
 
 _open_dialog: tk.Toplevel | None = None
+
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")
+_CODE_RE = re.compile(r"`([^`]+)`")
+_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 
 
 def user_docs_dir() -> Path:
@@ -30,14 +37,75 @@ def help_file_path(language: str | None = None) -> Path:
     return user_docs_dir() / f"help.{code}.md"
 
 
+def _inline_markdown(text: str) -> str:
+    """Verwijdert inline markdown-markeringen (bold/italic/code/links)."""
+
+    text = _BOLD_RE.sub(r"\1", text)
+    text = _ITALIC_RE.sub(r"\1", text)
+    text = _CODE_RE.sub(r"\1", text)
+    text = _LINK_RE.sub(r"\1", text)
+    return text
+
+
+def markdown_to_plain(source: str) -> str:
+    """
+    Zet een beperkt markdown-subset om naar leesbare platte tekst.
+
+    Ondersteunt: koppen, lijsten, tabellen, bold/italic/code/links.
+    Bewust geen volledige markdown-parser (geen extra dependency).
+    """
+
+    out: list[str] = []
+    for raw in source.splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            if out and out[-1] != "":
+                out.append("")
+            continue
+
+        if stripped.startswith("|") and stripped.endswith("|"):
+            cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+            if cells and all(re.fullmatch(r":?-{3,}:?", cell or "") for cell in cells):
+                continue
+            out.append(" — ".join(_inline_markdown(cell) for cell in cells if cell))
+            continue
+
+        if stripped.startswith("#"):
+            title = stripped.lstrip("#").strip()
+            if out and out[-1] != "":
+                out.append("")
+            out.append(_inline_markdown(title))
+            out.append("")
+            continue
+
+        if stripped.startswith("- "):
+            out.append(f"• {_inline_markdown(stripped[2:])}")
+            continue
+
+        if set(stripped) <= {"-", "*", "_"} and len(stripped) >= 3:
+            continue
+
+        out.append(_inline_markdown(stripped))
+
+    while out and out[-1] == "":
+        out.pop()
+    return "\n".join(out)
+
+
 def load_help_text(language: str | None = None) -> str:
     """Leest help-markdown voor `language`; fallback naar korte i18n-string."""
 
     path = help_file_path(language)
     try:
-        return path.read_text(encoding="utf-8")
+        return markdown_to_plain(path.read_text(encoding="utf-8"))
     except OSError:
         return i18n.t("help.fallback")
+
+
+def _help_font() -> tuple:
+    if sys.platform == "darwin":
+        return ("Helvetica Neue", 12)
+    return ("Segoe UI", 10)
 
 
 def open_help(parent: tk.Misc, *, wait: bool = False) -> None:
@@ -63,7 +131,7 @@ def open_help(parent: tk.Misc, *, wait: bool = False) -> None:
     text = scrolledtext.ScrolledText(
         win,
         wrap="word",
-        font=("Segoe UI", 10),
+        font=_help_font(),
         state="disabled",
         borderwidth=1,
         relief="solid",
