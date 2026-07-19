@@ -46,6 +46,7 @@ class _TranscriptionState:
     drain_lock: Lock = field(default_factory=Lock)
     status: TranscriptionStatus = TranscriptionStatus.IDLE
     sequence: int = 0
+    stopping: bool = False
 
 
 class IncrementalSpeechToText:
@@ -109,10 +110,13 @@ class IncrementalSpeechToText:
 
     def stop_session(self, session_id: str) -> None:
         state = self._require_session(session_id)
-        state.capture.unsubscribe(state.capture_session_id, state.capture_handler)
         with self._lock:
-            state.queue.clear()
-        self._set_status(state, TranscriptionStatus.IDLE)
+            state.stopping = True
+        state.capture.unsubscribe(state.capture_session_id, state.capture_handler)
+        with state.drain_lock:
+            with self._lock:
+                state.queue.clear()
+            self._set_status(state, TranscriptionStatus.IDLE)
 
     def get_status(self, session_id: str) -> TranscriptionStatus:
         return self._require_session(session_id).status
@@ -130,6 +134,8 @@ class IncrementalSpeechToText:
             return
         state = self._require_session(session_id)
         with self._lock:
+            if state.stopping:
+                return
             state.queue.append(event.chunk)
             gaps = self._trim_queue(state)
         if gaps:
@@ -165,11 +171,17 @@ class IncrementalSpeechToText:
     def _drain_queue_serially(self, state: _TranscriptionState) -> None:
         while True:
             with self._lock:
+                if state.stopping:
+                    return
                 queue_empty = not state.queue
                 was_delayed = state.status == TranscriptionStatus.DELAYED
             if queue_empty:
                 if was_delayed:
                     self._set_status(state, TranscriptionStatus.ACTIVE)
+                return
+
+            if self._whisper.dictation_active:
+                self._set_status(state, TranscriptionStatus.DELAYED)
                 return
 
             with self._whisper.try_locked_model() as model:
@@ -183,6 +195,9 @@ class IncrementalSpeechToText:
                 try:
                     text = self._transcribe_fn(model, chunk).strip()
                 except Exception as exc:
+                    with self._lock:
+                        if state.stopping:
+                            return
                     log.exception("Transcriptie faalde voor sessie %s", state.session_id)
                     self._set_status(
                         state,
@@ -192,6 +207,8 @@ class IncrementalSpeechToText:
                     return
 
             with self._lock:
+                if state.stopping:
+                    return
                 state.sequence += 1
                 sequence = state.sequence
             if text:

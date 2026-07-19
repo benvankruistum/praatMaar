@@ -69,3 +69,34 @@ registration.
 ## Commit
 
 `Add speech-to-text capability with SharedWhisper backpressure.`
+
+## Review fixes
+
+- Added nesting-safe dictation priority tracking to `SharedWhisper`.
+  `locked_model()` now marks dictation active while waiting for and holding the
+  model lock; Buddy's non-blocking access yields immediately while that marker
+  is active.
+- Buddy rechecks dictation priority before every queued chunk and stops with
+  `DELAYED` status, leaving remaining chunks queued for a later drain.
+- `stop_session()` marks the session as stopping, unsubscribes capture, waits
+  for the in-flight drain lock, clears queued work, and suppresses an in-flight
+  delta before returning.
+- Added threaded regression coverage for dictation arriving during a multi-
+  chunk Buddy drain, nested priority scopes, and stopping during a slow
+  transcription.
+
+### Review-fix TDD evidence
+
+1. The priority tests failed because `SharedWhisper.dictation_active` and
+   `dictation_priority()` did not exist, then passed after priority tracking and
+   per-chunk drain checks were added.
+2. The shutdown test failed because `stop_session()` returned while
+   transcription was still blocked, then passed after drain synchronization and
+   in-flight result suppression were added.
+
+### Review-fix verification
+
+- `python -m pytest -q` — 168 passed, 1 skipped.
+- `python -m ruff check .` — all checks passed.
+- `python -m ruff format --check .` — 78 files already formatted.
+- IDE diagnostics on changed Python files — no errors.

@@ -36,3 +36,15 @@ def test_try_locked_model_yields_model_when_available() -> None:
 
     with whisper.try_locked_model() as acquired:
         assert acquired is model
+
+
+def test_dictation_priority_is_nesting_safe() -> None:
+    whisper = SharedWhisper()
+
+    assert whisper.dictation_active is False
+    with whisper.dictation_priority():
+        assert whisper.dictation_active is True
+        with whisper.dictation_priority():
+            assert whisper.dictation_active is True
+        assert whisper.dictation_active is True
+    assert whisper.dictation_active is False
