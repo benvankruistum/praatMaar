@@ -136,6 +136,41 @@ def test_overlapping_final_deltas_do_not_duplicate_question_or_action() -> None:
     )
 
 
+def test_overlapping_revised_question_stays_open_without_answer_update() -> None:
+    engine = HeuristicsEngine()
+    service = MeetingStateService()
+    config = MeetingBuddyConfig.defaults()
+    state = MeetingState.empty("m1")
+    first = TranscriptDelta(
+        "t1",
+        1,
+        0,
+        3000,
+        "Hoe gaan we de website controleren?",
+        True,
+        0.9,
+    )
+    revised = TranscriptDelta(
+        "t1",
+        2,
+        500,
+        3500,
+        "Hoe gaan we deze website controleren?",
+        True,
+        0.9,
+    )
+
+    for proposal in engine.proposals_for(first, state, config, now_s=10.0):
+        state = service.apply(state, proposal)
+    revised_proposals = engine.proposals_for(revised, state, config, now_s=11.0)
+    for proposal in revised_proposals:
+        state = service.apply(state, proposal)
+
+    assert len(state.questions) == 1
+    assert state.questions[0].status == QuestionStatus.OPEN
+    assert not any(proposal.type == "update_question" for proposal in revised_proposals)
+
+
 def test_non_final_delta_produces_no_proposals() -> None:
     delta = TranscriptDelta("t1", 1, 0, 1000, "Wat moeten we doen?", False, 0.9)
 

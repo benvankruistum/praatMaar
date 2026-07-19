@@ -10,7 +10,7 @@ from uuid import uuid4
 from modules.capabilities.speech_to_text import TranscriptDelta
 
 from .config import MeetingBuddyConfig
-from .state import ActionItemStatus, MeetingState, QuestionStatus, TopicStatus
+from .state import ActionItemStatus, MeetingState, Question, QuestionStatus, TopicStatus
 from .state_service import StateProposal
 
 _STOPWORDS = {
@@ -40,6 +40,7 @@ class HeuristicsEngine:
 
     def __init__(self) -> None:
         self._recent_text: dict[str, deque[tuple[float, str]]] = defaultdict(deque)
+        self._source_windows: dict[str, tuple[int, int]] = {}
 
     def proposals_for(
         self,
@@ -59,11 +60,19 @@ class HeuristicsEngine:
             recent.popleft()
         window_text = " ".join(text for _, text in recent)
 
+        looks_like_question = bool("?" in delta.text or _QUESTION_PATTERN.search(normalized))
         proposals = self._topic_proposals(delta, state, config, now_s, window_text)
-        proposals.extend(self._question_proposals(delta, state, config, now_s, normalized))
-        if (
-            "?" in delta.text or _QUESTION_PATTERN.search(normalized)
-        ) and not self._has_similar_open_question(state, normalized):
+        proposals.extend(
+            self._question_proposals(
+                delta,
+                state,
+                config,
+                now_s,
+                normalized,
+                looks_like_question,
+            )
+        )
+        if looks_like_question and not self._has_similar_open_question(state, normalized):
             proposals.append(
                 self._proposal(
                     "add_question",
@@ -73,6 +82,10 @@ class HeuristicsEngine:
                     {"text": delta.text.strip(), "created_at": now_s},
                 )
             )
+        self._source_windows[f"{delta.session_id}:{delta.sequence}"] = (
+            delta.start_ms,
+            delta.end_ms,
+        )
         if _ACTION_PATTERN.search(normalized) and not self._has_similar_candidate_action(
             state, normalized
         ):
@@ -114,6 +127,7 @@ class HeuristicsEngine:
         config: MeetingBuddyConfig,
         now_s: float,
         normalized: str,
+        looks_like_question: bool,
     ) -> list[StateProposal]:
         delta_id = f"{delta.session_id}:{delta.sequence}"
         delta_tokens = set(_tokens(normalized))
@@ -126,6 +140,13 @@ class HeuristicsEngine:
                 or question.source_delta_id == delta_id
                 or age > config.topic_match_window_s
                 or _normalize(question.text) == normalized
+                or (
+                    looks_like_question
+                    and (
+                        _is_highly_similar(_normalize(question.text), normalized)
+                        or self._substantially_overlaps_source(question, delta)
+                    )
+                )
                 or not _has_sufficient_overlap(question_tokens, delta_tokens, config)
             ):
                 continue
@@ -143,6 +164,15 @@ class HeuristicsEngine:
                 )
             )
         return proposals
+
+    def _substantially_overlaps_source(self, question: Question, delta: TranscriptDelta) -> bool:
+        source_window = self._source_windows.get(question.source_delta_id or "")
+        if source_window is None:
+            return False
+        source_start, source_end = source_window
+        overlap_ms = max(0, min(source_end, delta.end_ms) - max(source_start, delta.start_ms))
+        shorter_duration_ms = min(source_end - source_start, delta.end_ms - delta.start_ms)
+        return shorter_duration_ms > 0 and overlap_ms / shorter_duration_ms >= 0.5
 
     def _topic_proposals(
         self,
