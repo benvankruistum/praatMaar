@@ -69,7 +69,18 @@ py-modules = [
     "i18n",
     "mac_input",
 ]
-packages = ["host", "indicator"]
+packages = [
+    "host",
+    "indicator",
+    "modules",
+    "modules._builtin",
+    "modules._builtin.meeting_buddy",
+    "modules.capabilities",
+    "modules.testing",
+]
+
+[tool.setuptools.package-data]
+modules = ["defaults/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

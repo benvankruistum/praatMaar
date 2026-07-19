@@ -236,6 +236,15 @@ capabilities van de module (`unregister_owner`) — ook als `on_app_shutdown` fa
 Zie [capability-registry design](superpowers/specs/2026-07-19-capability-registry-design.md)
 en [speaker-detection design](superpowers/specs/2026-07-19-speaker-detection-design.md).
 
+### Experimentele streaming-capabilities
+
+De ingebouwde modules `audio-capture`, `speech-to-text` en `meeting-buddy`
+leveren respectievelijk continue Windows-microfooncapture, incrementele lokale
+transcriptie en meetingorkestratie met hints. Gebruik de capability-contracten
+`audio.continuous_capture` en `transcription.speech_to_text`; importeer geen
+implementatiedetails uit een andere module. Zie het
+[Meeting Buddy MVP-design](superpowers/specs/2026-07-19-meeting-buddy-mvp-design.md).
+
 ## UI
 
 Nieuwe modules verschijnen **automatisch** in tray → **Modules** (checkbox
