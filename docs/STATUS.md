@@ -18,9 +18,10 @@ Laatst bijgewerkt: 2026-07-19.
 - Meertaligheid UI + spraak (`nl`/`en`/`de`)
 - Sticky bestemmingen (transcript naar gekozen map)
 - Laadscherm met model-downloadvoortgang (`splash.py`)
-- Herstel: transcripts + recovery-audio (`recovery.py`)
+- Herstel: transcripts + recovery-audio (`recovery.py`); beheer + opnieuw
+  transcriberen via sectie **Herstel-audio** in Instellingen
 - Platform-seam: paste, autostart, app-dir, single-instance (`host/`)
-- Windows-release: Inno Setup + CI (tag `v0.1.0`)
+- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.1.0`)
 
 ## macOS
 
@@ -49,10 +50,10 @@ Gatekeeper (zie roadmap).
 
 ## Open / roadmap
 
-1. Recovery-audio opruimen / UI.
-2. Formele releases: Windows Setup.exe + zip; macOS `.app` (signing later).
-   CHANGELOG `[Unreleased]` bevat o.a. i18n, warm mic, bestemmingen, Help.
-3. macOS: eventuele Gatekeeper/signing-check op een schone Mac zonder TCC-dev-host.
+1. Release **v0.2.0**: versie sync + CHANGELOG-cut + Windows-tag (Setup/zip);
+   macOS `.app` handmatig of later via CI (signing later).
+   Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
+2. macOS: eventuele Gatekeeper/signing-check op een schone Mac zonder TCC-dev-host.
 
 ## Historische handoffs
 

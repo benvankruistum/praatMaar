@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from indicator import RecordingState, notify_state, push_level, reset_levels
-from indicator._contract import drain_status_queue, snapshot_levels
+from indicator._contract import (
+    destination_display_name,
+    drain_status_queue,
+    snapshot_levels,
+)
 
 
 def test_recording_state_values() -> None:
@@ -34,3 +38,12 @@ def test_levels_buffer() -> None:
     assert snapshot_levels() == [0.1, 0.2]
     reset_levels()
     assert snapshot_levels() == []
+
+
+def test_destination_display_name_truncates() -> None:
+    assert destination_display_name(None) == ""
+    assert destination_display_name("  kort  ") == "kort"
+    long = "a" * 40
+    shown = destination_display_name(long)
+    assert shown.endswith("…")
+    assert len(shown) == 24

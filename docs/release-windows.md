@@ -1,15 +1,41 @@
 # Windows-release (indie / OSS)
 
 praatMaar wordt gedistribueerd **zonder code signing**. Dat is bewust: geen
-Authenticode-certificaat, geen Apple-notarization. Gebruikers kunnen een
-SmartScreen-waarschuwing zien.
+Authenticode-certificaat. Gebruikers kunnen een SmartScreen-waarschuwing zien.
+
+macOS-builds: zie [release-macos.md](release-macos.md).
+
+## Versie bijhouden
+
+Houd deze plekken **gelijk** (zonder `v`-prefix, behalve de git-tag):
+
+| Plek | Voorbeeld |
+|------|-----------|
+| `pyproject.toml` → `version` | `0.2.0` |
+| `version_info.txt` (File/ProductVersion) | `0.2.0` / `(0, 2, 0, 0)` |
+| `installer/praatMaar.iss` fallback `#define MyAppVersion` | `0.2.0` |
+| `scripts/build-windows.ps1` default `-Version` | `0.2.0` |
+| Git-tag | `v0.2.0` |
+| `CHANGELOG.md` | sectie `[0.2.0] - YYYY-MM-DD`, `[Unreleased]` leegmaken |
+
+Huidige **gepubliceerde** release: **v0.1.0**. Werk op `main` voor **v0.2.0** staat in
+CHANGELOG onder `[Unreleased]`.
+
+### Checklist vóór een tag
+
+1. Versie overal bijgewerkt (tabel hierboven).
+2. CHANGELOG: Unreleased → `[x.y.z] - datum`.
+3. Tests: `pytest -q`.
+4. Tag + push (of handmatige Actions-run).
 
 ## Artefacten
 
+Namen volgen de versie, bijv. voor `0.1.0`:
+
 | Bestand | Doel |
 |---------|------|
-| `praatMaar-Setup-0.1.0.exe` | Inno Setup-installer → `%LOCALAPPDATA%\praatMaar\` |
-| `praatMaar-0.1.0-windows-x64.zip` | Portable: uitpakken en `praatMaar.exe` starten |
+| `praatMaar-Setup-{versie}.exe` | Inno Setup → `%LOCALAPPDATA%\praatMaar\` |
+| `praatMaar-{versie}-windows-x64.zip` | Portable: uitpakken en `praatMaar.exe` starten |
 
 Het Whisper-model zit **niet** in de bundle; eerste start downloadt het.
 
@@ -26,19 +52,20 @@ Het Whisper-model zit **niet** in de bundle; eerste start downloadt het.
 
 2. [Inno Setup 6](https://jrsoftware.org/isinfo.php) installeren (voor de Setup.exe).
 
-3. Alles in één keer:
+3. Alles in één keer (versie expliciet meegeven):
 
    ```powershell
-   .\scripts\build-windows.ps1
+   .\scripts\build-windows.ps1 -Version 0.2.0
    ```
 
    Of alleen de app-map:
 
    ```powershell
-   .\scripts\build-windows.ps1 -SkipInstaller
+   .\scripts\build-windows.ps1 -Version 0.2.0 -SkipInstaller
    ```
 
 Output: `release\` (zip + setup) en `dist\praatMaar\`.
+Het build-script geeft `/DMyAppVersion=…` door aan Inno.
 
 ## GitHub Release
 
@@ -46,14 +73,11 @@ Push een versie-tag; Actions bouwt op `windows-latest` en zet Setup.exe + zip
 op de release-pagina:
 
 ```powershell
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
-Of: Actions → **Release** → Run workflow (handmatig, vul versie in).
-
-Houd `version` in `pyproject.toml` en de tag in sync (het build-script zet
-`MyAppVersion` via `/D` voor Inno).
+Of: Actions → **Release** → Run workflow (handmatig, vul versie in zonder `v`).
 
 ## App-naam in Windows (“Python” i.p.v. praatMaar)
 
@@ -75,5 +99,5 @@ certificaat is de structurele fix (later, optioneel).
 ## Wat we bewust niet doen (nu)
 
 - Authenticode / `signtool`
-- Apple Developer ID / notarization (geen Mac-build)
 - Microsoft Store / MSIX
+- Automatische macOS-release in dezelfde workflow (apart, zie release-macos)

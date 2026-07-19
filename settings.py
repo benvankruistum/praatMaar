@@ -14,13 +14,17 @@ SIGABRT).
 from __future__ import annotations
 
 import queue
+import threading
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import sounddevice as sd
 
+import destinations
 import hotkeys
 import i18n
+import recovery
 
 MODELS = ["base", "small", "medium"]
 
@@ -67,14 +71,19 @@ def open_settings_dialog(
     *,
     wait: bool = False,
     use_tk_capture: bool = False,
+    on_retranscribe: Callable[[Path], str] | None = None,
+    on_parent_retranscribe: Callable[[Path], None] | None = None,
 ) -> None:
     """
     ``use_tk_capture``: neem sneltoetsen op via Tk KeyPress/KeyRelease
     (betrouwbaarder voor Windows-/PC-toetsenborden in het macOS-settingsproces).
+
+    ``on_retranscribe``: live callback (Windows) — blokkerend, in achtergrondthread.
+    ``on_parent_retranscribe``: macOS-kind — schrijft pad terug naar parent en sluit.
     """
 
     import tkinter as tk
-    from tkinter import ttk
+    from tkinter import messagebox, ttk
 
     global _open_dialog
 
@@ -343,6 +352,210 @@ def open_settings_dialog(
         foreground="#888888",
     ).grid(row=row, column=0, sticky="w", pady=(0, 14))
     row += 1
+
+    # Herstel-audio.
+    _section_label(i18n.t("recovery.section"))
+    recovery_paths: list[Path] = []
+    recovery_busy = {"active": False}
+
+    list_frame = ttk.Frame(win)
+    list_frame.grid(row=row, column=0, sticky="ew", pady=(0, 4))
+    list_frame.columnconfigure(0, weight=1)
+    row += 1
+
+    recovery_list = tk.Listbox(list_frame, height=5, exportselection=False, width=48)
+    recovery_list.grid(row=0, column=0, sticky="ew")
+    recovery_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=recovery_list.yview)
+    recovery_scroll.grid(row=0, column=1, sticky="ns")
+    recovery_list.configure(yscrollcommand=recovery_scroll.set)
+
+    empty_label = ttk.Label(
+        win,
+        text=i18n.t("recovery.empty"),
+        foreground="#888888",
+    )
+    empty_label.grid(row=row, column=0, sticky="w", pady=(0, 4))
+    row += 1
+
+    status_var = tk.StringVar(value="")
+    status_label = ttk.Label(win, textvariable=status_var, foreground="#555555")
+    status_label.grid(row=row, column=0, sticky="w", pady=(0, 4))
+    row += 1
+
+    recovery_btns = ttk.Frame(win)
+    recovery_btns.grid(row=row, column=0, sticky="w", pady=(0, 14))
+    row += 1
+
+    def _refresh_recovery_list() -> None:
+        recovery_paths.clear()
+        recovery_list.delete(0, tk.END)
+        for path in recovery.list_recovery_wavs():
+            recovery_paths.append(path)
+            recovery_list.insert(tk.END, recovery.recovery_list_label(path))
+        empty_label.config(text="" if recovery_paths else i18n.t("recovery.empty"))
+
+    def _selected_recovery_path() -> Path | None:
+        selection = recovery_list.curselection()
+        if not selection:
+            return None
+        index = int(selection[0])
+        if index < 0 or index >= len(recovery_paths):
+            return None
+        return recovery_paths[index]
+
+    def _set_recovery_controls_enabled(enabled: bool) -> None:
+        state = ["!disabled"] if enabled else ["disabled"]
+        for btn in (
+            open_folder_btn,
+            delete_btn,
+            delete_all_btn,
+            retranscribe_btn,
+        ):
+            btn.state(state)
+
+    def open_recovery_folder() -> None:
+        try:
+            destinations.open_in_explorer(recovery.recovery_dir())
+        except OSError as exc:
+            messagebox.showerror(
+                i18n.t("settings.title"),
+                str(exc),
+                parent=win,
+            )
+
+    def delete_selected() -> None:
+        path = _selected_recovery_path()
+        if path is None:
+            messagebox.showinfo(
+                i18n.t("settings.title"),
+                i18n.t("recovery.select_first"),
+                parent=win,
+            )
+            return
+        if not messagebox.askyesno(
+            i18n.t("settings.title"),
+            i18n.t("recovery.confirm_delete", name=path.name),
+            parent=win,
+        ):
+            return
+        try:
+            recovery.delete_recovery_file(path)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror(i18n.t("settings.title"), str(exc), parent=win)
+            return
+        _refresh_recovery_list()
+
+    def delete_all() -> None:
+        if not recovery_paths:
+            messagebox.showinfo(
+                i18n.t("settings.title"),
+                i18n.t("recovery.empty"),
+                parent=win,
+            )
+            return
+        if not messagebox.askyesno(
+            i18n.t("settings.title"),
+            i18n.t("recovery.confirm_delete_all", count=len(recovery_paths)),
+            parent=win,
+        ):
+            return
+        recovery.delete_all_recovery_files()
+        _refresh_recovery_list()
+
+    def _ask_delete_after_success(path: Path) -> None:
+        if not path.exists():
+            _refresh_recovery_list()
+            return
+        if messagebox.askyesno(
+            i18n.t("settings.title"),
+            i18n.t("recovery.ask_delete_after", name=path.name),
+            parent=win,
+        ):
+            try:
+                recovery.delete_recovery_file(path)
+            except (OSError, ValueError) as exc:
+                messagebox.showerror(i18n.t("settings.title"), str(exc), parent=win)
+        _refresh_recovery_list()
+
+    def retranscribe_selected() -> None:
+        if recovery_busy["active"]:
+            return
+        path = _selected_recovery_path()
+        if path is None:
+            messagebox.showinfo(
+                i18n.t("settings.title"),
+                i18n.t("recovery.select_first"),
+                parent=win,
+            )
+            return
+
+        if on_parent_retranscribe is not None:
+            on_parent_retranscribe(path)
+            close()
+            return
+
+        if on_retranscribe is None:
+            messagebox.showinfo(
+                i18n.t("settings.title"),
+                i18n.t("recovery.unavailable"),
+                parent=win,
+            )
+            return
+
+        recovery_busy["active"] = True
+        status_var.set(i18n.t("recovery.busy_status"))
+        _set_recovery_controls_enabled(False)
+
+        def worker() -> None:
+            error: str | None = None
+            try:
+                on_retranscribe(path)
+            except Exception as exc:
+                error = str(exc)
+
+            def done() -> None:
+                recovery_busy["active"] = False
+                status_var.set("")
+                _set_recovery_controls_enabled(True)
+                if error is not None:
+                    messagebox.showerror(
+                        i18n.t("settings.title"),
+                        error,
+                        parent=win,
+                    )
+                    return
+                _ask_delete_after_success(path)
+
+            win.after(0, done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    open_folder_btn = ttk.Button(
+        recovery_btns,
+        text=i18n.t("recovery.open_folder"),
+        command=open_recovery_folder,
+    )
+    open_folder_btn.grid(row=0, column=0, padx=(0, 6))
+    delete_btn = ttk.Button(
+        recovery_btns,
+        text=i18n.t("recovery.delete"),
+        command=delete_selected,
+    )
+    delete_btn.grid(row=0, column=1, padx=(0, 6))
+    delete_all_btn = ttk.Button(
+        recovery_btns,
+        text=i18n.t("recovery.delete_all"),
+        command=delete_all,
+    )
+    delete_all_btn.grid(row=0, column=2, padx=(0, 6))
+    retranscribe_btn = ttk.Button(
+        recovery_btns,
+        text=i18n.t("recovery.retranscribe"),
+        command=retranscribe_selected,
+    )
+    retranscribe_btn.grid(row=0, column=3)
+
+    _refresh_recovery_list()
 
     buttons = ttk.Frame(win)
     buttons.grid(row=row, column=0, sticky="e")

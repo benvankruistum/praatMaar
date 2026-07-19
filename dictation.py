@@ -493,6 +493,104 @@ def _save_transcript_routed(text: str) -> Path:
     return recovery.save_transcript(text, directory=directory)
 
 
+def retranscribe_recovery_wav(path: Path) -> str:
+    """
+    Transcribeert een recovery-WAV met het geladen model.
+
+    Blokkerend — aanroepen vanaf een achtergrondthread. Geeft het transcript
+    terug; gooit bij weigering (bezig) of lege/geen herkenning.
+    Bestemmings-stemcommando's worden bewust overgeslagen (herstel-inhoud).
+    """
+
+    if session.is_recording or session.is_processing:
+        raise RuntimeError(i18n.t("recovery.busy"))
+    if model is None:
+        raise RuntimeError(i18n.t("model.load_failed"))
+
+    resolved = path.resolve()
+    if resolved.parent != recovery.recovery_dir().resolve():
+        raise ValueError(i18n.t("recovery.invalid_file"))
+
+    segments, _info = model.transcribe(
+        str(resolved),
+        language=LANGUAGE,
+        beam_size=5,
+        vad_filter=True,
+        vad_parameters={"min_silence_duration_ms": 300},
+        condition_on_previous_text=False,
+    )
+    text_parts: list[str] = []
+    for segment in segments:
+        text = segment.text.strip()
+        if text:
+            text_parts.append(text)
+    transcript = " ".join(text_parts).strip()
+    if not transcript:
+        raise RuntimeError(i18n.t("rec.no_speech"))
+
+    try:
+        _save_transcript_routed(transcript)
+    except OSError as exc:
+        print(i18n.t("rec.save_warn", error=exc))
+
+    try:
+        _copy_to_clipboard(transcript)
+    except Exception as exc:
+        print(i18n.t("rec.clipboard_warn", error=exc))
+
+    if AUTO_PASTE:
+        wait_until_modifier_keys_released()
+        time.sleep(PASTE_DELAY_SECONDS)
+        try:
+            host.paste()
+        except Exception as exc:
+            print(i18n.t("rec.paste_failed"))
+            print(i18n.t("rec.error", error=exc))
+
+    return transcript
+
+
+def _start_recovery_retranscribe(path: Path, indicator: RecordingIndicator) -> None:
+    """Start herstel-transcriptie op een achtergrondthread (macOS-parent-pad)."""
+
+    from tkinter import messagebox
+
+    def worker() -> None:
+        error: str | None = None
+        try:
+            retranscribe_recovery_wav(path)
+        except Exception as exc:
+            error = str(exc)
+
+        def done() -> None:
+            if error is not None:
+                messagebox.showerror(
+                    i18n.t("settings.title"),
+                    error,
+                    parent=indicator.root,
+                )
+                return
+            if not path.exists():
+                return
+            if messagebox.askyesno(
+                i18n.t("settings.title"),
+                i18n.t("recovery.ask_delete_after", name=path.name),
+                parent=indicator.root,
+            ):
+                try:
+                    recovery.delete_recovery_file(path)
+                except (OSError, ValueError) as exc:
+                    messagebox.showerror(
+                        i18n.t("settings.title"),
+                        str(exc),
+                        parent=indicator.root,
+                    )
+
+        indicator.call_on_main(done)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
 def _handle_destination_command(kind: str, name: str | None) -> None:
     """Werkt sticky bestemming bij na een stem-commando."""
 
@@ -872,8 +970,15 @@ def main() -> None:
                     new = run_settings_subprocess(current_settings())
                 finally:
                     set_capture(None)
-                if new is not None:
-                    indicator.call_on_main(lambda: apply_settings(new, indicator))
+                if new is None:
+                    return
+                path_str = new.get("_recovery_retranscribe")
+                if path_str:
+                    indicator.call_on_main(
+                        lambda: _start_recovery_retranscribe(Path(str(path_str)), indicator)
+                    )
+                    return
+                indicator.call_on_main(lambda: apply_settings(new, indicator))
 
             threading.Thread(target=_mac_settings, daemon=True).start()
             return
@@ -886,6 +991,7 @@ def main() -> None:
                 current_settings(),
                 lambda new: apply_settings(new, indicator),
                 set_capture,
+                on_retranscribe=retranscribe_recovery_wav,
             )
         )
 

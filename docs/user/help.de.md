@@ -37,13 +37,15 @@ Im Standardordner behält praatMaar automatisch nur die neuesten Transkripte (Re
 Zielordner werden nicht bereinigt.
 
 Recovery-Audiodateien (bei fehlgeschlagenen Aufnahmen) bleiben immer in
-`%APPDATA%\praatMaar\recovery\`, unabhängig vom aktiven Ziel.
+`%APPDATA%\praatMaar\recovery\`, unabhängig vom aktiven Ziel. Unter
+**Einstellungen** → **Wiederherstellungs-Audio** können Sie diese Dateien
+auflisten, löschen oder erneut transkribieren lassen.
 
 ## Verwaltung über das Infobereich-Symbol
 
 Rechtsklick auf das praatMaar-Symbol im Infobereich:
 
-- **Einstellungen** — Mikrofon, Hotkey, Sprachen
+- **Einstellungen** — Mikrofon, Hotkey, Sprachen, Wiederherstellungs-Audio
 - **Ziele** — Dialog zum Hinzufügen, Ändern oder Entfernen von Namen und Ordnern sowie
   zum Setzen oder Löschen des aktiven Ziels. In diesem Dialog finden Sie auch
   Schaltflächen zum Öffnen des Transkriptordners oder des aktiven Ordners.

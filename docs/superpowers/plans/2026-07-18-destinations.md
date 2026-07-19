@@ -1,6 +1,6 @@
 # Destinations implementation plan — STATUS: gedaan (2026-07-18)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status:** gedaan (2026-07-18). Alle stappen hieronder zijn afgevinkt.
 
 **Goal:** Sticky bestemmingen (naam→map) met stem-wisseling via exacte match, zichtbaar in de pill; transcriptmap openen vanuit Bestemmingen-dialoog; Help als tray-item naast Instellingen.
 
@@ -54,7 +54,7 @@
   - `resolve_save_dir(active_name: str | None, destinations: list[dict], default_dir: Path) -> Path`
   - `sanitize_destinations(raw: Any) -> list[dict[str, str]]` — alleen items met non-empty name+path strings
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_destinations.py
@@ -82,12 +82,12 @@ def test_resolve_active_and_default(tmp_path: Path):
     assert d.resolve_save_dir(None, dests, tmp_path / "default") == tmp_path / "default"
 ```
 
-- [ ] **Step 2: Run tests — expect FAIL**
+- [x] **Step 2: Run tests — expect FAIL**
 
 Run: `pytest tests/test_destinations.py -q`  
 Expected: import/collection errors or FAIL
 
-- [ ] **Step 3: Implement `destinations.py`**
+- [x] **Step 3: Implement `destinations.py`**
 
 ```python
 # destinations.py — kern
@@ -136,12 +136,12 @@ def sanitize_destinations(raw: Any) -> list[dict[str, str]]:
     return out
 ```
 
-- [ ] **Step 4: Run tests — expect PASS**
+- [x] **Step 4: Run tests — expect PASS**
 
 Run: `pytest tests/test_destinations.py -q`  
 Expected: all PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add destinations.py tests/test_destinations.py
@@ -161,7 +161,7 @@ git commit -m "Voeg destinations-logica toe (match + padresolutie)."
 - Produces: `save_transcript(text: str, directory: Path | None = None) -> Path`  
   — als `directory` is gezet en ≠ default: **geen** `prune_transcripts()`
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 ```python
 def test_save_transcript_custom_dir_skips_prune(tmp_path, monkeypatch):
@@ -175,11 +175,11 @@ def test_save_transcript_custom_dir_skips_prune(tmp_path, monkeypatch):
 
 (Uitbreiden: schrijf 3 files in default met max_files=2 via prune-test patroon; custom file blijft.)
 
-- [ ] **Step 2: Run — expect FAIL**
+- [x] **Step 2: Run — expect FAIL**
 
 Run: `pytest tests/test_recovery.py::test_save_transcript_custom_dir_skips_prune -v`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `save_transcript`:
 
@@ -198,11 +198,11 @@ def save_transcript(text: str, directory: Path | None = None) -> Path:
     return target
 ```
 
-- [ ] **Step 4: Run all recovery tests — PASS**
+- [x] **Step 4: Run all recovery tests — PASS**
 
 Run: `pytest tests/test_recovery.py -q`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add recovery.py tests/test_recovery.py
@@ -244,15 +244,15 @@ if kind in ("set", "reset"):
 # anders bestaande save/paste flow
 ```
 
-- [ ] **Step 1: Failing test** — fake model returns `"boodschappenlijst"`; destinations list contains that name; assert paste_calls==0 and command callback fired with `("set", ...)`
+- [x] **Step 1: Failing test** — fake model returns `"boodschappenlijst"`; destinations list contains that name; assert paste_calls==0 and command callback fired with `("set", ...)`
 
-- [ ] **Step 2: Run — FAIL**
+- [x] **Step 2: Run — FAIL**
 
-- [ ] **Step 3: Minimal wiring in `opnamesessie.py`**
+- [x] **Step 3: Minimal wiring in `opnamesessie.py`**
 
-- [ ] **Step 4: Tests PASS** (bestaande + nieuw)
+- [x] **Step 4: Tests PASS** (bestaande + nieuw)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add opnamesessie.py tests/test_opnamesessie.py
@@ -273,11 +273,11 @@ git commit -m "Behandel exacte bestemmingsnamen als sticky commando-takes."
 - `_save_transcript_routed(text)` → `recovery.save_transcript(text, directory=resolve_save_dir(...))`
 - Settings apply: destinations list + active
 
-- [ ] **Step 1:** Laad/sanitise destinations bij startup; bouw session met callbacks
-- [ ] **Step 2:** `current_settings` / `apply_settings` uitbreiden
-- [ ] **Step 3:** Helper `open_folder(path: Path)` (Windows `os.startfile`)
-- [ ] **Step 4:** Handmatige smoke: config.json schrijven met één bestemming (geen UI nog) — of unit-test resolve via dictation helpers als die puur genoeg zijn
-- [ ] **Step 5: Commit**
+- [x] **Step 1:** Laad/sanitise destinations bij startup; bouw session met callbacks
+- [x] **Step 2:** `current_settings` / `apply_settings` uitbreiden
+- [x] **Step 3:** Helper `open_folder(path: Path)` (Windows `os.startfile`)
+- [x] **Step 4:** Handmatige smoke: config.json schrijven met één bestemming (geen UI nog) — of unit-test resolve via dictation helpers als die puur genoeg zijn
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "Koppel bestemmingen aan config en transcript-opslag."
@@ -296,9 +296,9 @@ git commit -m "Koppel bestemmingen aan config en transcript-opslag."
 - Als `name` gezet: bij IDLE **niet** verbergen — toon venster met alleen bestemmingsnaam (gedempt)
 - Als `name` is None: huidig idle-gedrag (verbergen)
 
-- [ ] **Step 1:** `set_destination` + render in `_apply_state` / idle branch
-- [ ] **Step 2:** Handmatig of kleine test als er indicator-tests bestaan; anders manuele checklist
-- [ ] **Step 3: Commit**
+- [x] **Step 1:** `set_destination` + render in `_apply_state` / idle branch
+- [x] **Step 2:** Handmatig of kleine test als er indicator-tests bestaan; anders manuele checklist
+- [x] **Step 3: Commit**
 
 ```bash
 git commit -m "Toon actieve bestemming op de status-pill."
@@ -322,10 +322,10 @@ git commit -m "Toon actieve bestemming op de status-pill."
 
 **i18n:** `tray.destinations`, `destinations.*` labels
 
-- [ ] **Step 1:** Dialoog + save via bestaande `apply_settings` of dedicated apply-callback
-- [ ] **Step 2:** Tray + wiring
-- [ ] **Step 3:** Locale strings
-- [ ] **Step 4: Commit**
+- [x] **Step 1:** Dialoog + save via bestaande `apply_settings` of dedicated apply-callback
+- [x] **Step 2:** Tray + wiring
+- [x] **Step 3:** Locale strings
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "Voeg Bestemmingen-traydialoog toe."
@@ -351,11 +351,11 @@ git commit -m "Voeg Bestemmingen-traydialoog toe."
 
 Laden: `Path` naast repo of `sys._MEIPASS / "docs/user"`. Fallback: korte i18n-string als file ontbreekt.
 
-- [ ] **Step 1:** Schrijf de drie markdown-bestanden (volledige tekst, geen TODO)
-- [ ] **Step 2:** `help_dialog.open_help(parent)` — ScrolledText readonly
-- [ ] **Step 3:** Tray + wiring
-- [ ] **Step 4:** Bundle in spec
-- [ ] **Step 5: Commit**
+- [x] **Step 1:** Schrijf de drie markdown-bestanden (volledige tekst, geen TODO)
+- [x] **Step 2:** `help_dialog.open_help(parent)` — ScrolledText readonly
+- [x] **Step 3:** Tray + wiring
+- [x] **Step 4:** Bundle in spec
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "Voeg Help-menu en gebruikersdocumentatie toe."
@@ -370,9 +370,9 @@ git commit -m "Voeg Help-menu en gebruikersdocumentatie toe."
 - Modify: `CHANGELOG.md`
 - Modify: `README.md` — korte vermelding Help + bestemmingen
 
-- [ ] **Step 1:** `pytest -q` — all green
-- [ ] **Step 2:** Docs bijwerken
-- [ ] **Step 3:** Commit
+- [x] **Step 1:** `pytest -q` — all green
+- [x] **Step 2:** Docs bijwerken
+- [x] **Step 3:** Commit
 
 ```bash
 git commit -m "Documenteer bestemmingen en Help in CONTEXT/CHANGELOG."
