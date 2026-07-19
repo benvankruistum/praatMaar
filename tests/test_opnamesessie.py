@@ -145,6 +145,24 @@ def test_start_sets_recording_and_notifies(
     assert states[-1] == RecordingState.RECORDING
 
 
+def test_start_failure_shows_user_error(
+    session: Opnamesessie, sd: FakeSoundDevice, states: list
+) -> None:
+    errors: list[str] = []
+    session._on_user_error = errors.append
+
+    def boom(**_kwargs):
+        raise RuntimeError("No Default Input Device Available")
+
+    sd.InputStream = boom  # type: ignore[method-assign]
+    session.start()
+    assert not session.is_recording
+    assert states[-1] == RecordingState.ERROR
+    assert len(errors) == 1
+    assert "microfoon" in errors[0].lower()
+    assert "No Default Input Device Available" in errors[0]
+
+
 def test_start_while_recording_is_noop(session: Opnamesessie, sd: FakeSoundDevice) -> None:
     session.start()
     first = sd.stream

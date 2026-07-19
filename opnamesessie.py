@@ -34,6 +34,11 @@ from indicator import (
 from indicator import (
     reset_levels as default_reset_levels,
 )
+from mic_errors import (
+    first_input_device_index,
+    format_recording_start_error,
+    refresh_portaudio,
+)
 
 
 class Host(Protocol):
@@ -75,6 +80,7 @@ class Opnamesessie:
         preserve_audio: Callable[[Path], Path] | None = None,
         on_destination_command: Callable[[str, str | None], None] | None = None,
         get_destinations: Callable[[], list[dict[str, str]]] | None = None,
+        on_user_error: Callable[[str], None] | None = None,
     ) -> None:
         self.host = host
         self.sample_rate = sample_rate
@@ -98,6 +104,7 @@ class Opnamesessie:
         self._preserve_audio = preserve_audio
         self._on_destination_command = on_destination_command
         self._get_destinations = get_destinations
+        self._on_user_error = on_user_error
 
         self._lock = threading.RLock()
         self._recording = False
@@ -147,7 +154,9 @@ class Opnamesessie:
             self._ensure_stream()
             print(i18n.t("mic.warm"))
         except Exception as exc:
+            # Warmup is best-effort: geen dialoog (GUI bestaat vaak nog niet).
             print(i18n.t("mic.warm_failed", error=exc))
+            print(format_recording_start_error(exc))
 
     def _keep_stream_warm(self) -> bool:
         """Effectief warm houden: user-optie, nooit op macOS (menubalk-indicator)."""
@@ -211,7 +220,24 @@ class Opnamesessie:
                 return
 
         _, sd, _ = self._require_audio()
+        # Bluetooth/hotplug: herenumereren vóór open (geen actieve stream hier).
+        refresh_portaudio(sd)
+
         device = self._resolve_input_device(sd)
+        try:
+            self._open_input_stream(sd, device)
+        except Exception as first_exc:
+            # Stale default (-1) of oude index: opnieuw enumereren + concrete mic.
+            refresh_portaudio(sd)
+            device = self._resolve_input_device(sd)
+            if device is None:
+                device = first_input_device_index(sd)
+            if device is None:
+                raise first_exc
+            self._open_input_stream(sd, device)
+
+    def _open_input_stream(self, sd: Any, device: int | None) -> None:
+        """Opent en start een InputStream; koppelt die aan de sessie."""
 
         # latency='low': kleinere buffers, snellere eerste callback na start.
         stream = sd.InputStream(
@@ -318,14 +344,12 @@ class Opnamesessie:
                 self._recording = False
                 self._recording_started_at = None
                 self._audio_chunks.clear()
+            message = format_recording_start_error(exc)
             print()
             print(i18n.t("rec.start_failed"))
-            print(i18n.t("rec.error", error=exc))
-            print()
-            print(i18n.t("rec.check_header"))
-            print(i18n.t("rec.check_privacy"))
-            print(i18n.t("rec.check_default"))
-            print(i18n.t("rec.check_settings"))
+            print(message)
+            if self._on_user_error is not None:
+                self._on_user_error(message)
             self._notify(RecordingState.ERROR)
             return
 

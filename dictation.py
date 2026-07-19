@@ -609,6 +609,30 @@ def _handle_destination_command(kind: str, name: str | None) -> None:
         indicator.call_on_main(lambda: indicator.set_destination(active))
 
 
+def _report_user_error(message: str) -> None:
+    """Toont een gebruikersfout in een dialoog zodra de indicator-GUI bestaat."""
+
+    indicator = _indicator
+    if indicator is None:
+        # Te vroeg in de start (vóór pill/tray): alleen loggen, niet blokkeren.
+        return
+
+    def show() -> None:
+        from tkinter import messagebox
+
+        parent = getattr(indicator, "root", None)
+        try:
+            messagebox.showerror(
+                i18n.t("rec.start_failed_title"),
+                message,
+                parent=parent,
+            )
+        except Exception:
+            pass
+
+    indicator.call_on_main(show)
+
+
 def _build_session() -> Opnamesessie:
     """Bouwt de Opnamesessie met de huidige config en geïnjecteerde seams."""
 
@@ -631,6 +655,7 @@ def _build_session() -> Opnamesessie:
         preserve_audio=recovery.preserve_audio,
         on_destination_command=_handle_destination_command,
         get_destinations=lambda: DESTINATIONS,
+        on_user_error=_report_user_error,
     )
 
 
