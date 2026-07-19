@@ -6,7 +6,16 @@ from enum import Enum
 from uuid import uuid4
 
 from .config import MeetingBuddyConfig
-from .state import ActionItemStatus, Hint, MeetingState, QuestionStatus, TopicStatus
+from .state import (
+    ActionItemStatus,
+    Hint,
+    MeetingState,
+    QuestionStatus,
+    TopicStatus,
+)
+from .state import (
+    HintStatus as HintStatus,
+)
 
 
 class HintType(str, Enum):
