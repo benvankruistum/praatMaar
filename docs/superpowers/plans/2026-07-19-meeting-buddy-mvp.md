@@ -938,8 +938,35 @@ def test_format_elapsed():
 
 def test_pick_emphasis_is_highest_priority():
     from modules._builtin.meeting_buddy.overlay import pick_emphasis
-    # hints with priorities → exactly one emphasized id
-    ...
+    from modules._builtin.meeting_buddy.hints import Hint, HintType, HintStatus
+
+    hints = [
+        Hint(
+            id="h1",
+            type=HintType.TOPIC_NOT_DISCUSSED,
+            message="a",
+            priority=1,
+            confidence=0.8,
+            related_entity_id="t1",
+            created_at=0,
+            expires_at=None,
+            cooldown_key="t1",
+            status=HintStatus.ACTIVE,
+        ),
+        Hint(
+            id="h2",
+            type=HintType.CANDIDATE_ACTION_WITHOUT_OWNER,
+            message="b",
+            priority=10,
+            confidence=0.9,
+            related_entity_id="a1",
+            created_at=0,
+            expires_at=None,
+            cooldown_key="a1",
+            status=HintStatus.ACTIVE,
+        ),
+    ]
+    assert pick_emphasis(hints) == "h2"
 ```
 
 - [ ] **Step 2: Run — expect FAIL**
