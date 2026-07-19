@@ -125,6 +125,7 @@ class _CaptureState:
     stop_event: Event
     handlers: list[CaptureEventHandler]
     status: CaptureStatus = CaptureStatus.IDLE
+    status_message: str | None = None
     stream: Any | None = None
     worker: Thread | None = None
     captured_samples: int = 0
@@ -204,6 +205,12 @@ class AudioCaptureEngine:
         with self._lock:
             if handler not in state.handlers:
                 state.handlers.append(handler)
+            current_status = CaptureStatusChanged(
+                session_id=state.session_id,
+                status=state.status,
+                message=state.status_message,
+            )
+        self._notify_handler(state, handler, current_status)
 
     def unsubscribe(self, session_id: str, handler: CaptureEventHandler) -> None:
         state = self._require_session(session_id)
@@ -259,6 +266,18 @@ class AudioCaptureEngine:
             return
         if status:
             log.warning("Microfoonstatus voor sessie %s: %s", state.session_id, status)
+        if getattr(status, "input_overflow", False):
+            gap_start_ms = round(state.captured_samples * 1000 / SAMPLE_RATE)
+            state.captured_samples += frames
+            self._publish(
+                state,
+                CaptureGap(
+                    session_id=state.session_id,
+                    start_ms=gap_start_ms,
+                    end_ms=round(state.captured_samples * 1000 / SAMPLE_RATE),
+                    reason="input_overflow",
+                ),
+            )
         samples = np.asarray(data, dtype=np.float32).reshape(-1)
         if frames < samples.size:
             samples = samples[:frames]
@@ -292,6 +311,7 @@ class AudioCaptureEngine:
         message: str | None = None,
     ) -> None:
         state.status = status
+        state.status_message = message
         self._publish(
             state,
             CaptureStatusChanged(
@@ -305,10 +325,18 @@ class AudioCaptureEngine:
         with self._lock:
             handlers = list(state.handlers)
         for handler in handlers:
-            try:
-                handler(event)
-            except Exception:
-                log.exception("Capture-eventhandler faalde voor sessie %s", state.session_id)
+            self._notify_handler(state, handler, event)
+
+    @staticmethod
+    def _notify_handler(
+        state: _CaptureState,
+        handler: CaptureEventHandler,
+        event: object,
+    ) -> None:
+        try:
+            handler(event)
+        except Exception:
+            log.exception("Capture-eventhandler faalde voor sessie %s", state.session_id)
 
     @staticmethod
     def _close_stream(state: _CaptureState) -> None:
@@ -354,9 +382,13 @@ class AudioCaptureModule:
         del event
 
     def on_app_shutdown(self) -> None:
-        if self._engine is not None:
-            self._engine.shutdown()
-        if self._capabilities is not None:
-            self._capabilities.unregister_owner(self.id)
-        self._engine = None
-        self._capabilities = None
+        try:
+            if self._engine is not None:
+                self._engine.shutdown()
+        finally:
+            try:
+                if self._capabilities is not None:
+                    self._capabilities.unregister_owner(self.id)
+            finally:
+                self._engine = None
+                self._capabilities = None

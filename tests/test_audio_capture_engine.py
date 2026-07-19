@@ -15,7 +15,9 @@ from modules._builtin.audio_capture import (
 )
 from modules.capabilities.continuous_capture import (
     AudioChunkReceived,
+    CaptureGap,
     CaptureStatus,
+    CaptureStatusChanged,
 )
 
 
@@ -90,3 +92,57 @@ def test_non_windows_session_enters_error_status() -> None:
     session = engine.start_session()
 
     assert engine.get_status(session.session_id) == CaptureStatus.ERROR
+
+
+def test_subscribe_replays_current_error_status_and_message() -> None:
+    engine = AudioCaptureEngine(
+        sounddevice_module=FakeSoundDevice(),
+        platform_name="linux",
+    )
+    session = engine.start_session()
+    events: list[object] = []
+
+    engine.subscribe(session.session_id, events.append)
+
+    assert events == [
+        CaptureStatusChanged(
+            session_id=session.session_id,
+            status=CaptureStatus.ERROR,
+            message="Continuous microphone capture is currently supported on Windows only.",
+        )
+    ]
+
+
+def test_input_overflow_emits_gap_before_captured_samples() -> None:
+    sounddevice = FakeSoundDevice()
+    engine = AudioCaptureEngine(
+        sounddevice_module=sounddevice,
+        platform_name="win32",
+    )
+    session = engine.start_session()
+    events: list[object] = []
+    engine.subscribe(session.session_id, events.append)
+    assert sounddevice.stream is not None
+    callback = sounddevice.stream.kwargs["callback"]
+    frames = SAMPLE_RATE // 10
+    status = type("Status", (), {"input_overflow": True})()
+
+    callback(
+        np.zeros((frames, 1), dtype=np.float32),
+        frames,
+        None,
+        status,
+    )
+
+    assert (
+        CaptureGap(
+            session_id=session.session_id,
+            start_ms=0,
+            end_ms=100,
+            reason="input_overflow",
+        )
+        in events
+    )
+    assert engine._require_session(session.session_id).buffer.read_window(frames).start_ms == 100
+
+    engine.stop_session(session.session_id)
