@@ -1,6 +1,7 @@
 {
   "tray.settings": "Settings",
   "tray.destinations": "Destinations",
+  "tray.modules": "Modules",
   "tray.help": "Help",
   "tray.quit": "Quit",
   "tray.tooltip.idle": "praatMaar — ready",
@@ -168,6 +169,16 @@
   "destinations.error.reserved_name": "This name is reserved for the voice command \"standaard\".",
   "destinations.error.name_collision": "This name collides with \"{existing}\" (same voice command).",
   "destinations.error.select_first": "Select a destination in the list first.",
+
+  "modules.title": "praatMaar — Modules",
+  "modules.intro": "Enable or disable extensions. All dictation cycle events are also written to the event journal (events/events.jsonl) for external tools.",
+  "modules.incremental": "Incremental transcription during recording (interim partial events)",
+  "modules.list_heading": "Built-in modules",
+  "modules.enabled": "Enabled",
+  "modules.cancel": "Cancel",
+  "modules.save": "Save",
+  "modules.inbox_mirror.name": "Inbox mirror",
+  "modules.inbox_mirror.description": "Copies each saved transcript to the inbox folder for external processing.",
 
   "help.title": "praatMaar — Help",
   "help.close": "Close",

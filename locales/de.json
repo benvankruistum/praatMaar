@@ -1,6 +1,7 @@
 {
   "tray.settings": "Einstellungen",
   "tray.destinations": "Ziele",
+  "tray.modules": "Module",
   "tray.help": "Hilfe",
   "tray.quit": "Beenden",
   "tray.tooltip.idle": "praatMaar — bereit",
@@ -168,6 +169,16 @@
   "destinations.error.reserved_name": "Dieser Name ist für den Sprachbefehl \"standaard\" reserviert.",
   "destinations.error.name_collision": "Dieser Name kollidiert mit \"{existing}\" (gleicher Sprachbefehl).",
   "destinations.error.select_first": "Wählen Sie zuerst ein Ziel in der Liste.",
+
+  "modules.title": "praatMaar — Module",
+  "modules.intro": "Erweiterungen ein- oder ausschalten. Alle Diktierzyklus-Ereignisse werden auch ins Event-Journal (events/events.jsonl) geschrieben — für externe Tools.",
+  "modules.incremental": "Inkrementelle Transkription während der Aufnahme (Zwischenstände als Partial-Events)",
+  "modules.list_heading": "Eingebaute Module",
+  "modules.enabled": "Aktiviert",
+  "modules.cancel": "Abbrechen",
+  "modules.save": "Speichern",
+  "modules.inbox_mirror.name": "Inbox-Spiegel",
+  "modules.inbox_mirror.description": "Kopiert jedes gespeicherte Transkript in den Inbox-Ordner zur externen Verarbeitung.",
 
   "help.title": "praatMaar — Hilfe",
   "help.close": "Schließen",

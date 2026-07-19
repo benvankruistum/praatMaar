@@ -53,8 +53,27 @@ Rechtsklick auf das praatMaar-Symbol im Infobereich:
 - **Ziele** — Dialog zum Hinzufügen, Ändern oder Entfernen von Namen und Ordnern sowie
   zum Setzen oder Löschen des aktiven Ziels. In diesem Dialog finden Sie auch
   Schaltflächen zum Öffnen des Transkriptordners oder des aktiven Ordners.
+- **Module** — Erweiterungen ein-/ausschalten und inkrementelle Transkription
 - **Hilfe** — diese Benutzeranleitung
 - **Beenden**
+
+## Module und externe Tools
+
+Unter **Module** im Infobereich schalten Sie Erweiterungen ein oder aus und
+aktivieren optional **inkrementelle Transkription**. Dabei läuft Whisper bereits
+während der Aufnahme im Hintergrund; Module und externe Tools können
+Zwischentext erhalten, bevor Sie stoppen.
+
+**Event-Journal:** jeder Diktierzyklus wird als JSON-Zeilen nach
+`%APPDATA%\praatMaar\events\events.jsonl` geschrieben (macOS: Application Support).
+Externe Programme können diese Datei beobachten, ohne praatMaar anzupassen. Jedes
+Event hat `session_id`, `type` (z. B. `transcript.saved`) und Metadaten.
+
+**Inbox-Spiegel** (standardmäßig an): kopiert jedes gespeicherte Transkript nach
+`%APPDATA%\praatMaar\inbox\` — fester Ablageort für Skripte.
+
+Wiederherstellungs-Transkription (Einstellungen → Wiederherstellungs-Audio)
+sendet dieselben Event-Typen mit `source: "recovery"`.
 
 ## Risiken und Tipps
 

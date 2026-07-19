@@ -91,11 +91,13 @@ gedownload. Daarna: systeemvak-/menubalk-icoon + status-pill.
 |--------|-----------|
 | Start/stop dicteren (toggle) | `Ctrl+Shift+Alt+Spatie` (op Mac: Control+Shift+Option+Spatie) |
 | Annuleren tijdens opname | `Esc` |
-| Instellingen / Bestemmingen / Help / afsluiten | Rechtsklik systeemvak-icoon (Mac: menubalk) |
+| Instellingen / Bestemmingen / Modules / Help / afsluiten | Rechtsklik systeemvak-icoon (Mac: menubalk) |
 
 Sneltoets, modus (toggle of push-to-talk), microfoon en model zijn aanpasbaar
 via **Instellingen** in het systeemvak-menu. **Bestemmingen** beheren sticky
-opslagmappen (naam + pad; wisselen met stem via exacte naam). **Help** opent
+opslagmappen (naam + pad; wisselen met stem via exacte naam). **Modules**
+schakelt uitbreidingen in/uit en incrementele transcriptie; alle dicteercycli
+worden ook gelogd in `events/events.jsonl` voor externe tools. **Help** opent
 lokale gebruikersdocumentatie (nl/en/de).
 
 ## Privacy
@@ -109,7 +111,9 @@ lokale gebruikersdocumentatie (nl/en/de).
 - Gebruikersdata:
   - Windows: `%APPDATA%\praatMaar\`
   - macOS: `~/Library/Application Support/praatMaar/`
-  - `config.json`, `transcripts\`, `recovery\`, `praatMaar.log`
+  - `config.json`, `transcripts\`, `recovery\`, `events\` (dicteercyclus-log),
+    `inbox\` (module-kopieën), `praatMaar.log`
+  - Het event-journal bevat transcripttekst in JSON-regels; behandel als gevoelige data.
 
 Zie ook [SECURITY.md](SECURITY.md).
 

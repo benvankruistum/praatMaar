@@ -12,15 +12,31 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 
 ## File structure
 
-Single-context repo (most repos):
+Single-context repo (this repo):
 
 ```
 /
 ├── CONTEXT.md
 ├── docs/adr/
-│   ├── 0001-event-sourced-orders.md
-│   └── 0002-postgres-for-write-model.md
+│   ├── 0001-platform-seam.md
+│   └── 0002-macos-native-overlay-indicator.md
+├── docs/superpowers/specs/     ← feature design docs (chat-approved)
+└── …                           ← flat Python modules at repo root
+```
+
+Multi-context repo (presence of `CONTEXT-MAP.md` at the root) — **not used here**:
+
+```
+/
+├── CONTEXT-MAP.md
+├── docs/adr/                          ← system-wide decisions
 └── src/
+    ├── ordering/
+    │   ├── CONTEXT.md
+    │   └── docs/adr/                  ← context-specific decisions
+    └── billing/
+        ├── CONTEXT.md
+        └── docs/adr/
 ```
 
 ## Use the glossary's vocabulary
@@ -34,3 +50,5 @@ If the concept you need isn't in the glossary yet, that's a signal — either yo
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
 
 > _Contradicts ADR-0007 (event-sourced orders) — but worth reopening because…_
+
+Feature specs under `docs/superpowers/specs/` are design records; for hard architectural trade-offs prefer a numbered ADR in `docs/adr/`.

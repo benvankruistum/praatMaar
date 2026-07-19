@@ -63,7 +63,7 @@ bestemmingsnaam; reset-frase **`standaard`** zet terug naar de defaultmap
 
 - **Pill:** toont de actieve naam in idle (`indicator.py` / `set_destination`).
 - **Tray:** beheer via menu-item **Bestemmingen** (`destinations_dialog.py`),
-  naast Instellingen en Help — niet in het algemene Instellingen-scherm.
+  naast Instellingen, Modules en Help — niet in het algemene Instellingen-scherm.
 - **Logica:** `destinations.py` (normaliseren, matchen, padresolutie);
   wiring in `dictation.py`; commando-check in `Opnamesessie` vóór plakken.
 - **Opslaan:** `recovery.save_transcript` naar actieve map; prune alleen default.
@@ -77,4 +77,30 @@ of macOS Application Support). Beheer + opnieuw transcriberen via sectie
 **Herstel-audio** in Instellingen (`settings.py`); transcriptie via
 `dictation.retranscribe_recovery_wav` (geladen Whisper-model). Op macOS schrijft
 het settings-kind `_recovery_retranscribe` terug zodat de parent (met model)
-uitvoert.
+uitvoert. Herstel-transcriptie emitteert dezelfde `CycleEvent`-types als live
+dicteren (`source: "recovery"`).
+
+### module (praatMaar-module)
+
+In-process uitbreiding, geregistreerd in `modules/registry.py`. Reageert op
+**dicteercyclus-events** via `ModuleBus`. Gebruiker schakelt modules aan/uit
+via tray **Modules** (`modules_dialog.py`); state in `config.json` onder
+`modules.<id>.enabled`. v1: expliciete ingebouwde lijst (geen download/install).
+Beslissing: [ADR-0003](docs/adr/0003-hybrid-module-system.md).
+
+Voorbeeld: **inbox-spiegel** (`inbox-mirror`) kopieert opgeslagen transcripts
+naar `%APPDATA%\praatMaar\inbox\`.
+
+### dicteercyclus-event (`CycleEvent`)
+
+Één lifecycle-moment in of rond de dicteercyclus, met stabiele `session_id`.
+Types o.a. `cycle.started`, `transcript.partial`, `cycle.completed`,
+`transcript.saved`, `destination.command`, `cycle.idle`. Contract:
+`modules/_contract.py`. Emissie vanuit `Opnamesessie` (`emit_event`) en
+herstel-pad in `dictation.py`.
+
+### event-journal
+
+Append-only JSONL (`events/events.jsonl` onder de app-datamap) — **hybride brug**
+voor externe tools. `ModuleBus` schrijft elk event altijd; in-process modules
+krijgen dezelfde payload. Schema: `schema_version` + `type` + payload-velden.

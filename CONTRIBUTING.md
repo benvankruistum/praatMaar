@@ -25,6 +25,18 @@ Gebruik de termen uit `CONTEXT.md` (bijv. `host`, dicteercyclus, indicator).
 Wijk niet af naar synoniemen in issues, specs of PR-titels. Bestaande
 beslissingen staan in `docs/adr/`.
 
+## Modules
+
+praatMaar heeft een hybride module-systeem ([ADR-0003](docs/adr/0003-hybrid-module-system.md)):
+
+- **Externe integratie** (scripts, andere apps): lees het event-journal —
+  [docs/modules-integration.md](docs/modules-integration.md)
+- **Ingebouwde module via PR**: volg de authoring-checklist —
+  [docs/modules-authoring.md](docs/modules-authoring.md)
+
+v1: geen plugin-installatie buiten de repo; modules worden geregistreerd in
+`modules/registry.py`.
+
 ## Code-stijl
 
 - Nederlands in gebruikersgerichte strings en module-docstrings (bestaande stijl).

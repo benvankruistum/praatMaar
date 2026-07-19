@@ -26,9 +26,19 @@ In `.cursor/skills/` (deze repo):
 
 ### Issue tracker
 
-Issues en specs: markdown onder `.scratch/<feature-slug>/`.
-Zie `docs/agents/issue-tracker.md`. Publieke issues: GitHub Issues.
+Agent-skills: markdown onder `.scratch/<feature-slug>/` (lokaal).
+Zie `docs/agents/issue-tracker.md`. Publieke meldingen: GitHub Issues.
+
+### Triage labels
+
+Vijf canonieke triage-rollen (default strings, ongewijzigd).
+Zie `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/`. Zie `docs/agents/domain.md`.
+
+### Matt Pocock engineering skills (globaal)
+
+In `~/.cursor/skills/` — o.a. `/domain-modeling`, `/grill-with-docs`,
+`/wayfinder`, `/to-spec`, `/tdd`. Vereisen bovenstaande `docs/agents/*`-layout.

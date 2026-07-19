@@ -5,6 +5,11 @@ Beheert opname → transcriberen → idle/geannuleerd/fout. De UI-toestanden
 (`RecordingState`) leven in `indicator.py`; deze module is de runtime die die
 toestanden aandrijft. Toetsenbordrouting blijft in `dictation.py`.
 
+Elke cyclus krijgt een `session_id` (UUID). Optioneel `emit_event` stuurt
+`CycleEvent`-payloads naar de module-bus (zie `modules/`). Met
+`incremental_transcription` draait tussentijdse Whisper op de achtergrond
+tijdens opname (`transcript.partial`).
+
 OS-plakken gaat via een geïnjecteerde `Host` (zie `docs/adr/0001-platform-seam.md`),
 zodat tests een `FakeHost` kunnen steken.
 """
@@ -16,6 +21,7 @@ import sys
 import tempfile
 import threading
 import time
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
@@ -39,6 +45,7 @@ from mic_errors import (
     format_recording_start_error,
     refresh_portaudio,
 )
+from modules._contract import CycleEvent, CycleEventType
 
 
 class Host(Protocol):
@@ -70,7 +77,11 @@ class Opnamesessie:
         delete_temp_audio: bool = True,
         mode: str = "toggle",
         warm_microphone: bool = False,
+        incremental_transcription: bool = False,
+        incremental_interval_seconds: float = 3.0,
+        incremental_min_seconds: float = 1.5,
         wait_until_modifiers_clear: Callable[[], None] | None = None,
+        emit_event: Callable[[CycleEvent], None] | None = None,
         on_ready: Callable[[], None] | None = None,
         notify: Callable[..., None] | None = None,
         push_level: Callable[[float], None] | None = None,
@@ -94,8 +105,12 @@ class Opnamesessie:
         self.delete_temp_audio = delete_temp_audio
         self.mode = mode
         self.warm_microphone = warm_microphone
+        self.incremental_transcription = incremental_transcription
+        self._incremental_interval_seconds = incremental_interval_seconds
+        self._incremental_min_seconds = incremental_min_seconds
 
         self.wait_until_modifiers_clear = wait_until_modifiers_clear or (lambda: None)
+        self._emit_event = emit_event
         self.on_ready = on_ready or (lambda: None)
         self._notify = notify or default_notify_state
         self._push_level = push_level or default_push_level
@@ -120,6 +135,10 @@ class Opnamesessie:
         # Geen callbacks langer dan dit → stream als dood beschouwen.
         self._stream_stale_after_seconds = 1.5
         self._audio_chunks: list[Any] = []
+        self._session_id: str | None = None
+        self._incremental_thread: threading.Thread | None = None
+        self._incremental_stop: threading.Event | None = None
+        self._model_lock = threading.Lock()
 
         self.model: Any | None = None
         self._np: Any | None = None
@@ -185,6 +204,129 @@ class Opnamesessie:
     def is_processing(self) -> bool:
         with self._lock:
             return self._processing
+
+    def _event(
+        self,
+        event_type: CycleEventType,
+        *,
+        transcript: str | None = None,
+        path: str | None = None,
+        destination: str | None = None,
+        error: str | None = None,
+        recovery_path: str | None = None,
+        destination_command: str | None = None,
+        destination_name: str | None = None,
+        source: str = "live",
+    ) -> None:
+        if self._emit_event is None or self._session_id is None:
+            return
+
+        self._emit_event(
+            CycleEvent(
+                type=event_type,
+                session_id=self._session_id,
+                transcript=transcript,
+                path=path,
+                destination=destination,
+                language=self.language,
+                mode=self.mode,
+                error=error,
+                recovery_path=recovery_path,
+                destination_command=destination_command,
+                destination_name=destination_name,
+                source=source,
+            )
+        )
+
+    def _stop_incremental_worker(self) -> None:
+        stop = self._incremental_stop
+        thread = self._incremental_thread
+        if stop is not None:
+            stop.set()
+        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=5.0)
+        self._incremental_thread = None
+        self._incremental_stop = None
+
+    def _start_incremental_worker(self) -> None:
+        if not self.incremental_transcription:
+            return
+
+        self._stop_incremental_worker()
+        self._incremental_stop = threading.Event()
+        self._incremental_thread = threading.Thread(
+            target=self._incremental_loop,
+            daemon=True,
+        )
+        self._incremental_thread.start()
+
+    def _incremental_loop(self) -> None:
+        stop = self._incremental_stop
+        if stop is None:
+            return
+
+        while not stop.wait(self._incremental_interval_seconds):
+            with self._lock:
+                if not self._recording:
+                    return
+                chunks_copy = [chunk.copy() for chunk in self._audio_chunks]
+                session_id = self._session_id
+
+            if not chunks_copy or session_id is None:
+                continue
+
+            sample_count = sum(chunk.shape[0] for chunk in chunks_copy)
+            duration = sample_count / float(self.sample_rate)
+            if duration < self._incremental_min_seconds:
+                continue
+
+            try:
+                transcript = self._transcribe_chunks_to_text(chunks_copy)
+            except Exception:
+                continue
+
+            if transcript:
+                if self._emit_event is not None:
+                    self._emit_event(
+                        CycleEvent(
+                            type=CycleEventType.TRANSCRIPT_PARTIAL,
+                            session_id=session_id,
+                            transcript=transcript,
+                            language=self.language,
+                            mode=self.mode,
+                        )
+                    )
+
+    def _transcribe_chunks_to_text(self, chunks: list[Any]) -> str:
+        """Transcribeert audioblokken naar tekst (incrementeel + finaal)."""
+
+        if self.model is None:
+            raise RuntimeError("Whisper-model is niet geladen.")
+
+        temporary_path = self.create_temporary_wav(chunks)
+        try:
+            with self._model_lock:
+                segments, _info = self.model.transcribe(
+                    str(temporary_path),
+                    language=self.language,
+                    beam_size=5,
+                    vad_filter=True,
+                    vad_parameters={"min_silence_duration_ms": 300},
+                    condition_on_previous_text=False,
+                )
+                text_parts: list[str] = []
+                for segment in segments:
+                    text = segment.text.strip()
+                    if text:
+                        text_parts.append(text)
+
+            return " ".join(text_parts).strip()
+        finally:
+            if self.delete_temp_audio and temporary_path.exists():
+                try:
+                    os.remove(temporary_path)
+                except OSError:
+                    pass
 
     def _require_audio(self) -> tuple[Any, Any, Any]:
         if self._np is None or self._sd is None or self._write_wav is None:
@@ -334,6 +476,10 @@ class Opnamesessie:
             self._audio_chunks = []
             self._recording = True
             self._recording_started_at = time.monotonic()
+            self._session_id = str(uuid.uuid4())
+
+        self._event(CycleEventType.CYCLE_STARTED)
+        self._start_incremental_worker()
 
         # UI meteen rood — vóór eventuele (her)open van de stream.
         self._reset_levels()
@@ -346,6 +492,7 @@ class Opnamesessie:
                 self._recording = False
                 self._recording_started_at = None
                 self._audio_chunks.clear()
+            self._stop_incremental_worker()
             message = format_recording_start_error(exc)
             print()
             print(i18n.t("rec.start_failed"))
@@ -353,6 +500,9 @@ class Opnamesessie:
             if self._on_user_error is not None:
                 self._on_user_error(message)
             self._notify(RecordingState.ERROR)
+            self._event(CycleEventType.CYCLE_ERROR, error=message)
+            self._event(CycleEventType.CYCLE_IDLE)
+            self._session_id = None
             return
 
         print()
@@ -393,6 +543,8 @@ class Opnamesessie:
             started_at = self._recording_started_at
             self._recording_started_at = None
 
+        self._stop_incremental_worker()
+
         duration = 0.0
         if started_at is not None:
             duration = time.monotonic() - started_at
@@ -406,6 +558,8 @@ class Opnamesessie:
             self._notify(RecordingState.IDLE)
             print(i18n.t("rec.too_short"))
             self._release_stream_if_cold()
+            self._event(CycleEventType.CYCLE_IDLE)
+            self._session_id = None
             self.on_ready()
             return
 
@@ -422,8 +576,12 @@ class Opnamesessie:
             # Vaak een dode warme stream na Bluetooth reconnect — heropen bij
             # de volgende start i.p.v. dezelfde zombie te hergebruiken.
             self.refresh_input_device()
+            self._event(CycleEventType.CYCLE_IDLE)
+            self._session_id = None
             self.on_ready()
             return
+
+        self._event(CycleEventType.CYCLE_TRANSCRIBING)
 
         # Koude modus / macOS: stream mag dicht zodra de chunks veilig gekopieerd zijn.
         self._release_stream_if_cold()
@@ -447,12 +605,17 @@ class Opnamesessie:
             self._recording_started_at = None
             self._audio_chunks.clear()
 
+        self._stop_incremental_worker()
+        self._event(CycleEventType.CYCLE_CANCELLED)
+
         self._notify(RecordingState.CANCELLED)
 
         print()
         print(i18n.t("rec.cancelled"))
         print(i18n.t("rec.cancelled_detail"))
         self._release_stream_if_cold()
+        self._event(CycleEventType.CYCLE_IDLE)
+        self._session_id = None
         self.on_ready()
 
     def create_temporary_wav(self, chunks: list[Any]) -> Path:
@@ -481,6 +644,8 @@ class Opnamesessie:
 
         temporary_path: Path | None = None
         final_state = RecordingState.IDLE
+        error_message: str | None = None
+        recovery_kept: Path | None = None
 
         try:
             print(i18n.t("rec.transcribing"))
@@ -489,14 +654,15 @@ class Opnamesessie:
                 raise RuntimeError("Whisper-model is niet geladen.")
 
             temporary_path = self.create_temporary_wav(chunks)
-            segments, _info = self.model.transcribe(
-                str(temporary_path),
-                language=self.language,
-                beam_size=5,
-                vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 300},
-                condition_on_previous_text=False,
-            )
+            with self._model_lock:
+                segments, _info = self.model.transcribe(
+                    str(temporary_path),
+                    language=self.language,
+                    beam_size=5,
+                    vad_filter=True,
+                    vad_parameters={"min_silence_duration_ms": 300},
+                    condition_on_previous_text=False,
+                )
 
             text_parts: list[str] = []
             for segment in segments:
@@ -515,6 +681,12 @@ class Opnamesessie:
             if kind in ("set", "reset"):
                 if self._on_destination_command:
                     self._on_destination_command(kind, name)
+                self._event(
+                    CycleEventType.DESTINATION_COMMAND,
+                    transcript=transcript,
+                    destination_command=kind,
+                    destination_name=name,
+                )
                 if kind == "set":
                     print(i18n.t("destination.switched", name=name))
                 else:
@@ -528,15 +700,27 @@ class Opnamesessie:
             print(transcript)
             print("-" * 60)
 
+            active = self._get_active_destination() if self._get_active_destination else None
+            self._event(
+                CycleEventType.CYCLE_COMPLETED,
+                transcript=transcript,
+                destination=active,
+            )
+
             saved_path: Path | None = None
             if self._save_transcript is not None:
                 try:
                     saved_path = self._save_transcript(transcript)
                     print(i18n.t("rec.saved", path=saved_path))
+                    self._event(
+                        CycleEventType.TRANSCRIPT_SAVED,
+                        transcript=transcript,
+                        path=str(saved_path),
+                        destination=active,
+                    )
                 except OSError as exc:
                     print(i18n.t("rec.save_warn", error=exc))
 
-            active = self._get_active_destination() if self._get_active_destination else None
             deliver = resolve_auto_paste(active, dests, self.auto_paste)
 
             if not deliver:
@@ -566,6 +750,7 @@ class Opnamesessie:
 
         except Exception as exc:
             final_state = RecordingState.ERROR
+            error_message = str(exc)
             print()
             print(i18n.t("rec.transcribe_error"))
             print(i18n.t("rec.error", error=exc))
@@ -575,8 +760,8 @@ class Opnamesessie:
                 if final_state == RecordingState.ERROR:
                     if self._preserve_audio is not None:
                         try:
-                            kept = self._preserve_audio(temporary_path)
-                            print(i18n.t("rec.recovery_saved", path=kept))
+                            recovery_kept = self._preserve_audio(temporary_path)
+                            print(i18n.t("rec.recovery_saved", path=recovery_kept))
                         except OSError as exc:
                             print(i18n.t("rec.recovery_preserve_warn", error=exc))
                 elif self.delete_temp_audio:
@@ -589,4 +774,12 @@ class Opnamesessie:
                 self._processing = False
 
             self._notify(final_state)
+            if error_message is not None:
+                self._event(
+                    CycleEventType.CYCLE_ERROR,
+                    error=error_message,
+                    recovery_path=str(recovery_kept) if recovery_kept is not None else None,
+                )
+            self._event(CycleEventType.CYCLE_IDLE)
+            self._session_id = None
             self.on_ready()
