@@ -15,12 +15,24 @@ Lint/format: `ruff check` + `ruff format` (CI enforced). Zie CONTRIBUTING.
 
 ## Agent skills
 
+### Project skills
+
+In `.cursor/skills/` (deze repo):
+
+| Skill | Wanneer |
+|-------|---------|
+| `/update-documentation` | Docs sinds branch en/of volledige app-audit |
+| `/prepare-release` | Nieuwe versie: docs + `/code-review` + tag (na bevestiging) |
+
 ### Issue tracker
 
-Issues en specs worden lokaal opgeslagen als markdown onder `.scratch/<feature-slug>/`.
+Issues en specs: markdown onder `.scratch/<feature-slug>/`.
 Zie `docs/agents/issue-tracker.md`. Publieke issues: GitHub Issues.
+
+### Triage labels
+
+Zie `docs/agents/triage-labels.md` als die aanwezig is.
 
 ### Domain docs
 
-Single-context: één `CONTEXT.md` in de root plus `docs/adr/` voor beslissingen.
-Zie `docs/agents/domain.md`.
+Single-context: `CONTEXT.md` + `docs/adr/`. Zie `docs/agents/domain.md`.
