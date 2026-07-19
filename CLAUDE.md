@@ -21,7 +21,7 @@ In `.cursor/skills/` (deze repo):
 
 | Skill | Wanneer |
 |-------|---------|
-| `/update-documentation` | Docs sinds branch en/of volledige app-audit |
+| `/update-documentation` | Docs sinds branch / full-audit: help, locales, docstrings, markdown |
 | `/prepare-release` | Nieuwe versie: docs + `/code-review` + tag (na bevestiging) |
 
 ### Issue tracker

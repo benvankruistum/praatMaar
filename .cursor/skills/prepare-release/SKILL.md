@@ -14,7 +14,8 @@ Orchestrate a release on a **feature branch**, then optionally tag.
 
 Always chain:
 
-1. `/update-documentation` (branch-delta + full-audit)
+1. `/update-documentation` (branch-delta + full-audit — all surfaces:
+   help, locales, docstrings, markdown)
 2. `/code-review` (Matt Pocock — personal skill in `~/.cursor/skills/`)
 3. Version bump + CHANGELOG cut
 4. Tag **only** after explicit user OK
