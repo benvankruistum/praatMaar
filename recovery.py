@@ -128,3 +128,62 @@ def preserve_audio(wav_path: Path) -> Path:
     shutil.move(str(wav_path), str(target))
 
     return target
+
+
+def list_recovery_wavs() -> list[Path]:
+    """WAV’s in de recovery-map, nieuwste eerst. Ontbrekende map → []."""
+
+    directory = recovery_dir()
+    if not directory.is_dir():
+        return []
+    try:
+        files = [path for path in directory.glob("*.wav") if path.is_file()]
+    except OSError:
+        return []
+    files.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    return files
+
+
+def delete_recovery_file(path: Path) -> None:
+    """
+    Verwijdert één recovery-WAV. Weigert paden buiten `recovery_dir()`.
+    """
+
+    directory = recovery_dir().resolve()
+    resolved = path.resolve()
+    if resolved.parent != directory or resolved.suffix.lower() != ".wav":
+        raise ValueError(f"Geen recovery-bestand: {path}")
+    resolved.unlink()
+
+
+def delete_all_recovery_files() -> int:
+    """Verwijdert alle recovery-WAV’s. Geeft het aantal verwijderde bestanden."""
+
+    removed = 0
+    for path in list_recovery_wavs():
+        try:
+            delete_recovery_file(path)
+            removed += 1
+        except OSError:
+            pass
+    return removed
+
+
+def format_size(num_bytes: int) -> str:
+    """Menselijke bestandsgrootte voor UI-labels."""
+
+    if num_bytes < 1024:
+        return f"{num_bytes} B"
+    if num_bytes < 1024 * 1024:
+        return f"{num_bytes / 1024:.1f} KB"
+    return f"{num_bytes / (1024 * 1024):.1f} MB"
+
+
+def recovery_list_label(path: Path) -> str:
+    """Weergavetekst: bestandsnaam + grootte."""
+
+    try:
+        size = path.stat().st_size
+    except OSError:
+        size = 0
+    return f"{path.name}  ({format_size(size)})"

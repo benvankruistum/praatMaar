@@ -36,13 +36,15 @@ In de standaardmap houdt praatMaar automatisch alleen de nieuwste transcripts bi
 (retentie). In bestemmingsmappen gebeurt dat niet.
 
 Recovery-audiobestanden (bij mislukte opnames) blijven altijd in
-`%APPDATA%\praatMaar\recovery\`, ongeacht de actieve bestemming.
+`%APPDATA%\praatMaar\recovery\`, ongeacht de actieve bestemming. In **Instellingen**
+→ **Herstel-audio** kun je die bestanden bekijken, wissen of opnieuw laten
+transcriberen.
 
 ## Beheer via het systeemvak
 
 Rechtsklik op het praatMaar-icoon in het systeemvak:
 
-- **Instellingen** — microfoon, sneltoets, talen
+- **Instellingen** — microfoon, sneltoets, talen, herstel-audio
 - **Bestemmingen** — dialoog om namen en mappen toe te voegen, te wijzigen of te
   verwijderen, en de actieve bestemming in te stellen of te wissen. In die dialoog
   vind je ook knoppen om de transcriptmap of de actieve map te openen.

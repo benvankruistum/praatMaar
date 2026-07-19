@@ -130,6 +130,12 @@ def _run_settings_child(in_path: Path, out_path: Path) -> int:
             encoding="utf-8",
         )
 
+    def on_parent_retranscribe(path: Path) -> None:
+        out_path.write_text(
+            json.dumps({"_recovery_retranscribe": str(path)}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
     try:
         open_settings_dialog(
             root,
@@ -138,6 +144,7 @@ def _run_settings_child(in_path: Path, out_path: Path) -> int:
             set_capture=None,
             wait=True,
             use_tk_capture=True,
+            on_parent_retranscribe=on_parent_retranscribe,
         )
     finally:
         try:

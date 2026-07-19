@@ -42,6 +42,21 @@
   "settings.saved": "Einstellungen gespeichert.",
   "settings.model_restart_note": "Hinweis: Das neue Modell wirkt erst nach Neustart.",
 
+  "recovery.section": "Wiederherstellungs-Audio",
+  "recovery.empty": "Keine Wiederherstellungsaufnahmen.",
+  "recovery.open_folder": "Ordner öffnen",
+  "recovery.delete": "Löschen",
+  "recovery.delete_all": "Alles löschen",
+  "recovery.retranscribe": "Erneut transkribieren",
+  "recovery.select_first": "Wählen Sie zuerst eine Wiederherstellungsaufnahme.",
+  "recovery.confirm_delete": "Datei „{name}“ löschen?",
+  "recovery.confirm_delete_all": "Alle {count} Wiederherstellungsaufnahmen löschen?",
+  "recovery.ask_delete_after": "Transkription erfolgreich. Aufnahme „{name}“ löschen?",
+  "recovery.busy_status": "Transkription läuft…",
+  "recovery.busy": "Es läuft bereits eine Aufnahme oder Transkription. Bitte später erneut versuchen.",
+  "recovery.invalid_file": "Keine gültige Wiederherstellungs-Audiodatei.",
+  "recovery.unavailable": "Erneutes Transkribieren ist hier nicht verfügbar.",
+
   "key.space": "Leertaste",
 
   "ready": "Bereit. Drücken Sie {hotkey}, um eine Aufnahme zu starten.",

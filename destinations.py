@@ -1,5 +1,7 @@
 import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -37,9 +39,16 @@ def resolve_save_dir(
 
 
 def open_in_explorer(path: Path) -> None:
-    """Opent een map in Verkenner (Windows: os.startfile)."""
+    """Opent een map in de bestandsverkenner (Windows / macOS)."""
 
-    os.startfile(path)
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "win32":
+        os.startfile(path)  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.run(["open", str(path)], check=False)
+    else:
+        raise RuntimeError(f"Map openen niet ondersteund op {sys.platform!r}")
 
 
 def is_reserved_name(name: str) -> bool:

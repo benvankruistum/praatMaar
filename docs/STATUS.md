@@ -18,7 +18,8 @@ Laatst bijgewerkt: 2026-07-19.
 - Meertaligheid UI + spraak (`nl`/`en`/`de`)
 - Sticky bestemmingen (transcript naar gekozen map)
 - Laadscherm met model-downloadvoortgang (`splash.py`)
-- Herstel: transcripts + recovery-audio (`recovery.py`)
+- Herstel: transcripts + recovery-audio (`recovery.py`); beheer + opnieuw
+  transcriberen via sectie **Herstel-audio** in Instellingen
 - Platform-seam: paste, autostart, app-dir, single-instance (`host/`)
 - Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.1.0`)
 
@@ -40,8 +41,7 @@ permissies-doc. Eerste prioriteit: dicteercyclus + geen focus-diefstal + paste.
 ## Open / roadmap
 
 1. macOS runtime-verificatie + eventuele fixes na eerste Mac-run.
-2. Recovery-audio opruimen / UI.
-3. Release **v0.2.0**: versie sync + CHANGELOG-cut + Windows-tag (Setup/zip);
+2. Release **v0.2.0**: versie sync + CHANGELOG-cut + Windows-tag (Setup/zip);
    macOS `.app` handmatig of later via CI (signing later).
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
 

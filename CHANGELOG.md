@@ -19,6 +19,8 @@ Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
 - **Help:** tray-item met lokale gebruikersdocumentatie (`docs/user/help.*.md`,
   nl/en/de)
 - Transcriptmap en actieve bestemmingsmap openen vanuit de Bestemmingen-dialoog
+- **Herstel-audio:** sectie in Instellingen — lijst/wissen/map openen + opnieuw
+  transcriberen (met vraag om WAV te verwijderen na succes)
 - macOS-port: native NSPanel-indicator (`indicator._mac`, ADR-0002), tray op
   main thread, `host._mac`, TCC- en release-docs, PyObjC-dependency op Darwin
 - Ruff lint/format als CI-guardrail

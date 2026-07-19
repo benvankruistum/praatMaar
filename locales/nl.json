@@ -42,6 +42,21 @@
   "settings.saved": "Instellingen opgeslagen.",
   "settings.model_restart_note": "Let op: het gewijzigde model werkt pas na herstart.",
 
+  "recovery.section": "Herstel-audio",
+  "recovery.empty": "Geen herstel-opnames.",
+  "recovery.open_folder": "Map openen",
+  "recovery.delete": "Verwijderen",
+  "recovery.delete_all": "Alles wissen",
+  "recovery.retranscribe": "Opnieuw transcriberen",
+  "recovery.select_first": "Selecteer eerst een herstel-opname.",
+  "recovery.confirm_delete": "Bestand “{name}” verwijderen?",
+  "recovery.confirm_delete_all": "Alle {count} herstel-opnames wissen?",
+  "recovery.ask_delete_after": "Transcriptie gelukt. Opname “{name}” verwijderen?",
+  "recovery.busy_status": "Bezig met transcriberen…",
+  "recovery.busy": "Er loopt al een opname of transcriptie. Probeer het later opnieuw.",
+  "recovery.invalid_file": "Geen geldig herstel-audiobestand.",
+  "recovery.unavailable": "Opnieuw transcriberen is hier niet beschikbaar.",
+
   "key.space": "Spatie",
 
   "ready": "Gereed. Druk {hotkey} om een opname te starten.",

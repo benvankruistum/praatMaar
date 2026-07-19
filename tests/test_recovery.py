@@ -64,3 +64,71 @@ def test_preserve_audio_moves_wav(tmp_path: Path, monkeypatch) -> None:
     assert kept.suffix == ".wav"
     assert kept.parent == tmp_path / "recovery"
     assert not source.exists()
+
+
+def test_list_recovery_wavs_newest_first(tmp_path: Path, monkeypatch) -> None:
+    _patch_dirs(tmp_path, monkeypatch)
+    directory = tmp_path / "recovery"
+    directory.mkdir()
+    older = directory / "2026-01-01_120000.wav"
+    newer = directory / "2026-01-02_120000.wav"
+    older.write_bytes(b"old")
+    newer.write_bytes(b"new")
+    import os
+
+    os.utime(older, (1_700_000_000, 1_700_000_000))
+    os.utime(newer, (1_700_000_100, 1_700_000_100))
+    listed = recovery.list_recovery_wavs()
+    assert [p.name for p in listed] == ["2026-01-02_120000.wav", "2026-01-01_120000.wav"]
+
+
+def test_list_recovery_wavs_empty_dir(tmp_path: Path, monkeypatch) -> None:
+    _patch_dirs(tmp_path, monkeypatch)
+    assert recovery.list_recovery_wavs() == []
+
+
+def test_delete_recovery_file(tmp_path: Path, monkeypatch) -> None:
+    _patch_dirs(tmp_path, monkeypatch)
+    directory = tmp_path / "recovery"
+    directory.mkdir()
+    target = directory / "2026-01-01_120000.wav"
+    target.write_bytes(b"x")
+    recovery.delete_recovery_file(target)
+    assert not target.exists()
+
+
+def test_delete_recovery_file_rejects_outside(tmp_path: Path, monkeypatch) -> None:
+    _patch_dirs(tmp_path, monkeypatch)
+    (tmp_path / "recovery").mkdir()
+    outsider = tmp_path / "other.wav"
+    outsider.write_bytes(b"x")
+    try:
+        recovery.delete_recovery_file(outsider)
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
+    assert outsider.exists()
+
+
+def test_delete_all_recovery_files(tmp_path: Path, monkeypatch) -> None:
+    _patch_dirs(tmp_path, monkeypatch)
+    directory = tmp_path / "recovery"
+    directory.mkdir()
+    (directory / "a.wav").write_bytes(b"1")
+    (directory / "b.wav").write_bytes(b"2")
+    (directory / "note.txt").write_text("x", encoding="utf-8")
+    assert recovery.delete_all_recovery_files() == 2
+    assert list(directory.glob("*.wav")) == []
+    assert (directory / "note.txt").exists()
+
+
+def test_format_size_and_label(tmp_path: Path, monkeypatch) -> None:
+    _patch_dirs(tmp_path, monkeypatch)
+    assert recovery.format_size(500) == "500 B"
+    assert recovery.format_size(2048) == "2.0 KB"
+    assert recovery.format_size(2 * 1024 * 1024) == "2.0 MB"
+    directory = tmp_path / "recovery"
+    directory.mkdir()
+    path = directory / "2026-01-01_120000.wav"
+    path.write_bytes(b"abcd")
+    assert recovery.recovery_list_label(path) == "2026-01-01_120000.wav  (4 B)"
