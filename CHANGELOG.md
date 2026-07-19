@@ -24,6 +24,8 @@ Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
 - macOS-port: native NSPanel-indicator (`indicator._mac`, ADR-0002), tray op
   main thread, `host._mac`, TCC- en release-docs, PyObjC-dependency op Darwin
 - Ruff lint/format als CI-guardrail
+- Cursor project-skills: `/update-documentation` en `/prepare-release`
+  (`.cursor/skills/`; zie `CLAUDE.md`)
 
 ### Fixed
 
