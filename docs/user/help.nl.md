@@ -52,8 +52,27 @@ Rechtsklik op het praatMaar-icoon in het systeemvak:
 - **Bestemmingen** — dialoog om namen en mappen toe te voegen, te wijzigen of te
   verwijderen, en de actieve bestemming in te stellen of te wissen. In die dialoog
   vind je ook knoppen om de transcriptmap of de actieve map te openen.
+- **Modules** — uitbreidingen en incrementele transcriptie
 - **Help** — deze gebruikershandleiding
 - **Afsluiten**
+
+## Modules en externe tools
+
+Via **Modules** in het systeemvak kun je uitbreidingen aan- of uitzetten en
+**incrementele transcriptie** inschakelen. Met incrementele transcriptie draait
+Whisper al tijdens je opname op de achtergrond; modules en externe tools kunnen
+tussentijdse tekst ontvangen vóór je stopt.
+
+**Event-journal:** elke dicteercyclus wordt als JSON-regels weggeschreven in
+`%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). Externe
+programma's kunnen dat bestand volgen zonder praatMaar aan te passen. Elk event
+heeft een `session_id`, `type` (bijv. `transcript.saved`) en metadata.
+
+**Inbox-spiegel** (standaard aan): kopieert elk opgeslagen transcript naar
+`%APPDATA%\praatMaar\inbox\` — handig als vaste “drop zone” voor scripts.
+
+Herstel-transcriptie (Instellingen → Herstel-audio) emitteert dezelfde soort
+events met `source: "recovery"`.
 
 ## Risico's en tips
 

@@ -3,7 +3,7 @@ Systeemvak-/menubalk-icoon voor praatMaar (pystray).
 
 Toont een microfoon-icoon dat per dicteertoestand kleurt (donker = gereed,
 rood = opname, amber = transcriberen), met een menu (Instellingen,
-Bestemmingen, Help, Afsluiten).
+Bestemmingen, Modules, Help, Afsluiten).
 
 Threading:
 - **Windows:** `Icon.run_detached()` op een eigen thread; tkinter houdt de
@@ -84,11 +84,13 @@ class TrayIcon:
         on_quit: Callable[[], None],
         on_settings: Callable[[], None],
         on_destinations: Callable[[], None],
+        on_modules: Callable[[], None],
         on_help: Callable[[], None],
     ) -> None:
         self._on_quit = on_quit
         self._on_settings = on_settings
         self._on_destinations = on_destinations
+        self._on_modules = on_modules
         self._on_help = on_help
         self._state = RecordingState.IDLE
         self._running_main = False
@@ -106,6 +108,7 @@ class TrayIcon:
         return Menu(
             MenuItem(i18n.t("tray.settings"), self._handle_settings, default=True),
             MenuItem(i18n.t("tray.destinations"), self._handle_destinations),
+            MenuItem(i18n.t("tray.modules"), self._handle_modules),
             MenuItem(i18n.t("tray.help"), self._handle_help),
             Menu.SEPARATOR,
             MenuItem(i18n.t("tray.quit"), self._handle_quit),
@@ -132,6 +135,9 @@ class TrayIcon:
 
     def _handle_destinations(self, icon: pystray.Icon, item: MenuItem) -> None:
         self._on_destinations()
+
+    def _handle_modules(self, icon: pystray.Icon, item: MenuItem) -> None:
+        self._on_modules()
 
     def _handle_help(self, icon: pystray.Icon, item: MenuItem) -> None:
         self._on_help()

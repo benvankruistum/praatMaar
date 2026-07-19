@@ -3,8 +3,8 @@ Standalone Tk-UI in een apart proces + launcher voor de parent.
 
 Op macOS crasht het sluiten van een Tk-`Toplevel` die in dezelfde Cocoa-
 runloop als pystray/NSApp hangt (`PyEval_RestoreThread` → SIGABRT). Daarom
-draaien Instellingen, Bestemmingen en Help daar in een apart proces met een
-echte `mainloop`.
+draaien Instellingen, Bestemmingen, Modules en Help daar in een apart proces
+met een echte `mainloop`.
 
 Sneltoets-opname (Instellingen) gebeurt via Tk KeyPress/KeyRelease
 (`use_tk_capture`) — dat herkent Windows-/PC-toetsenborden beter dan alleen
@@ -13,6 +13,7 @@ NSEvent-keycodes.
 Parent:
   ``run_settings_subprocess(current)`` → dict of None
   ``run_destinations_subprocess(current)`` → dict of None
+  ``run_modules_subprocess(current)`` → dict of None
   ``run_help_subprocess(current)`` → None (geen resultaat)
 
 Kind: ``python settings_process.py --praatmaar-<kind>-ui <in.json> [out.json]``
@@ -29,11 +30,12 @@ import tempfile
 from pathlib import Path
 from typing import Any, Literal
 
-DialogKind = Literal["settings", "destinations", "help"]
+DialogKind = Literal["settings", "destinations", "modules", "help"]
 
 _FLAG = {
     "settings": "--praatmaar-settings-ui",
     "destinations": "--praatmaar-destinations-ui",
+    "modules": "--praatmaar-modules-ui",
     "help": "--praatmaar-help-ui",
 }
 
@@ -97,6 +99,12 @@ def run_destinations_subprocess(
     """Open Bestemmingen in een apart proces; return nieuwe settings of None."""
 
     return _run_dialog_subprocess("destinations", current, expect_result=True)
+
+
+def run_modules_subprocess(current: dict[str, Any]) -> dict[str, Any] | None:
+    """Open Modules in een apart proces; return nieuwe settings of None."""
+
+    return _run_dialog_subprocess("modules", current, expect_result=True)
 
 
 def run_help_subprocess(current: dict[str, Any] | None = None) -> None:
@@ -182,6 +190,34 @@ def _run_destinations_child(in_path: Path, out_path: Path) -> int:
     return 0
 
 
+def _run_modules_child(in_path: Path, out_path: Path) -> int:
+    import tkinter as tk
+
+    from modules_dialog import open_modules_dialog
+
+    current = json.loads(in_path.read_text(encoding="utf-8"))
+    _apply_ui_language(current)
+
+    root = tk.Tk()
+    root.withdraw()
+    root.title("praatMaar")
+
+    def on_apply(new_settings: dict[str, Any]) -> None:
+        out_path.write_text(
+            json.dumps(new_settings, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    try:
+        open_modules_dialog(root, current, on_apply, wait=True)
+    finally:
+        try:
+            root.destroy()
+        except Exception:
+            pass
+    return 0
+
+
 def _run_help_child(in_path: Path) -> int:
     import tkinter as tk
 
@@ -233,6 +269,15 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         return _run_destinations_child(Path(rest[0]), Path(rest[1]))
+
+    if flag == "--praatmaar-modules-ui":
+        if len(rest) != 2:
+            print(
+                "Gebruik: settings_process.py --praatmaar-modules-ui <in.json> <out.json>",
+                file=sys.stderr,
+            )
+            return 2
+        return _run_modules_child(Path(rest[0]), Path(rest[1]))
 
     if flag == "--praatmaar-help-ui":
         if len(rest) != 1:

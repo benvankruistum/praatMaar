@@ -14,13 +14,16 @@ Laatst bijgewerkt: 2026-07-19.
 
 - Dicteercyclus (opname → Faster-Whisper → klembord/plakken)
 - Status-pill zonder focus te stelen (`indicator._win`)
-- Systeemvak: Instellingen, Bestemmingen, Help (`tray.py`, dialogen)
+- Systeemvak: Instellingen, Bestemmingen, Modules, Help (`tray.py`, dialogen)
 - Meertaligheid UI + spraak (`nl`/`en`/`de`)
 - Sticky bestemmingen (transcript naar gekozen map)
 - Laadscherm met model-downloadvoortgang (`splash.py`)
 - Herstel: transcripts + recovery-audio (`recovery.py`); beheer + opnieuw
   transcriberen via sectie **Herstel-audio** in Instellingen
 - Platform-seam: paste, autostart, app-dir, single-instance (`host/`)
+- **Modules:** in-process uitbreidingen + event-journal (`modules/`, tray **Modules**);
+  inbox-spiegel; optionele incrementele transcriptie tijdens opname
+  ([ADR-0003](adr/0003-hybrid-module-system.md))
 - Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.1.0`)
 
 ## macOS
@@ -31,7 +34,8 @@ Geïmplementeerd én runtime-geverifieerd op Apple Silicon (macOS 26.x):
 - Tray op main thread (`TrayIcon.owns_main_thread` + `run()`)
 - Native overlay-indicator (`indicator._mac`, NSPanel / ADR-0002)
 - UI-polish (fonts, Control/Option/Command-labels, settings-teksten)
-- Instellingen in apart Tk-proces (voorkomt Cocoa/Tk SIGABRT bij sluiten)
+- Instellingen in apart Tk-proces (voorkomt Cocoa/Tk SIGABRT bij sluiten); idem
+  Bestemmingen, Modules en Help
 - TCC: Microfoon + Toegankelijkheid verplicht —
   [macos-permissions.md](macos-permissions.md)
 - Build-docs: [release-macos.md](release-macos.md), `packaging/macos/entitlements.plist`

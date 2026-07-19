@@ -51,8 +51,27 @@ Right-click the praatMaar icon in the system tray:
 - **Destinations** — dialog to add, edit, or remove names and folders, and set or
   clear the active destination. In that dialog you also find buttons to open the
   transcript folder or the active folder.
+- **Modules** — enable or disable extensions and incremental transcription
 - **Help** — this user guide
 - **Quit**
+
+## Modules and external tools
+
+From **Modules** in the system tray you can turn extensions on or off and enable
+**incremental transcription**. With incremental transcription, Whisper runs in the
+background while you record; modules and external tools can receive interim text
+before you stop.
+
+**Event journal:** every dictation cycle is appended as JSON lines to
+`%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). External
+programs can watch that file without modifying praatMaar. Each event has a
+`session_id`, `type` (e.g. `transcript.saved`), and metadata.
+
+**Inbox mirror** (on by default): copies each saved transcript to
+`%APPDATA%\praatMaar\inbox\` — a fixed drop zone for scripts.
+
+Recovery re-transcription (Settings → Recovery audio) emits the same kind of
+events with `source: "recovery"`.
 
 ## Risks and tips
 

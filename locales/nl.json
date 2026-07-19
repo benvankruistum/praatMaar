@@ -1,6 +1,7 @@
 {
   "tray.settings": "Instellingen",
   "tray.destinations": "Bestemmingen",
+  "tray.modules": "Modules",
   "tray.help": "Help",
   "tray.quit": "Afsluiten",
   "tray.tooltip.idle": "praatMaar — gereed",
@@ -168,6 +169,16 @@
   "destinations.error.reserved_name": "Deze naam is gereserveerd voor de spraakopdracht \"standaard\".",
   "destinations.error.name_collision": "Deze naam botst met \"{existing}\" (zelfde spraakopdracht).",
   "destinations.error.select_first": "Selecteer eerst een bestemming in de lijst.",
+
+  "modules.title": "praatMaar — Modules",
+  "modules.intro": "Schakel uitbreidingen in of uit. Alle dicteercyclus-events worden ook weggeschreven naar het event-journal (events/events.jsonl) voor externe tools.",
+  "modules.incremental": "Incrementele transcriptie tijdens opname (tussentijdse partial-events)",
+  "modules.list_heading": "Ingebouwde modules",
+  "modules.enabled": "Ingeschakeld",
+  "modules.cancel": "Annuleren",
+  "modules.save": "Opslaan",
+  "modules.inbox_mirror.name": "Inbox-spiegel",
+  "modules.inbox_mirror.description": "Kopieert elk opgeslagen transcript naar de inbox-map voor externe verwerking.",
 
   "help.title": "praatMaar — Help",
   "help.close": "Sluiten",

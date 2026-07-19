@@ -2,12 +2,18 @@
 
 Issues and specs (you may know a spec as a PRD) for this repo live as markdown files in `.scratch/`.
 
+Engineering skills (`to-tickets`, `to-spec`, `wayfinder`, …) read from and write to **this local tracker** by default.
+
+## Public issues (GitHub)
+
+The repo is on GitHub (`benvankruistum/praatMaar`). **GitHub Issues** exist for public bug reports and community discussion. Agent skills do **not** automatically sync with GitHub — use `gh issue …` only when a workflow explicitly targets GitHub, or when the user points at an issue number.
+
 ## Conventions
 
 - One feature per directory: `.scratch/<feature-slug>/`
 - The spec is `.scratch/<feature-slug>/spec.md`
 - Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` — never a single combined tickets file
-- Triage state is recorded as a `Status:` line near the top of each issue file
+- Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 
 ## When a skill says "publish to the issue tracker"

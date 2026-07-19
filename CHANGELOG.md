@@ -21,6 +21,8 @@ Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
 - Transcriptmap en actieve bestemmingsmap openen vanuit de Bestemmingen-dialoog
 - **Herstel-audio:** sectie in Instellingen — lijst/wissen/map openen + opnieuw
   transcriberen (met vraag om WAV te verwijderen na succes)
+- **Modules:** tray-dialoog (aan/uit), event-journal (`events/events.jsonl`),
+  inbox-spiegel, incrementele transcriptie (`incremental_transcription`)
 - Per bestemming optioneel automatisch plakken (`auto_paste`, default uit)
 - macOS-port: native NSPanel-indicator (`indicator._mac`, ADR-0002), tray op
   main thread, `host._mac`, TCC- en release-docs, PyObjC-dependency op Darwin

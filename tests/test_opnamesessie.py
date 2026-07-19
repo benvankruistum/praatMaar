@@ -497,3 +497,22 @@ def test_reset_command_skips_paste(
     assert clipboard == []
     assert command_calls == [("reset", None)]
     assert states[-1] == RecordingState.IDLE
+
+
+def test_successful_cycle_emits_module_events(session: Opnamesessie, sd: FakeSoundDevice) -> None:
+    from modules._contract import CycleEventType
+
+    events: list[str] = []
+
+    def capture(event) -> None:
+        events.append(str(event.type))
+
+    session._emit_event = capture  # type: ignore[method-assign]
+    _record_short_audio(session, sd)
+
+    assert events[0] == CycleEventType.CYCLE_STARTED
+    assert CycleEventType.CYCLE_TRANSCRIBING in events
+    assert CycleEventType.CYCLE_COMPLETED in events
+    assert CycleEventType.TRANSCRIPT_SAVED in events
+    assert events[-1] == CycleEventType.CYCLE_IDLE
+    assert session._session_id is None

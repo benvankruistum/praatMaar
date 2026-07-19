@@ -4,6 +4,7 @@ import signal
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,14 @@ import recovery
 import win_identity
 from indicator import (
     RecordingIndicator,
+)
+from modules import (
+    CycleEvent,
+    CycleEventType,
+    ModuleBus,
+    load_enabled_modules,
+    modules_config_for_settings,
+    sanitize_modules_config,
 )
 from opnamesessie import Opnamesessie
 from splash import Splash
@@ -142,6 +151,22 @@ else:
         ACTIVE_DESTINATION = _active_name
     else:
         ACTIVE_DESTINATION = None
+
+MODULES_CONFIG = sanitize_modules_config(_user_config.get("modules"))
+INCREMENTAL_TRANSCRIPTION = bool(_user_config.get("incremental_transcription", False))
+
+module_bus = ModuleBus()
+module_bus.set_modules(load_enabled_modules(MODULES_CONFIG))
+
+
+def _emit_cycle_event(event: CycleEvent) -> None:
+    module_bus.emit(event)
+
+
+def _reload_modules() -> None:
+    """Herlaadt enabled modules na een instellingenwijziging."""
+
+    module_bus.set_modules(load_enabled_modules(MODULES_CONFIG))
 
 
 # =========================================================
@@ -479,6 +504,8 @@ def _user_config_dict() -> dict[str, Any]:
         "ui_language": i18n.ui_language(),
         "destinations": DESTINATIONS,
         "active_destination": ACTIVE_DESTINATION,
+        "incremental_transcription": INCREMENTAL_TRANSCRIPTION,
+        "modules": modules_config_for_settings(MODULES_CONFIG),
     }
 
 
@@ -511,6 +538,18 @@ def retranscribe_recovery_wav(path: Path) -> str:
     if resolved.parent != recovery.recovery_dir().resolve():
         raise ValueError(i18n.t("recovery.invalid_file"))
 
+    session_id = str(uuid.uuid4())
+    module_bus.emit(
+        CycleEvent(
+            type=CycleEventType.CYCLE_TRANSCRIBING,
+            session_id=session_id,
+            language=LANGUAGE,
+            mode=MODE,
+            recovery_path=str(resolved),
+            source="recovery",
+        )
+    )
+
     segments, _info = model.transcribe(
         str(resolved),
         language=LANGUAGE,
@@ -526,12 +565,59 @@ def retranscribe_recovery_wav(path: Path) -> str:
             text_parts.append(text)
     transcript = " ".join(text_parts).strip()
     if not transcript:
+        module_bus.emit(
+            CycleEvent(
+                type=CycleEventType.CYCLE_IDLE,
+                session_id=session_id,
+                source="recovery",
+            )
+        )
         raise RuntimeError(i18n.t("rec.no_speech"))
 
+    module_bus.emit(
+        CycleEvent(
+            type=CycleEventType.CYCLE_COMPLETED,
+            session_id=session_id,
+            transcript=transcript,
+            destination=ACTIVE_DESTINATION,
+            language=LANGUAGE,
+            mode=MODE,
+            recovery_path=str(resolved),
+            source="recovery",
+        )
+    )
+
+    saved_path: Path | None = None
     try:
-        _save_transcript_routed(transcript)
+        saved_path = _save_transcript_routed(transcript)
     except OSError as exc:
         print(i18n.t("rec.save_warn", error=exc))
+
+    if saved_path is not None:
+        module_bus.emit(
+            CycleEvent(
+                type=CycleEventType.TRANSCRIPT_SAVED,
+                session_id=session_id,
+                transcript=transcript,
+                path=str(saved_path),
+                destination=ACTIVE_DESTINATION,
+                language=LANGUAGE,
+                mode=MODE,
+                recovery_path=str(resolved),
+                source="recovery",
+            )
+        )
+
+    module_bus.emit(
+        CycleEvent(
+            type=CycleEventType.RECOVERY_RETRANSCRIBED,
+            session_id=session_id,
+            transcript=transcript,
+            path=str(saved_path) if saved_path is not None else None,
+            recovery_path=str(resolved),
+            source="recovery",
+        )
+    )
 
     try:
         _copy_to_clipboard(transcript)
@@ -546,6 +632,14 @@ def retranscribe_recovery_wav(path: Path) -> str:
         except Exception as exc:
             print(i18n.t("rec.paste_failed"))
             print(i18n.t("rec.error", error=exc))
+
+    module_bus.emit(
+        CycleEvent(
+            type=CycleEventType.CYCLE_IDLE,
+            session_id=session_id,
+            source="recovery",
+        )
+    )
 
     return transcript
 
@@ -648,6 +742,8 @@ def _build_session() -> Opnamesessie:
         delete_temp_audio=DELETE_TEMP_AUDIO,
         mode=MODE,
         warm_microphone=WARM_MICROPHONE,
+        incremental_transcription=INCREMENTAL_TRANSCRIPTION,
+        emit_event=_emit_cycle_event,
         wait_until_modifiers_clear=wait_until_modifier_keys_released,
         on_ready=print_ready_message,
         copy_text=_copy_to_clipboard,
@@ -815,6 +911,8 @@ def current_settings() -> dict[str, Any]:
         "autostart": host.is_autostart_enabled(),
         "destinations": list(DESTINATIONS),
         "active_destination": ACTIVE_DESTINATION,
+        "incremental_transcription": INCREMENTAL_TRANSCRIPTION,
+        "modules": modules_config_for_settings(MODULES_CONFIG),
     }
 
 
@@ -832,7 +930,7 @@ def apply_settings(
 
     global MODEL_NAME, MICROPHONE_DEVICE, AUTO_PASTE, INDICATOR_POSITION
     global MODE, HOTKEY_TOKENS, LANGUAGE, WARM_MICROPHONE
-    global DESTINATIONS, ACTIVE_DESTINATION
+    global DESTINATIONS, ACTIVE_DESTINATION, MODULES_CONFIG, INCREMENTAL_TRANSCRIPTION
 
     new_model = str(new_settings.get("model", MODEL_NAME))
     model_changed = new_model != MODEL_NAME
@@ -879,6 +977,12 @@ def apply_settings(
             else:
                 ACTIVE_DESTINATION = None
 
+    if "incremental_transcription" in new_settings:
+        INCREMENTAL_TRANSCRIPTION = bool(new_settings["incremental_transcription"])
+    if "modules" in new_settings:
+        MODULES_CONFIG = sanitize_modules_config(new_settings["modules"])
+        _reload_modules()
+
     # Houd de Opnamesessie synchroon met live-instellingen.
     old_mic = session.microphone_device
     old_warm = session.warm_microphone
@@ -887,6 +991,7 @@ def apply_settings(
     session.mode = MODE
     session.language = LANGUAGE
     session.warm_microphone = WARM_MICROPHONE
+    session.incremental_transcription = INCREMENTAL_TRANSCRIPTION
     if old_mic != MICROPHONE_DEVICE:
         session.refresh_input_device()
     elif old_warm and not WARM_MICROPHONE:
@@ -1047,6 +1152,32 @@ def main() -> None:
             )
         )
 
+    def open_modules() -> None:
+        if sys.platform == "darwin":
+            from settings_process import run_modules_subprocess
+
+            def _mac_modules() -> None:
+                set_capture(lambda *_: None)
+                try:
+                    new = run_modules_subprocess(current_settings())
+                finally:
+                    set_capture(None)
+                if new is not None:
+                    indicator.call_on_main(lambda: apply_settings(new, indicator))
+
+            threading.Thread(target=_mac_modules, daemon=True).start()
+            return
+
+        from modules_dialog import open_modules_dialog
+
+        indicator.call_on_main(
+            lambda: open_modules_dialog(
+                indicator.root,
+                current_settings(),
+                lambda new: apply_settings(new, indicator),
+            )
+        )
+
     def open_help() -> None:
         if sys.platform == "darwin":
             from settings_process import run_help_subprocess
@@ -1073,6 +1204,7 @@ def main() -> None:
         on_quit=request_shutdown,
         on_settings=open_settings,
         on_destinations=open_destinations,
+        on_modules=open_modules,
         on_help=open_help,
     )
     _tray = tray
