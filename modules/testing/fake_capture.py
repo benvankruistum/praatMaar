@@ -26,9 +26,10 @@ class FakeContinuousCapture:
         self._status: dict[str, CaptureStatus] = {}
         self._elapsed_ms: dict[str, int] = defaultdict(int)
         self._chunk_counter: dict[str, int] = defaultdict(int)
+        self.start_configs: list[dict[str, Any]] = []
 
     def start_session(self, config: dict[str, Any] | None = None) -> CaptureSession:
-        del config
+        self.start_configs.append(dict(config or {}))
         session_id = str(uuid.uuid4())
         self._status[session_id] = CaptureStatus.ACTIVE
         self._emit(session_id, CaptureStatusChanged(session_id, CaptureStatus.ACTIVE))

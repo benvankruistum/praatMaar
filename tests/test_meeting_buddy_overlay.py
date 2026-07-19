@@ -1,5 +1,6 @@
-from modules._builtin.meeting_buddy.hints import Hint, HintStatus, HintType
+from modules._builtin.meeting_buddy.hints import HintType
 from modules._builtin.meeting_buddy.overlay import format_elapsed, pick_emphasis
+from modules._builtin.meeting_buddy.state import Hint, HintStatus
 
 
 def _hint(hint_id: str, priority: int, *, status: HintStatus = HintStatus.ACTIVE) -> Hint:

@@ -10,7 +10,7 @@ from uuid import uuid4
 from modules.capabilities.speech_to_text import TranscriptDelta
 
 from .config import MeetingBuddyConfig
-from .state import MeetingState, QuestionStatus, TopicStatus
+from .state import ActionItemStatus, MeetingState, QuestionStatus, TopicStatus
 from .state_service import StateProposal
 
 _STOPWORDS = {
@@ -61,7 +61,9 @@ class HeuristicsEngine:
 
         proposals = self._topic_proposals(delta, state, config, now_s, window_text)
         proposals.extend(self._question_proposals(delta, state, config, now_s, normalized))
-        if "?" in delta.text or _QUESTION_PATTERN.search(normalized):
+        if (
+            "?" in delta.text or _QUESTION_PATTERN.search(normalized)
+        ) and not self._has_similar_open_question(state, normalized):
             proposals.append(
                 self._proposal(
                     "add_question",
@@ -71,7 +73,9 @@ class HeuristicsEngine:
                     {"text": delta.text.strip(), "created_at": now_s},
                 )
             )
-        if _ACTION_PATTERN.search(normalized):
+        if _ACTION_PATTERN.search(normalized) and not self._has_similar_candidate_action(
+            state, normalized
+        ):
             proposals.append(
                 self._proposal(
                     "add_action",
@@ -86,6 +90,22 @@ class HeuristicsEngine:
                 )
             )
         return proposals
+
+    @staticmethod
+    def _has_similar_open_question(state: MeetingState, normalized: str) -> bool:
+        return any(
+            question.status == QuestionStatus.OPEN
+            and _is_highly_similar(_normalize(question.text), normalized)
+            for question in state.questions
+        )
+
+    @staticmethod
+    def _has_similar_candidate_action(state: MeetingState, normalized: str) -> bool:
+        return any(
+            action.status == ActionItemStatus.CANDIDATE
+            and _is_highly_similar(_normalize(action.description), normalized)
+            for action in state.action_items
+        )
 
     def _question_proposals(
         self,
@@ -105,6 +125,7 @@ class HeuristicsEngine:
                 question.status != QuestionStatus.OPEN
                 or question.source_delta_id == delta_id
                 or age > config.topic_match_window_s
+                or _normalize(question.text) == normalized
                 or not _has_sufficient_overlap(question_tokens, delta_tokens, config)
             ):
                 continue
@@ -188,6 +209,21 @@ def _normalize(text: str) -> str:
 
 def _tokens(text: str) -> tuple[str, ...]:
     return tuple(token for token in text.split() if token not in _STOPWORDS)
+
+
+def _is_highly_similar(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    left_tokens = set(_tokens(left))
+    right_tokens = set(_tokens(right))
+    if not left_tokens or not right_tokens:
+        return False
+    matched = left_tokens & right_tokens
+    return (
+        len(matched) >= 3
+        and len(matched) / min(len(left_tokens), len(right_tokens)) >= 0.8
+        and len(matched) / len(left_tokens | right_tokens) >= 0.6
+    )
 
 
 def _has_sufficient_overlap(

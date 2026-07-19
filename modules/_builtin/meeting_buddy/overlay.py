@@ -42,6 +42,7 @@ class MeetingBuddyOverlay:
         elapsed_seconds: Callable[[], float],
         on_dismiss: Callable[[str], None],
         on_confirm: Callable[[str], None],
+        on_reconnect: Callable[[], None],
         parent: Any = None,
     ) -> None:
         import tkinter as tk
@@ -52,6 +53,7 @@ class MeetingBuddyOverlay:
         self._elapsed_seconds = elapsed_seconds
         self._on_dismiss = on_dismiss
         self._on_confirm = on_confirm
+        self._on_reconnect = on_reconnect
         self._hint_widgets: list[Any] = []
 
         self.window = tk.Toplevel(parent)
@@ -97,6 +99,11 @@ class MeetingBuddyOverlay:
             foreground="#536674",
             font=("Segoe UI", 8),
         ).pack(fill="x")
+        self._reconnect_button = ttk.Button(
+            self.window,
+            text=i18n.t("modules.meeting_buddy.overlay.reconnect"),
+            command=self._on_reconnect,
+        )
 
         self._tick()
 
@@ -123,6 +130,11 @@ class MeetingBuddyOverlay:
                 )
             )
         )
+        if _enum_value(capture_status) == "error":
+            if not self._reconnect_button.winfo_manager():
+                self._reconnect_button.pack(fill="x", pady=(7, 0))
+        else:
+            self._reconnect_button.pack_forget()
         if self.window.state() == "withdrawn":
             self.window.deiconify()
             self._place_top_right()

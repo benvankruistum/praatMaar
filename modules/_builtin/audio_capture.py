@@ -177,9 +177,10 @@ class AudioCaptureEngine:
                 samplerate=SAMPLE_RATE,
                 channels=CHANNELS,
                 dtype="float32",
-                callback=lambda data, frames, time_info, status: self._audio_callback(
+                callback=lambda data, frames, time_info, status: self._stream_callback(
                     state, data, frames, time_info, status
                 ),
+                finished_callback=lambda: self._stream_finished(state),
                 device=options.get("device"),
                 latency="low",
             )
@@ -284,6 +285,32 @@ class AudioCaptureEngine:
         start_ms = round(state.captured_samples * 1000 / SAMPLE_RATE)
         state.captured_samples += int(samples.size)
         state.buffer.write(samples, start_ms=start_ms)
+
+    def _stream_callback(
+        self,
+        state: _CaptureState,
+        data: Any,
+        frames: int,
+        time_info: Any,
+        status: Any,
+    ) -> None:
+        try:
+            self._audio_callback(state, data, frames, time_info, status)
+        except Exception as exc:
+            log.exception("Microfooncapture faalde voor sessie %s", state.session_id)
+            self._fail_capture(state, f"Microphone capture failed: {exc}")
+
+    def _stream_finished(self, state: _CaptureState) -> None:
+        if not state.stop_event.is_set():
+            self._fail_capture(state, "Microphone device disconnected.")
+
+    def _fail_capture(self, state: _CaptureState, message: str) -> None:
+        with self._lock:
+            if state.status in {CaptureStatus.ERROR, CaptureStatus.STOPPED}:
+                return
+            state.stop_event.set()
+        self._set_status(state, CaptureStatus.ERROR, message)
+        self._publish(state, CaptureStopped(session_id=state.session_id, reason="error"))
 
     def _worker(self, state: _CaptureState) -> None:
         sample_count = SAMPLE_RATE * CHUNK_DURATION_MS // 1000

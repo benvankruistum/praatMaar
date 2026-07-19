@@ -74,6 +74,23 @@ def test_start_wires_capture_and_stt_and_updates_state(tmp_path: Path) -> None:
     assert orchestrator.binding is None
 
 
+def test_start_passes_backpressure_config_to_capture_and_stt(tmp_path: Path) -> None:
+    capabilities, capture, stt = _capabilities()
+    orchestrator = MeetingOrchestrator(
+        capabilities=capabilities,
+        app_dir=tmp_path,
+    )
+    orchestrator._config = orchestrator._config.replace(
+        max_audio_buffer_duration_s=12.5,
+        max_whisper_queue_duration_s=4.25,
+    )
+
+    orchestrator.start()
+
+    assert capture.start_configs == [{"max_audio_buffer_duration_s": 12.5}]
+    assert stt.start_configs == [{"max_whisper_queue_duration_s": 4.25}]
+
+
 def test_start_failure_cleans_up_started_sessions_and_state(tmp_path: Path) -> None:
     capabilities, capture, stt = _capabilities()
 
@@ -206,6 +223,7 @@ def test_overlay_actions_apply_dismiss_and_confirm_proposals(tmp_path: Path) -> 
     assert orchestrator.state.action_items[0].status == ActionItemStatus.CONFIRMED
     assert all(hint.status == HintStatus.DISMISSED for hint in orchestrator.state.emitted_hints)
     assert "action_confirmed" in observer.names
+    assert observer.names.count("hint_dismissed") == 2
 
 
 def test_status_events_refresh_ui_and_expose_current_status(tmp_path: Path) -> None:
@@ -231,6 +249,41 @@ def test_status_events_refresh_ui_and_expose_current_status(tmp_path: Path) -> N
     assert len(updates) == previous_updates + 2
     assert orchestrator.capture_status == CaptureStatus.ERROR
     assert orchestrator.transcription_status == TranscriptionStatus.DELAYED
+
+
+def test_reconnect_capture_rebinds_sessions_and_logs_restart(tmp_path: Path) -> None:
+    capabilities, capture, stt = _capabilities()
+    observer = RecordingObserver()
+    updates = []
+    orchestrator = MeetingOrchestrator(
+        capabilities=capabilities,
+        app_dir=tmp_path,
+        observer=observer,
+        on_ui_update=updates.append,
+    )
+    orchestrator.start()
+    assert orchestrator.binding is not None
+    old_binding = orchestrator.binding
+
+    orchestrator.on_capture_status(
+        CaptureStatusChanged(
+            old_binding.capture_session_id,
+            CaptureStatus.ERROR,
+            "device disappeared",
+        )
+    )
+    orchestrator.reconnect_capture()
+
+    assert orchestrator.binding is not None
+    assert orchestrator.binding.meeting_session_id == old_binding.meeting_session_id
+    assert orchestrator.binding.capture_session_id != old_binding.capture_session_id
+    assert orchestrator.binding.transcription_session_id != old_binding.transcription_session_id
+    assert orchestrator.capture_status == CaptureStatus.ACTIVE
+    assert orchestrator.transcription_status == TranscriptionStatus.ACTIVE
+    assert observer.names.count("capture_restart") == 1
+    assert capture._handlers[old_binding.capture_session_id] == []
+    assert stt._handlers[old_binding.transcription_session_id] == []
+    assert updates[-1] is orchestrator.state
 
 
 def test_module_registers_disabled_with_tray_actions(tmp_path: Path) -> None:
@@ -293,3 +346,4 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
         "capture_status": CaptureStatus.ACTIVE,
         "transcription_status": TranscriptionStatus.ACTIVE,
     }
+    assert overlays[0].callbacks["on_reconnect"] == module.orchestrator.reconnect_capture

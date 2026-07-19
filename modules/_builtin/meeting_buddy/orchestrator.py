@@ -122,11 +122,18 @@ class MeetingOrchestrator:
             minimum_contract_version=STT_CONTRACT_VERSION,
         )
 
-        capture_session = capture.start_session()
+        capture_session = capture.start_session(
+            config={
+                "max_audio_buffer_duration_s": self._config.max_audio_buffer_duration_s,
+            }
+        )
         try:
             transcription_session = stt.start_session(
                 capture_session_id=capture_session.session_id,
                 capture=capture,
+                config={
+                    "max_whisper_queue_duration_s": (self._config.max_whisper_queue_duration_s),
+                },
             )
         except Exception as exc:
             try:
@@ -164,6 +171,59 @@ class MeetingOrchestrator:
             self._cleanup_sessions(self._binding)
             self._clear_running_state()
             raise RuntimeError(f"Meeting Buddy starten mislukt: {exc}") from exc
+
+    def reconnect_capture(self) -> None:
+        """Replace failed capture and STT sessions while keeping the meeting open."""
+
+        binding = self._binding
+        if binding is None:
+            raise RuntimeError("Meeting Buddy is niet gestart")
+
+        log_event(
+            self._observer,
+            "capture_restart",
+            meeting_session_id=binding.meeting_session_id,
+            capture_session_id=binding.capture_session_id,
+        )
+        self._capture_status = CaptureStatus.RECONNECTING
+        self._notify_ui()
+        self._cleanup_sessions(binding)
+
+        capture_session = None
+        try:
+            capture_session = self._capture.start_session(
+                config={
+                    "max_audio_buffer_duration_s": (self._config.max_audio_buffer_duration_s),
+                }
+            )
+            transcription_session = self._stt.start_session(
+                capture_session_id=capture_session.session_id,
+                capture=self._capture,
+                config={
+                    "max_whisper_queue_duration_s": (self._config.max_whisper_queue_duration_s),
+                },
+            )
+            self._binding = MeetingSessionBinding(
+                meeting_session_id=binding.meeting_session_id,
+                capture_session_id=capture_session.session_id,
+                transcription_session_id=transcription_session.session_id,
+            )
+            self._capture_status = self._capture.get_status(capture_session.session_id)
+            self._transcription_status = self._stt.get_status(transcription_session.session_id)
+            self._capture.subscribe(capture_session.session_id, self.on_capture_status)
+            self._stt.subscribe(transcription_session.session_id, self.on_stt_event)
+        except Exception as exc:
+            if capture_session is not None:
+                try:
+                    self._capture.stop_session(capture_session.session_id)
+                except Exception:
+                    pass
+            self._capture_status = CaptureStatus.ERROR
+            self._transcription_status = TranscriptionStatus.ERROR
+            self._notify_ui()
+            raise RuntimeError(f"Microfoon herverbinden mislukt: {exc}") from exc
+
+        self._notify_ui()
 
     def stop(self) -> None:
         binding = self._binding
@@ -272,13 +332,6 @@ class MeetingOrchestrator:
             if event.session_id != binding.capture_session_id:
                 return
             self._capture_status = event.status
-            if event.status == CaptureStatus.RECONNECTING:
-                log_event(
-                    self._observer,
-                    "capture_restart",
-                    meeting_session_id=binding.meeting_session_id,
-                    capture_session_id=event.session_id,
-                )
             self._notify_ui()
         elif isinstance(event, CaptureGap):
             log_event(
@@ -323,6 +376,14 @@ class MeetingOrchestrator:
         )
         self._state = self._state_service.apply(self.state, proposal)
         self._dismiss_hint(hint)
+        log_event(
+            self._observer,
+            "hint_dismissed",
+            meeting_session_id=self.state.meeting_session_id,
+            hint_type=_enum_value(hint.type),
+            related_entity_id=hint.related_entity_id,
+            state_version=self.state.version,
+        )
         log_event(
             self._observer,
             "action_confirmed",

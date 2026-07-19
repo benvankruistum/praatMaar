@@ -33,6 +33,8 @@ class FakeSpeechToText:
         self._status: dict[str, TranscriptionStatus] = {}
         self._sequence: dict[str, int] = defaultdict(int)
         self._capture_handlers: dict[str, Callable[[Any], None]] = {}
+        self._capture_bindings: dict[str, tuple[Any, str]] = {}
+        self.start_configs: list[dict[str, Any]] = []
 
     def start_session(
         self,
@@ -41,7 +43,7 @@ class FakeSpeechToText:
         capture: Any,
         config: dict[str, Any] | None = None,
     ) -> TranscriptionSession:
-        del config
+        self.start_configs.append(dict(config or {}))
         session_id = str(uuid.uuid4())
         self._status[session_id] = TranscriptionStatus.ACTIVE
         self._emit(session_id, TranscriptionStatusChanged(session_id, TranscriptionStatus.ACTIVE))
@@ -54,6 +56,7 @@ class FakeSpeechToText:
             self._emit_delta(session_id, event.chunk)
 
         self._capture_handlers[session_id] = on_capture_event
+        self._capture_bindings[session_id] = (capture, capture_session_id)
         capture.subscribe(capture_session_id, on_capture_event)
         return TranscriptionSession(session_id=session_id)
 
@@ -66,6 +69,11 @@ class FakeSpeechToText:
             handlers.remove(handler)
 
     def stop_session(self, session_id: str) -> None:
+        handler = self._capture_handlers.pop(session_id, None)
+        binding = self._capture_bindings.pop(session_id, None)
+        if handler is not None and binding is not None:
+            capture, capture_session_id = binding
+            capture.unsubscribe(capture_session_id, handler)
         self._status[session_id] = TranscriptionStatus.IDLE
         self._emit(session_id, TranscriptionStatusChanged(session_id, TranscriptionStatus.IDLE))
 

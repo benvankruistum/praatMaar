@@ -13,9 +13,6 @@ from .state import (
     QuestionStatus,
     TopicStatus,
 )
-from .state import (
-    HintStatus as HintStatus,
-)
 
 
 class HintType(str, Enum):

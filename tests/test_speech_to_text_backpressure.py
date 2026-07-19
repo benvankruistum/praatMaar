@@ -55,6 +55,32 @@ def test_gap_when_busy_queue_exceeds_maximum_duration() -> None:
     )
 
 
+def test_session_config_overrides_default_queue_duration() -> None:
+    capture = FakeContinuousCapture()
+    events: list[object] = []
+    stt = IncrementalSpeechToText(
+        whisper=AlwaysBusyWhisper(),
+        max_whisper_queue_duration_s=10,
+        on_event=events.append,
+    )
+    capture_session = capture.start_session()
+    session = stt.start_session(
+        capture_session_id=capture_session.session_id,
+        capture=capture,
+        config={"max_whisper_queue_duration_s": 0.1},
+    )
+
+    for _ in range(4):
+        capture.emit_seconds(0.05)
+
+    assert any(
+        isinstance(event, TranscriptGap)
+        and event.session_id == session.session_id
+        and event.reason == "whisper_queue_overflow"
+        for event in events
+    )
+
+
 def test_available_whisper_emits_final_delta() -> None:
     capture = FakeContinuousCapture()
     whisper = SharedWhisper()

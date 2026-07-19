@@ -196,6 +196,7 @@
   "modules.meeting_buddy.overlay.no_hints": "No hint right now",
   "modules.meeting_buddy.overlay.dismiss": "Dismiss",
   "modules.meeting_buddy.overlay.confirm": "Confirm",
+  "modules.meeting_buddy.overlay.reconnect": "Reconnect microphone",
   "modules.meeting_buddy.overlay.minimize": "Minimize",
   "modules.meeting_buddy.overlay.capture": "Capture",
   "modules.meeting_buddy.overlay.capture.idle": "off",

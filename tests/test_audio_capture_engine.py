@@ -18,6 +18,7 @@ from modules.capabilities.continuous_capture import (
     CaptureGap,
     CaptureStatus,
     CaptureStatusChanged,
+    CaptureStopped,
 )
 
 
@@ -45,6 +46,20 @@ class FakeSoundDevice:
     def InputStream(self, **kwargs: Any) -> FakeInputStream:  # noqa: N802
         self.stream = FakeInputStream(**kwargs)
         return self.stream
+
+
+def test_session_config_controls_ring_buffer_capacity() -> None:
+    engine = AudioCaptureEngine(
+        sounddevice_module=FakeSoundDevice(),
+        platform_name="win32",
+    )
+
+    session = engine.start_session({"max_audio_buffer_duration_s": 0.25})
+
+    state = engine._require_session(session.session_id)
+    state.buffer.write(np.zeros(SAMPLE_RATE // 2, dtype=np.float32), start_ms=0)
+    assert state.buffer.available_samples == SAMPLE_RATE // 4
+    engine.stop_session(session.session_id)
 
 
 def test_engine_emits_three_second_float32_chunk() -> None:
@@ -146,3 +161,33 @@ def test_input_overflow_emits_gap_before_captured_samples() -> None:
     assert engine._require_session(session.session_id).buffer.read_window(frames).start_ms == 100
 
     engine.stop_session(session.session_id)
+
+
+def test_callback_failure_marks_capture_error_and_stopped() -> None:
+    sounddevice = FakeSoundDevice()
+    engine = AudioCaptureEngine(
+        sounddevice_module=sounddevice,
+        platform_name="win32",
+    )
+    session = engine.start_session()
+    events: list[object] = []
+    engine.subscribe(session.session_id, events.append)
+    state = engine._require_session(session.session_id)
+
+    def fail_write(_samples: np.ndarray, start_ms: int) -> None:
+        del start_ms
+        raise RuntimeError("device disappeared")
+
+    state.buffer.write = fail_write
+    assert sounddevice.stream is not None
+    callback = sounddevice.stream.kwargs["callback"]
+    callback(np.zeros((10, 1), dtype=np.float32), 10, None, None)
+
+    assert engine.get_status(session.session_id) == CaptureStatus.ERROR
+    assert any(
+        isinstance(event, CaptureStatusChanged)
+        and event.status == CaptureStatus.ERROR
+        and "device disappeared" in (event.message or "")
+        for event in events
+    )
+    assert CaptureStopped(session.session_id, reason="error") in events

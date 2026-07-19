@@ -3,6 +3,7 @@ from dataclasses import replace
 from modules._builtin.meeting_buddy.config import MeetingBuddyConfig
 from modules._builtin.meeting_buddy.heuristics import HeuristicsEngine
 from modules._builtin.meeting_buddy.state import (
+    ActionItemStatus,
     MeetingState,
     Question,
     QuestionStatus,
@@ -10,6 +11,7 @@ from modules._builtin.meeting_buddy.state import (
     TopicSource,
     TopicStatus,
 )
+from modules._builtin.meeting_buddy.state_service import MeetingStateService
 from modules.capabilities.speech_to_text import TranscriptDelta
 
 
@@ -93,6 +95,45 @@ def test_action_pattern_creates_candidate_without_owner() -> None:
     action_proposals = [proposal for proposal in proposals if proposal.type == "add_action"]
     assert action_proposals
     assert action_proposals[0].payload.get("owner") in (None, "UNKNOWN", "unknown")
+
+
+def test_overlapping_final_deltas_do_not_duplicate_question_or_action() -> None:
+    engine = HeuristicsEngine()
+    service = MeetingStateService()
+    config = MeetingBuddyConfig.defaults()
+    state = MeetingState.empty("m1")
+    deltas = (
+        TranscriptDelta(
+            "t1",
+            1,
+            0,
+            3000,
+            "Wie pakt dit? Laten we de website controleren.",
+            True,
+            0.9,
+        ),
+        TranscriptDelta(
+            "t1",
+            2,
+            2500,
+            5500,
+            "Wie pakt dit? Laten we de website controleren.",
+            True,
+            0.9,
+        ),
+    )
+
+    for index, delta in enumerate(deltas):
+        for proposal in engine.proposals_for(delta, state, config, now_s=10.0 + index):
+            state = service.apply(state, proposal)
+
+    assert len(state.questions) == 1
+    assert (
+        len(
+            [action for action in state.action_items if action.status == ActionItemStatus.CANDIDATE]
+        )
+        == 1
+    )
 
 
 def test_non_final_delta_produces_no_proposals() -> None:

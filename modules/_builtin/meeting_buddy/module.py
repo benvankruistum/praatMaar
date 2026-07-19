@@ -125,6 +125,7 @@ class MeetingBuddyModule:
                 elapsed_seconds=orchestrator.elapsed_seconds,
                 on_dismiss=orchestrator.dismiss_hint,
                 on_confirm=orchestrator.confirm_hint,
+                on_reconnect=orchestrator.reconnect_capture,
             )
         self._overlay.update(
             state,

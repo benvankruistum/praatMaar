@@ -41,6 +41,7 @@ class _TranscriptionState:
     capture_session_id: str
     capture: Any
     capture_handler: Callable[[object], None]
+    max_queue_duration_ms: int
     handlers: list[SttEventHandler] = field(default_factory=list)
     queue: deque[AudioChunk] = field(default_factory=deque)
     callback_condition: Condition = field(default_factory=Condition)
@@ -65,7 +66,7 @@ class IncrementalSpeechToText:
         if max_whisper_queue_duration_s <= 0:
             raise ValueError("max_whisper_queue_duration_s moet groter dan nul zijn")
         self._whisper = whisper
-        self._max_queue_duration_ms = round(max_whisper_queue_duration_s * 1000)
+        self._default_max_queue_duration_s = max_whisper_queue_duration_s
         self._transcribe_fn = transcribe_fn or self._transcribe
         self._on_event = on_event
         self._sessions: dict[str, _TranscriptionState] = {}
@@ -78,7 +79,15 @@ class IncrementalSpeechToText:
         capture: Any,
         config: dict[str, Any] | None = None,
     ) -> TranscriptionSession:
-        del config
+        options = config or {}
+        max_queue_duration_s = float(
+            options.get(
+                "max_whisper_queue_duration_s",
+                self._default_max_queue_duration_s,
+            )
+        )
+        if max_queue_duration_s <= 0:
+            raise ValueError("max_whisper_queue_duration_s moet groter dan nul zijn")
         session_id = str(uuid.uuid4())
 
         def handle_capture_event(event: object) -> None:
@@ -89,6 +98,7 @@ class IncrementalSpeechToText:
             capture_session_id=capture_session_id,
             capture=capture,
             capture_handler=handle_capture_event,
+            max_queue_duration_ms=round(max_queue_duration_s * 1000),
         )
         with self._lock:
             self._sessions[session_id] = state
@@ -162,7 +172,7 @@ class IncrementalSpeechToText:
         gaps: list[TranscriptGap] = []
         while (
             state.queue
-            and state.queue[-1].end_ms - state.queue[0].start_ms > self._max_queue_duration_ms
+            and state.queue[-1].end_ms - state.queue[0].start_ms > state.max_queue_duration_ms
         ):
             dropped = state.queue.popleft()
             gap_end_ms = (
