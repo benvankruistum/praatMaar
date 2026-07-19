@@ -25,6 +25,11 @@ Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
   inbox-spiegel, incrementele transcriptie (`incremental_transcription`)
 - **Module-capabilities:** acties (Modules-dialoog + optioneel tray), shutdown-hook,
   `ui_dispatch`, per-module `config.json` onder app-dir
+- **SharedWhisper:** modules delen het geladen Faster-Whisper-model (+ lock) via
+  `ModuleContext.whisper` — geen tweede model-load naast dicteren
+- **Capability registry:** modules bieden services aan via stabiele ID’s
+  (`ctx.capabilities`); eerste provider: Speaker Detection (`audio.speaker_detection`)
+
 - Per bestemming optioneel automatisch plakken (`auto_paste`, default uit)
 - macOS-port: native NSPanel-indicator (`indicator._mac`, ADR-0002), tray op
   main thread, `host._mac`, TCC- en release-docs, PyObjC-dependency op Darwin

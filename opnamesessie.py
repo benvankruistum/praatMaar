@@ -46,6 +46,7 @@ from mic_errors import (
     refresh_portaudio,
 )
 from modules._contract import CycleEvent, CycleEventType
+from modules.whisper import SharedWhisper
 
 
 class Host(Protocol):
@@ -93,6 +94,7 @@ class Opnamesessie:
         get_destinations: Callable[[], list[dict[str, Any]]] | None = None,
         get_active_destination: Callable[[], str | None] | None = None,
         on_user_error: Callable[[str], None] | None = None,
+        shared_whisper: SharedWhisper | None = None,
     ) -> None:
         self.host = host
         self.sample_rate = sample_rate
@@ -138,12 +140,19 @@ class Opnamesessie:
         self._session_id: str | None = None
         self._incremental_thread: threading.Thread | None = None
         self._incremental_stop: threading.Event | None = None
-        self._model_lock = threading.Lock()
+        self._whisper = shared_whisper if shared_whisper is not None else SharedWhisper()
 
-        self.model: Any | None = None
         self._np: Any | None = None
         self._sd: Any | None = None
         self._write_wav: Any | None = None
+
+    @property
+    def model(self) -> Any | None:
+        return self._whisper.model
+
+    @model.setter
+    def model(self, value: Any | None) -> None:
+        self._whisper.set_model(value)
 
     def bind_audio(
         self,
@@ -300,13 +309,10 @@ class Opnamesessie:
     def _transcribe_chunks_to_text(self, chunks: list[Any]) -> str:
         """Transcribeert audioblokken naar tekst (incrementeel + finaal)."""
 
-        if self.model is None:
-            raise RuntimeError("Whisper-model is niet geladen.")
-
         temporary_path = self.create_temporary_wav(chunks)
         try:
-            with self._model_lock:
-                segments, _info = self.model.transcribe(
+            with self._whisper.locked_model() as model:
+                segments, _info = model.transcribe(
                     str(temporary_path),
                     language=self.language,
                     beam_size=5,
@@ -650,12 +656,9 @@ class Opnamesessie:
         try:
             print(i18n.t("rec.transcribing"))
 
-            if self.model is None:
-                raise RuntimeError("Whisper-model is niet geladen.")
-
             temporary_path = self.create_temporary_wav(chunks)
-            with self._model_lock:
-                segments, _info = self.model.transcribe(
+            with self._whisper.locked_model() as model:
+                segments, _info = model.transcribe(
                     str(temporary_path),
                     language=self.language,
                     beam_size=5,
@@ -663,12 +666,11 @@ class Opnamesessie:
                     vad_parameters={"min_silence_duration_ms": 300},
                     condition_on_previous_text=False,
                 )
-
-            text_parts: list[str] = []
-            for segment in segments:
-                text = segment.text.strip()
-                if text:
-                    text_parts.append(text)
+                text_parts: list[str] = []
+                for segment in segments:
+                    text = segment.text.strip()
+                    if text:
+                        text_parts.append(text)
 
             transcript = " ".join(text_parts).strip()
             if not transcript:

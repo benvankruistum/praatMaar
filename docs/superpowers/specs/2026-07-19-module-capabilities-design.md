@@ -113,6 +113,17 @@ Parent voor dialogs: `indicator.root` (via dispatch, niet direct importeren).
 | `tray.py` | Optioneel Modules-submenu |
 | `dictation.py` | ui_dispatch, shutdown, tray/dialoog callbacks |
 
+## Gedeeld Whisper (`SharedWhisper`)
+
+`ModuleContext.whisper` wijst naar hetzelfde object als de dicteercyclus:
+
+- `set_model` / `is_ready` / `model`
+- `locked_model()` — contextmanager: model onder lock, of `RuntimeError` als leeg
+
+`Opnamesessie` gebruikt diezelfde lock; modules moeten **niet** zelf
+`WhisperModel(...)` laden. Geen lange meeting-pipeline in de core — alleen
+modeltoegang.
+
 ## Buiten scope
 
 - Meeting Buddy zelf (volgende PR)

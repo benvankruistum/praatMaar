@@ -21,6 +21,7 @@ from modules.registry import (
     tray_action_entries,
 )
 from modules.settings_store import load_config, save_config
+from modules.whisper import SharedWhisper
 
 
 class ActionModule:
@@ -120,12 +121,40 @@ def test_settings_store_roundtrip(tmp_path: Path) -> None:
     assert load_config(tmp_path, "missing", default={"x": 1}) == {"x": 1}
 
 
-def test_load_enabled_modules_with_ui_dispatch(tmp_path, monkeypatch) -> None:
+def test_load_enabled_modules_passes_shared_whisper(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("host.app_dir", lambda: tmp_path)
+    whisper = SharedWhisper()
+    whisper.set_model(object())
 
+    captured: list[ModuleContext] = []
+
+    class Probe:
+        id = "inbox-mirror"
+
+        def display_name_key(self) -> str:
+            return "modules.inbox_mirror.name"
+
+        def description_key(self) -> str:
+            return "modules.inbox_mirror.description"
+
+        def default_enabled(self) -> bool:
+            return True
+
+        def on_app_start(self, ctx: ModuleContext) -> None:
+            captured.append(ctx)
+
+        def on_event(self, event) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "modules.registry.all_builtin_modules",
+        lambda: [Probe()],
+    )
     modules = load_enabled_modules(
         {"inbox-mirror": {"enabled": True}},
         ui_dispatch=noop_ui_dispatch,
+        whisper=whisper,
     )
     assert len(modules) == 1
-    assert (tmp_path / "inbox").is_dir()
+    assert captured[0].whisper is whisper
+    assert captured[0].whisper.is_ready

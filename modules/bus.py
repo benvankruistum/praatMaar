@@ -12,6 +12,7 @@ from modules.journal import EventJournal
 
 if TYPE_CHECKING:
     from modules._contract import PraatMaarModule
+    from modules.capabilities.registry import CapabilityRegistry
 
 
 class ModuleBus:
@@ -22,12 +23,17 @@ class ModuleBus:
         *,
         journal: EventJournal | None = None,
         modules: list[PraatMaarModule] | None = None,
+        capabilities: CapabilityRegistry | None = None,
     ) -> None:
         self._journal = journal or EventJournal()
         self._modules: list[PraatMaarModule] = list(modules or [])
+        self._capabilities = capabilities
 
     def set_modules(self, modules: list[PraatMaarModule]) -> None:
         self._modules = list(modules)
+
+    def set_capabilities(self, capabilities: CapabilityRegistry | None) -> None:
+        self._capabilities = capabilities
 
     @property
     def modules(self) -> tuple[PraatMaarModule, ...]:
@@ -47,11 +53,11 @@ class ModuleBus:
                 traceback.print_exc()
 
     def shutdown(self) -> None:
-        """Ruimt alle geladen modules op (``on_app_shutdown``)."""
+        """Ruimt alle geladen modules op (``on_app_shutdown`` + capabilities)."""
 
         from modules.registry import shutdown_modules
 
-        shutdown_modules(self._modules)
+        shutdown_modules(self._modules, capabilities=self._capabilities)
 
     def run_action(self, module_id: str, action_id: str) -> bool:
         from modules.registry import run_module_action

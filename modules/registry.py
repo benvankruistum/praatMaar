@@ -9,6 +9,7 @@ from typing import Any
 
 import host
 from modules._builtin.inbox_mirror import InboxMirrorModule
+from modules._builtin.speaker_detection import SpeakerDetectionModule
 from modules._contract import (
     ModuleAction,
     ModuleContext,
@@ -19,12 +20,14 @@ from modules._contract import (
     module_tray_actions,
     noop_ui_dispatch,
 )
+from modules.capabilities.registry import CapabilityRegistry
+from modules.whisper import SharedWhisper
 
 
 def all_builtin_modules() -> list[PraatMaarModule]:
     """Alle ingebouwde modules (v1: expliciete lijst, geen dynamic loading)."""
 
-    return [InboxMirrorModule()]
+    return [InboxMirrorModule(), SpeakerDetectionModule()]
 
 
 def module_enabled(module: PraatMaarModule, modules_config: dict[str, Any]) -> bool:
@@ -38,12 +41,21 @@ def load_enabled_modules(
     modules_config: dict[str, Any] | None = None,
     *,
     ui_dispatch: UiDispatch | None = None,
+    whisper: SharedWhisper | None = None,
+    capabilities: CapabilityRegistry | None = None,
 ) -> list[PraatMaarModule]:
     """Geeft enabled modules terug, na ``on_app_start``."""
 
     config = modules_config if modules_config is not None else {}
     dispatch = ui_dispatch if ui_dispatch is not None else noop_ui_dispatch
-    ctx = ModuleContext(app_dir=host.app_dir(), ui_dispatch=dispatch)
+    shared = whisper if whisper is not None else SharedWhisper()
+    caps = capabilities if capabilities is not None else CapabilityRegistry()
+    ctx = ModuleContext(
+        app_dir=host.app_dir(),
+        ui_dispatch=dispatch,
+        whisper=shared,
+        capabilities=caps,
+    )
     enabled: list[PraatMaarModule] = []
 
     for module in all_builtin_modules():
@@ -55,17 +67,23 @@ def load_enabled_modules(
     return enabled
 
 
-def shutdown_modules(modules: list[PraatMaarModule]) -> None:
-    """Roept ``on_app_shutdown`` aan op modules die dat ondersteunen."""
+def shutdown_modules(
+    modules: list[PraatMaarModule],
+    *,
+    capabilities: CapabilityRegistry | None = None,
+) -> None:
+    """Roept ``on_app_shutdown`` aan en verwijdert owned capabilities."""
 
     for module in modules:
-        if not isinstance(module, ModuleWithShutdown):
-            continue
         try:
-            module.on_app_shutdown()
+            if isinstance(module, ModuleWithShutdown):
+                module.on_app_shutdown()
         except Exception:
             print(f"Module {module.id} faalde bij afsluiten:")
             traceback.print_exc()
+        finally:
+            if capabilities is not None:
+                capabilities.unregister_owner(module.id)
 
 
 def run_module_action(modules: list[PraatMaarModule], module_id: str, action_id: str) -> bool:
