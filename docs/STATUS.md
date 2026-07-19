@@ -1,6 +1,6 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-07-18.
+Laatst bijgewerkt: 2026-07-19.
 
 ## Ondersteund
 
@@ -20,7 +20,7 @@ Laatst bijgewerkt: 2026-07-18.
 - Laadscherm met model-downloadvoortgang (`splash.py`)
 - Herstel: transcripts + recovery-audio (`recovery.py`)
 - Platform-seam: paste, autostart, app-dir, single-instance (`host/`)
-- Windows-release: Inno Setup + CI (tag `v0.1.0`)
+- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.1.0`)
 
 ## macOS (nieuw)
 
@@ -41,8 +41,9 @@ permissies-doc. Eerste prioriteit: dicteercyclus + geen focus-diefstal + paste.
 
 1. macOS runtime-verificatie + eventuele fixes na eerste Mac-run.
 2. Recovery-audio opruimen / UI.
-3. Formele releases: Windows Setup.exe + zip; macOS `.app` (signing later).
-   CHANGELOG `[Unreleased]` bevat o.a. i18n, warm mic, bestemmingen, Help.
+3. Release **v0.2.0**: versie sync + CHANGELOG-cut + Windows-tag (Setup/zip);
+   macOS `.app` handmatig of later via CI (signing later).
+   Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
 
 ## Historische handoffs
 

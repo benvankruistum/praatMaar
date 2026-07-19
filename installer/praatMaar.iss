@@ -5,9 +5,11 @@
 ;   2. Inno Setup 6:       https://jrsoftware.org/isinfo.php
 ;   3. Compileren:         iscc installer\praatMaar.iss
 ;
-; Of:  .\scripts\build-windows.ps1
+; Of:  .\scripts\build-windows.ps1 -Version x.y.z
 ;
-; Output: installer\Output\praatMaar-Setup-0.1.0.exe
+; Output: installer\Output\praatMaar-Setup-{MyAppVersion}.exe
+; Fallback MyAppVersion = laatste gepubliceerde default; sync bij release
+; (zie docs/release-windows.md).
 
 #define MyAppName "praatMaar"
 #ifndef MyAppVersion
