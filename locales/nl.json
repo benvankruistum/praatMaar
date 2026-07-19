@@ -186,6 +186,11 @@
   "modules.audio_capture.description": "Neemt op Windows continu microfoonaudio op voor Meeting Buddy.",
   "modules.speech_to_text.name": "Spraak-naar-tekst",
   "modules.speech_to_text.description": "Transcribeert Meeting Buddy-audio lokaal zonder actief dicteren te blokkeren.",
+  "modules.meeting_buddy.name": "Meeting Buddy",
+  "modules.meeting_buddy.description": "Volgt lokaal agendapunten, vragen en actiepunten en toont bruikbare vergaderhints.",
+  "modules.meeting_buddy.actions.start": "Meeting starten",
+  "modules.meeting_buddy.actions.stop": "Meeting stoppen",
+  "modules.meeting_buddy.actions.prepare_agenda": "Agenda voorbereiden",
 
   "help.title": "praatMaar — Help",
   "help.close": "Sluiten",

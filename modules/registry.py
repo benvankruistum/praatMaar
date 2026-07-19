@@ -10,6 +10,7 @@ from typing import Any
 import host
 from modules._builtin.audio_capture import AudioCaptureModule
 from modules._builtin.inbox_mirror import InboxMirrorModule
+from modules._builtin.meeting_buddy import MeetingBuddyModule
 from modules._builtin.speaker_detection import SpeakerDetectionModule
 from modules._builtin.speech_to_text import SpeechToTextModule
 from modules._contract import (
@@ -34,6 +35,7 @@ def all_builtin_modules() -> list[PraatMaarModule]:
         SpeakerDetectionModule(),
         AudioCaptureModule(),
         SpeechToTextModule(),
+        MeetingBuddyModule(),
     ]
 
 

@@ -186,6 +186,11 @@
   "modules.audio_capture.description": "Continuously captures microphone audio on Windows for Meeting Buddy.",
   "modules.speech_to_text.name": "Speech to text",
   "modules.speech_to_text.description": "Transcribes Meeting Buddy audio locally without blocking active dictation.",
+  "modules.meeting_buddy.name": "Meeting Buddy",
+  "modules.meeting_buddy.description": "Tracks agenda topics, questions, and action items locally and shows useful meeting hints.",
+  "modules.meeting_buddy.actions.start": "Start meeting",
+  "modules.meeting_buddy.actions.stop": "Stop meeting",
+  "modules.meeting_buddy.actions.prepare_agenda": "Prepare agenda",
 
   "help.title": "praatMaar — Help",
   "help.close": "Close",
