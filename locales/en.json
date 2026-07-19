@@ -182,6 +182,8 @@
   "modules.inbox_mirror.description": "Copies each saved transcript to the inbox folder for external processing.",
   "modules.speaker_detection.name": "Speaker Detection",
   "modules.speaker_detection.description": "Assigns speaker roles (me/other/unknown) from audio source; available to other modules via capabilities.",
+  "modules.audio_capture.name": "Audio capture",
+  "modules.audio_capture.description": "Continuously captures microphone audio on Windows for Meeting Buddy.",
 
   "help.title": "praatMaar — Help",
   "help.close": "Close",

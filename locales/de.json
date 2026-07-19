@@ -182,6 +182,8 @@
   "modules.inbox_mirror.description": "Kopiert jedes gespeicherte Transkript in den Inbox-Ordner zur externen Verarbeitung.",
   "modules.speaker_detection.name": "Speaker Detection",
   "modules.speaker_detection.description": "Bestimmt Sprecherrollen (ich/andere/unbekannt) anhand der Audioquelle; für andere Module über Capabilities verfügbar.",
+  "modules.audio_capture.name": "Audioaufnahme",
+  "modules.audio_capture.description": "Nimmt unter Windows kontinuierlich Mikrofonaudio für Meeting Buddy auf.",
 
   "help.title": "praatMaar — Hilfe",
   "help.close": "Schließen",

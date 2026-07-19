@@ -8,6 +8,7 @@ import traceback
 from typing import Any
 
 import host
+from modules._builtin.audio_capture import AudioCaptureModule
 from modules._builtin.inbox_mirror import InboxMirrorModule
 from modules._builtin.speaker_detection import SpeakerDetectionModule
 from modules._contract import (
@@ -27,7 +28,7 @@ from modules.whisper import SharedWhisper
 def all_builtin_modules() -> list[PraatMaarModule]:
     """Alle ingebouwde modules (v1: expliciete lijst, geen dynamic loading)."""
 
-    return [InboxMirrorModule(), SpeakerDetectionModule()]
+    return [InboxMirrorModule(), SpeakerDetectionModule(), AudioCaptureModule()]
 
 
 def module_enabled(module: PraatMaarModule, modules_config: dict[str, Any]) -> bool:

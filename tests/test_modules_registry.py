@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from modules._builtin.inbox_mirror import InboxMirrorModule
-from modules.registry import load_enabled_modules, module_enabled, sanitize_modules_config
+from modules.registry import (
+    all_builtin_modules,
+    load_enabled_modules,
+    module_enabled,
+    sanitize_modules_config,
+)
 
 
 def test_sanitize_modules_config_ignores_unknown() -> None:
@@ -20,5 +25,14 @@ def test_load_enabled_modules_respects_config(tmp_path, monkeypatch) -> None:
     import host
 
     monkeypatch.setattr(host, "app_dir", lambda: tmp_path)
-    modules = load_enabled_modules({"inbox-mirror": {"enabled": False}})
+    modules = load_enabled_modules(
+        {
+            "inbox-mirror": {"enabled": False},
+            "audio-capture": {"enabled": False},
+        }
+    )
     assert modules == []
+
+
+def test_audio_capture_is_a_builtin_module() -> None:
+    assert "audio-capture" in {module.id for module in all_builtin_modules()}
