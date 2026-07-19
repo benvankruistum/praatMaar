@@ -81,11 +81,20 @@ class SharedWhisper:
     def try_locked_model(self, timeout: float = 0.0) -> Iterator[Any | None]:
         """Levert het model, of ``None`` als de lock niet tijdig beschikbaar is."""
 
-        if self.dictation_active:
+        with self._priority_lock:
+            dictation_active = self._dictation_count > 0
+        if dictation_active:
             yield None
             return
         acquired = self._lock.acquire(timeout=timeout)
         if not acquired:
+            yield None
+            return
+        with self._priority_lock:
+            dictation_active = self._dictation_count > 0
+            if dictation_active:
+                self._lock.release()
+        if dictation_active:
             yield None
             return
         try:

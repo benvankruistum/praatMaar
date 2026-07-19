@@ -131,3 +131,30 @@ registration.
 - `python -m ruff format --check modules/_builtin/speech_to_text.py
   tests/test_speech_to_text_backpressure.py` — 2 files already formatted.
 - IDE diagnostics on changed Python files — no errors.
+
+## SharedWhisper check/acquire race fix
+
+- Buddy now rechecks dictation priority after acquiring the model lock. If
+  dictation entered while Buddy was acquiring, Buddy releases the model
+  immediately and yields `None`; otherwise its acquisition is admitted before
+  a later priority entry.
+- Added a deterministic threaded regression that pauses Buddy between its
+  initial priority check and model-lock acquire, enters dictation priority, and
+  verifies Buddy yields while dictation subsequently acquires the model.
+
+### Race-fix TDD evidence
+
+1. The regression failed because Buddy yielded the model after dictation
+   priority had already entered.
+2. It passed after the post-acquire priority validation was added.
+
+### Race-fix verification
+
+- `python -m pytest -q tests/test_shared_whisper.py
+  tests/test_shared_whisper_try_lock.py tests/test_speech_to_text_contract.py
+  tests/test_speech_to_text_backpressure.py` — 18 passed.
+- `python -m ruff check modules/whisper.py
+  tests/test_shared_whisper_try_lock.py` — all checks passed.
+- `python -m ruff format --check modules/whisper.py
+  tests/test_shared_whisper_try_lock.py` — 2 files already formatted.
+- IDE diagnostics on changed Python files — no errors.
