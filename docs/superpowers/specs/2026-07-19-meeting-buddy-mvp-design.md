@@ -107,9 +107,30 @@ get_status(session_id)
 - Meeting Buddy subscribe’t op **status/fouten**, niet op audio-callbacks
   (tenzij later expliciet nodig voor correlatie — niet in MVP).
 
+**Publishes (capability-events):**
+
+| Event | Wanneer |
+|-------|---------|
+| `AudioChunkReceived` | Nieuw PCM-chunk beschikbaar |
+| `CaptureStatusChanged` | status → starting / active / reconnecting / error / … |
+| `CaptureStopped` | Sessie gestopt (normaal of fout) |
+| `CaptureGap` | Buffer-overflow / gecontroleerde skip (correlatie met STT-gaps) |
+
+Consumers abonneren via het capability-API (callback/subscribe). Dit zijn
+**geen** nieuwe `CycleEvent`-types; het formaliseert wel een eventvorm die later
+desgewenst naar ModuleBus/journal kan worden gespiegeld.
+
 ### `transcription.speech_to_text`
 
 Consumeert `AudioChunk`s; produceert `TranscriptDelta`s.
+
+**Publishes:**
+
+| Event | Wanneer |
+|-------|---------|
+| `TranscriptDeltaReceived` | Nieuwe (non-)final delta |
+| `TranscriptionStatusChanged` | active / delayed / error / idle |
+| `TranscriptGap` | Gecontroleerde skip na backpressure/degradatie |
 
 ### `audio.speaker_detection` (optioneel)
 
@@ -126,11 +147,12 @@ AudioChunk
 TranscriptDelta + SpeakerLabel  →  meeting-buddy
 ```
 
+**Publishes (indien actief):** `SpeakerLabelUpdated` (session_id, time range, role).
+
 ### `ai.semantic_analysis`
 
 Interface + eventuele contracttest toegestaan. **Geen** stub die nodig is voor
 normaal gebruik. Heuristieken zijn het primaire pad.
-
 ---
 
 ## Sessie-eigenaarschap
@@ -187,8 +209,8 @@ Exacte sample rate volgt capture-config (typisch 16 kHz mono, gelijk aan dictee)
 | Dictee actief | Buddy-chunks in korte wachtrij; dictee mag niet crashen of blokkeren |
 | Achterstand | UI: “Transcriptie loopt achter”; geen stille drops |
 | Capture | Blijft lopen zolang ringbuffer capaciteit heeft |
-| `max_whisper_queue_duration` | 10 s — daarboven degradatie |
-| `max_audio_buffer_duration` | 30 s — daarboven degradatie |
+| `max_whisper_queue_duration_s` | Uit yaml — daarboven degradatie |
+| `max_audio_buffer_duration_s` | Uit yaml — daarboven degradatie |
 
 **Degradatie bij overschrijding (expliciet):**
 
@@ -245,11 +267,27 @@ ActionItem
 
 Actiepunten starten als **candidate**. Heuristiek bevestigt niet autonoom.
 
-### Mutatielaag
+### Mutatielaag (immutable state)
 
 ```text
-TranscriptDelta → Heuristics → StateProposal → MeetingStateService → MeetingState
+TranscriptDelta → Heuristics → StateProposal → MeetingStateService → MeetingState vN
 ```
+
+`MeetingStateService` **muteert nooit in-place**. Elke geaccepteerde proposal
+levert een **nieuwe immutable** `MeetingState`-versie:
+
+```text
+MeetingState v14  +  StateProposal  →  MeetingState v15
+```
+
+```text
+MeetingState
+- version                 # monotoon stijgend per meeting_session_id
+- …velden…
+```
+
+UI, hints en tests lezen altijd een concrete versie; debugging = diff tussen
+vN en vN+1.
 
 ```text
 StateProposal
@@ -266,7 +304,6 @@ Geen directe veldschrijfs vanuit losse heuristieken.
 
 **Niet in MVP-state:** deelnemersmodellen, besluitenregister, risico’s,
 documentreferenties, multi-meeting knowledge, zware confidence-aggregatie.
-
 ---
 
 ## Heuristieken
@@ -276,10 +313,9 @@ documentreferenties, multi-meeting knowledge, zware confidence-aggregatie.
 - Normaliseer hoofdletters en leestekens; strip stopwoorden
 - Tokens + herkenbare frases
 - Match over een kort venster van recente deltas
-- Eisen (startwaarden, tunebaar): `topic_match_score >= 0.55` **én**
-  `matched_tokens >= 2` (of 1 als die token een volledige genormaliseerde
-  topic-frase dekt van ≥ 3 tekens)
-- Matchvenster: laatste 45 s aan deltas
+- Eisen uit config: `topic_match_score` **én** `matched_tokens_min` (of 1 token
+  als die een volledige genormaliseerde topic-frase dekt van ≥ 3 tekens)
+- Matchvenster: `topic_match_window_s` (default in yaml)
 - Eén toevallig woord sluit geen topic
 - Na voldoende match: status `discussed` (later eventueel tussenstatus `active`)
 
@@ -344,13 +380,55 @@ Hint
 | Twijfel | Geen hint |
 | Per type | Eigen trigger, min. wachttijd, cooldown, dismiss |
 
-Concrete drempels (startwaarden; tunebaar in module-config):
+Drempels (wachttijd, cooldown, max hints, match-scores) staan **niet** als
+magic numbers in code — zie [Configuratie](#configuratie).
 
-| Type | Min. wachttijd | Cooldown |
-|------|----------------|----------|
-| `topic_not_discussed` | 120 s na start (of na laatste match-poging) | 180 s per topic |
-| `question_open` | 60 s na openen vraag | 120 s per question |
-| `candidate_action_without_owner` | 5 s na candidate | 90 s per action |
+---
+
+## Configuratie
+
+Alle tunebare drempels leven in een expliciet configbestand onder de
+module-datamap, bijv.:
+
+`%APPDATA%\praatMaar\meeting-buddy\meeting-buddy.yaml`
+
+(macOS: Application Support-equivalent). Defaults worden meegeleverd in de
+repo; gebruiker/override wint. Aanpassen van drempels vereist **geen** herbouw.
+
+Module enablement blijft via bestaande `config.json` / Modules-UI
+(`modules.meeting-buddy.enabled`); yaml is voor Buddy-gedrag, niet voor
+aan/uit van de module.
+
+Voorbeeldvelden:
+
+```yaml
+topic_match_score: 0.55
+matched_tokens_min: 2
+topic_match_window_s: 45
+
+question_hint_min_wait_s: 60
+question_hint_cooldown_s: 120
+# Timeout dempt hints; expireert Question niet
+question_hint_suppress_after_s: 600
+
+hint_cooldown:
+  topic_not_discussed: 180
+  question_open: 120
+  candidate_action_without_owner: 90
+
+hint_min_wait_s:
+  topic_not_discussed: 120
+  question_open: 60
+  candidate_action_without_owner: 5
+
+max_visible_hints: 3
+
+max_whisper_queue_duration_s: 10
+max_audio_buffer_duration_s: 30
+```
+
+`audio-capture` heeft een eigen, minimale config (device-keuze, buffergrenzen)
+onder `%APPDATA%\praatMaar\audio-capture\` — niet in `meeting-buddy.yaml`.
 
 ---
 
@@ -406,15 +484,53 @@ Besluit over livegang
 
 ---
 
+## Observability
+
+Gestructureerde debug-events (lokaal loggen; **geen** analytics/cloud). Geen
+transcripttekst of persoonsgegevens in standaardlogs — wel IDs, types, timings.
+
+| Event | Doel |
+|-------|------|
+| `meeting_started` | Sessie + binding-IDs |
+| `meeting_stopped` | Einde + duur |
+| `capture_restart` | Reconnect na device/fout |
+| `transcript_gap` | Gecontroleerde skip / backpressure |
+| `hint_emitted` | type, related_entity_id, state version |
+| `hint_dismissed` | type, door gebruiker/systeem |
+| `action_confirmed` | candidate → confirmed |
+| `state_version` | optioneel: vN → vN+1 + proposal type |
+
+Correleerbaar via `meeting_session_id` (+ capture/transcription IDs).
+
+---
+
 ## Testbaarheid (MVP)
 
 - Unit: buffering, delta final/non-final merge, topic match scoring, vraag-/actiepatronen
 - Unit: Hint Engine (cooldown, max 3, twijfel→geen hint)
-- Unit: StateProposal → MeetingStateService
+- Unit: StateProposal → MeetingStateService (**immutable** vN → vN+1)
+- Unit: yaml-defaults laden / override
 - Integratie: capture → STT → deltas (mic of fake AudioChunks)
-- Contracttests: `audio.continuous_capture`, `transcription.speech_to_text`
+- Contracttests: `audio.continuous_capture`, `transcription.speech_to_text` (+ events)
 - Prioriteit: dictee vs Buddy-queue (simulatie lock)
 - Geen stille drops: gap-events asserten bij degradatie
+
+---
+
+## Acceptatiecriteria (MVP gereed)
+
+De MVP is gereed wanneer:
+
+- [ ] Meeting kan gestart (en gestopt) worden via tray Modules
+- [ ] Microfoon wordt continu opgenomen (`audio.continuous_capture`)
+- [ ] Transcriptie loopt incrementeel / realtime genoeg voor hints
+- [ ] Meeting State wordt bijgewerkt als immutable versies (vN → vN+1)
+- [ ] Hints verschijnen (max. 3; twijfel → geen hint)
+- [ ] Geen transcript zichtbaar in de overlay
+- [ ] Dicteren blijft functioneren (voorrang + geen crash door Buddy)
+- [ ] Capture-/STT-fouten leiden niet tot app-crash; reconnect/gap zichtbaar
+- [ ] Drempels configureerbaar via `meeting-buddy.yaml` zonder herbouw
+- [ ] Debug-events (`meeting_started`, `transcript_gap`, `hint_emitted`, …) aanwezig
 
 ---
 
