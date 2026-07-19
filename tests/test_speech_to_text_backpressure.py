@@ -211,3 +211,64 @@ def test_stop_waits_for_drain_and_discards_in_flight_delta() -> None:
     assert stop_done.is_set()
     assert not any(isinstance(event, TranscriptDeltaReceived) for event in events)
     assert stt.get_status(session.session_id) == TranscriptionStatus.IDLE
+
+
+def test_stop_waits_for_capture_callback_and_suppresses_late_events() -> None:
+    capture = FakeContinuousCapture()
+    callback_started = threading.Event()
+    finish_callback = threading.Event()
+    stop_done = threading.Event()
+    events: list[object] = []
+    late_events: list[object] = []
+
+    def record_event(event: object) -> None:
+        events.append(event)
+        if stop_done.is_set():
+            late_events.append(event)
+
+    stt = IncrementalSpeechToText(
+        whisper=AlwaysBusyWhisper(),
+        max_whisper_queue_duration_s=0.01,
+        on_event=record_event,
+    )
+    capture_session = capture.start_session()
+    session = stt.start_session(
+        capture_session_id=capture_session.session_id,
+        capture=capture,
+    )
+    events.clear()
+
+    original_trim_queue = stt._trim_queue
+
+    def pause_after_stopping_check(state: object) -> list[TranscriptGap]:
+        callback_started.set()
+        assert finish_callback.wait(timeout=2)
+        return original_trim_queue(state)
+
+    stt._trim_queue = pause_after_stopping_check
+    emitter = threading.Thread(target=capture.emit_seconds, args=(0.05,))
+    emitter.start()
+    assert callback_started.wait(timeout=1)
+
+    def stop() -> None:
+        stt.stop_session(session.session_id)
+        stop_done.set()
+
+    stopper = threading.Thread(target=stop)
+    stopper.start()
+    try:
+        assert not stop_done.wait(timeout=0.05)
+    finally:
+        finish_callback.set()
+        emitter.join(timeout=1)
+        stopper.join(timeout=1)
+
+    assert stop_done.is_set()
+    assert late_events == []
+    assert not any(isinstance(event, TranscriptGap) for event in events)
+    assert not any(
+        isinstance(event, TranscriptionStatusChanged)
+        and event.status == TranscriptionStatus.DELAYED
+        for event in events
+    )
+    assert stt.get_status(session.session_id) == TranscriptionStatus.IDLE

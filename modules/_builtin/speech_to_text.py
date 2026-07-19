@@ -7,7 +7,7 @@ import uuid
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from threading import Lock, RLock
+from threading import Condition, Lock, RLock
 from typing import Any
 
 import numpy as np
@@ -43,6 +43,8 @@ class _TranscriptionState:
     capture_handler: Callable[[object], None]
     handlers: list[SttEventHandler] = field(default_factory=list)
     queue: deque[AudioChunk] = field(default_factory=deque)
+    callback_condition: Condition = field(default_factory=Condition)
+    active_callbacks: int = 0
     drain_lock: Lock = field(default_factory=Lock)
     status: TranscriptionStatus = TranscriptionStatus.IDLE
     sequence: int = 0
@@ -110,13 +112,16 @@ class IncrementalSpeechToText:
 
     def stop_session(self, session_id: str) -> None:
         state = self._require_session(session_id)
-        with self._lock:
-            state.stopping = True
+        with state.callback_condition:
+            with self._lock:
+                state.stopping = True
         state.capture.unsubscribe(state.capture_session_id, state.capture_handler)
+        with state.callback_condition:
+            state.callback_condition.wait_for(lambda: state.active_callbacks == 0)
         with state.drain_lock:
             with self._lock:
                 state.queue.clear()
-            self._set_status(state, TranscriptionStatus.IDLE)
+                state.status = TranscriptionStatus.IDLE
 
     def get_status(self, session_id: str) -> TranscriptionStatus:
         return self._require_session(session_id).status
@@ -133,16 +138,25 @@ class IncrementalSpeechToText:
         if not isinstance(event, AudioChunkReceived):
             return
         state = self._require_session(session_id)
-        with self._lock:
-            if state.stopping:
-                return
-            state.queue.append(event.chunk)
-            gaps = self._trim_queue(state)
-        if gaps:
-            self._set_status(state, TranscriptionStatus.DELAYED)
-        for gap in gaps:
-            self._publish(state, gap)
-        self._drain_queue(state)
+        with state.callback_condition:
+            with self._lock:
+                if state.stopping:
+                    return
+                state.active_callbacks += 1
+        try:
+            with self._lock:
+                state.queue.append(event.chunk)
+                gaps = self._trim_queue(state)
+            if gaps:
+                self._set_status(state, TranscriptionStatus.DELAYED)
+            for gap in gaps:
+                self._publish(state, gap)
+            self._drain_queue(state)
+        finally:
+            with state.callback_condition:
+                state.active_callbacks -= 1
+                if state.active_callbacks == 0:
+                    state.callback_condition.notify_all()
 
     def _trim_queue(self, state: _TranscriptionState) -> list[TranscriptGap]:
         gaps: list[TranscriptGap] = []
@@ -234,6 +248,8 @@ class IncrementalSpeechToText:
         message: str | None = None,
     ) -> None:
         with self._lock:
+            if state.stopping:
+                return
             if state.status == status and message is None:
                 return
             state.status = status
@@ -248,6 +264,8 @@ class IncrementalSpeechToText:
 
     def _publish(self, state: _TranscriptionState, event: object) -> None:
         with self._lock:
+            if state.stopping:
+                return
             handlers = list(state.handlers)
         if self._on_event is not None:
             self._notify(self._on_event, event)

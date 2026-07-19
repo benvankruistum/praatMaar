@@ -100,3 +100,34 @@ registration.
 - `python -m ruff check .` — all checks passed.
 - `python -m ruff format --check .` — 78 files already formatted.
 - IDE diagnostics on changed Python files — no errors.
+
+## Remaining Important finding fix
+
+- Added an in-flight capture-callback barrier. `stop_session()` now marks the
+  session as stopping, unsubscribes capture, waits for every entered callback,
+  clears queued work, and leaves the session `IDLE`.
+- Every status/event publication now rechecks `stopping`, preventing a callback
+  that already passed its initial check from publishing `DELAYED`,
+  `TranscriptGap`, or transcript events during shutdown.
+- Added a threaded regression test that pauses after the callback's initial
+  stopping check and proves shutdown blocks until the callback exits, emits
+  nothing after return, and leaves the stopped session `IDLE`.
+
+### Remaining-finding TDD evidence
+
+1. The new callback-race test failed with late `DELAYED` and `TranscriptGap`
+   events after `stop_session()` returned.
+2. It passed after adding callback lifecycle synchronization and publication
+   suppression.
+
+### Remaining-finding verification
+
+- `python -m pytest -q tests/test_speech_to_text_contract.py
+  tests/test_speech_to_text_backpressure.py
+  tests/test_shared_whisper_try_lock.py` — 11 passed.
+- `python -m pytest -q` — 169 passed, 1 skipped.
+- `python -m ruff check modules/_builtin/speech_to_text.py
+  tests/test_speech_to_text_backpressure.py` — all checks passed.
+- `python -m ruff format --check modules/_builtin/speech_to_text.py
+  tests/test_speech_to_text_backpressure.py` — 2 files already formatted.
+- IDE diagnostics on changed Python files — no errors.
