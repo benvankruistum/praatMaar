@@ -15,6 +15,11 @@ from modules._contract import (
     noop_ui_dispatch,
 )
 from modules.bus import ModuleBus
+from modules.capabilities.registry import (
+    CapabilityRegistration,
+    CapabilityRegistry,
+    CapabilityUnavailableError,
+)
 from modules.journal import EventJournal, events_dir, events_journal_path
 from modules.registry import (
     all_builtin_modules,
@@ -27,8 +32,12 @@ from modules.registry import (
     tray_action_entries,
 )
 from modules.settings_store import config_path, load_config, module_dir, save_config
+from modules.whisper import SharedWhisper
 
 __all__ = [
+    "CapabilityRegistration",
+    "CapabilityRegistry",
+    "CapabilityUnavailableError",
     "CycleEvent",
     "CycleEventType",
     "EventJournal",
@@ -39,6 +48,7 @@ __all__ = [
     "ModuleWithShutdown",
     "PraatMaarModule",
     "SCHEMA_VERSION",
+    "SharedWhisper",
     "UiDispatch",
     "all_builtin_modules",
     "config_path",

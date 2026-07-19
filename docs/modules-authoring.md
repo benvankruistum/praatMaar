@@ -26,7 +26,7 @@ Implementeer het `PraatMaarModule`-Protocol (`modules/_contract.py`):
 | `display_name_key()` | ja | i18n-key voor UI |
 | `description_key()` | ja | i18n-key voor UI |
 | `default_enabled()` | ja | Default als key ontbreekt in config |
-| `on_app_start(ctx)` | ja | Eenmalig; `ctx.app_dir`, `ctx.ui_dispatch`, `ctx.module_dir(id)` |
+| `on_app_start(ctx)` | ja | Eenmalig; `ctx.app_dir`, `ctx.ui_dispatch`, `ctx.whisper`, `ctx.capabilities`, `ctx.module_dir(id)` |
 | `on_event(event)` | ja | Alle `CycleEvent`s; filter zelf op `event.type` |
 
 Optionele protocols (duck typing — bestaande modules hoeven niets te wijzigen):
@@ -181,6 +181,59 @@ Modules-dialoog — module beheert eigen instellingenvenster.
 - **`on_app_shutdown`:** stop threads, sluit vensters (via `ui_dispatch` indien nodig).
 - **`ctx.ui_dispatch(fn)`:** plan tkinter-werk op de hoofdthread (Windows: pill-root;
   macOS: main-thread runloop).
+
+## Gedeeld Whisper-model
+
+Het Faster-Whisper-model wordt **eenmaal** geladen (splash) en gedeeld met modules
+via `ctx.whisper` (`SharedWhisper`). Gebruik **niet** `Opnamesessie` vanuit een
+module (die is voor korte dicteercycli); houd eigen opname/chunking, maar
+transcribeer via de gedeelde lock:
+
+```python
+def on_app_start(self, ctx: ModuleContext) -> None:
+    self._whisper = ctx.whisper
+
+def _transcribe_wav(self, path: Path) -> str:
+    with self._whisper.locked_model() as model:
+        segments, _info = model.transcribe(
+            str(path),
+            language="nl",
+            beam_size=5,
+            vad_filter=True,
+        )
+        parts = [s.text.strip() for s in segments if s.text.strip()]
+    return " ".join(parts)
+```
+
+Check `ctx.whisper.is_ready` vóór je start; anders is het model nog niet geladen.
+Dicteren en modules serialiseren via dezelfde lock — parallelle `transcribe`-
+calls blokkeren elkaar (geen tweede model in RAM).
+
+## Capabilities (services tussen modules)
+
+Modules mogen **niet** elkaars interne packages importeren. Bied functionaliteit
+aan via de gedeelde registry:
+
+```python
+# Provider (in on_app_start)
+ctx.capabilities.register(
+    capability_id="audio.speaker_detection",
+    provider=self._service,
+    owner_module_id=self.id,
+    contract_version=1,
+)
+
+# Consumer (optioneel)
+provider = ctx.capabilities.get("audio.speaker_detection")
+# of verplicht:
+# provider = ctx.capabilities.require("audio.speaker_detection")
+```
+
+Gedeelde protocollen: `modules/capabilities/<naam>.py`. Concrete implementatie:
+`modules/_builtin/`. Bij afsluiten verwijdert de registry automatisch alle
+capabilities van de module (`unregister_owner`) — ook als `on_app_shutdown` faalt.
+
+Zie [capability-registry design](superpowers/specs/2026-07-19-capability-registry-design.md).
 
 ## UI
 

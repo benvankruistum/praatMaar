@@ -14,6 +14,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from modules.capabilities.registry import CapabilityRegistry
+from modules.whisper import SharedWhisper
+
 SCHEMA_VERSION = 1
 
 UiDispatch = Callable[[Callable[[], None]], None]
@@ -88,6 +91,10 @@ class ModuleContext:
 
     app_dir: Path
     ui_dispatch: UiDispatch
+    whisper: SharedWhisper = field(default_factory=SharedWhisper)
+    """Gedeeld Faster-Whisper-model (+ lock) met de dicteercyclus."""
+    capabilities: CapabilityRegistry = field(default_factory=CapabilityRegistry)
+    """Gedeelde capability-registry (zelfde instantie voor alle modules)."""
 
     def module_dir(self, module_id: str) -> Path:
         """Datamap voor één module (mapnaam = kebab-case id)."""

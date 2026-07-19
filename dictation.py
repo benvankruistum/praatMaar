@@ -20,9 +20,11 @@ from indicator import (
     RecordingIndicator,
 )
 from modules import (
+    CapabilityRegistry,
     CycleEvent,
     CycleEventType,
     ModuleBus,
+    SharedWhisper,
     load_enabled_modules,
     modules_config_for_settings,
     noop_ui_dispatch,
@@ -157,8 +159,16 @@ else:
 MODULES_CONFIG = sanitize_modules_config(_user_config.get("modules"))
 INCREMENTAL_TRANSCRIPTION = bool(_user_config.get("incremental_transcription", False))
 
-module_bus = ModuleBus()
-module_bus.set_modules(load_enabled_modules(MODULES_CONFIG))
+shared_whisper = SharedWhisper()
+capability_registry = CapabilityRegistry()
+module_bus = ModuleBus(capabilities=capability_registry)
+module_bus.set_modules(
+    load_enabled_modules(
+        MODULES_CONFIG,
+        whisper=shared_whisper,
+        capabilities=capability_registry,
+    )
+)
 
 _ui_dispatch = noop_ui_dispatch
 
@@ -171,7 +181,14 @@ def _reload_modules() -> None:
     """Herlaadt enabled modules na een instellingenwijziging."""
 
     module_bus.shutdown()
-    module_bus.set_modules(load_enabled_modules(MODULES_CONFIG, ui_dispatch=_ui_dispatch))
+    module_bus.set_modules(
+        load_enabled_modules(
+            MODULES_CONFIG,
+            ui_dispatch=_ui_dispatch,
+            whisper=shared_whisper,
+            capabilities=capability_registry,
+        )
+    )
     if _tray is not None:
         _tray.refresh_modules_menu()
 
@@ -538,7 +555,7 @@ def retranscribe_recovery_wav(path: Path) -> str:
 
     if session.is_recording or session.is_processing:
         raise RuntimeError(i18n.t("recovery.busy"))
-    if model is None:
+    if not shared_whisper.is_ready:
         raise RuntimeError(i18n.t("model.load_failed"))
 
     resolved = path.resolve()
@@ -557,19 +574,20 @@ def retranscribe_recovery_wav(path: Path) -> str:
         )
     )
 
-    segments, _info = model.transcribe(
-        str(resolved),
-        language=LANGUAGE,
-        beam_size=5,
-        vad_filter=True,
-        vad_parameters={"min_silence_duration_ms": 300},
-        condition_on_previous_text=False,
-    )
-    text_parts: list[str] = []
-    for segment in segments:
-        text = segment.text.strip()
-        if text:
-            text_parts.append(text)
+    with shared_whisper.locked_model() as whisper_model:
+        segments, _info = whisper_model.transcribe(
+            str(resolved),
+            language=LANGUAGE,
+            beam_size=5,
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 300},
+            condition_on_previous_text=False,
+        )
+        text_parts: list[str] = []
+        for segment in segments:
+            text = segment.text.strip()
+            if text:
+                text_parts.append(text)
     transcript = " ".join(text_parts).strip()
     if not transcript:
         module_bus.emit(
@@ -760,6 +778,7 @@ def _build_session() -> Opnamesessie:
         get_destinations=lambda: DESTINATIONS,
         get_active_destination=lambda: ACTIVE_DESTINATION,
         on_user_error=_report_user_error,
+        shared_whisper=shared_whisper,
     )
 
 

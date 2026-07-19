@@ -35,7 +35,7 @@ class _FakeModel:
 def test_retranscribe_busy_raises(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(recovery, "config_dir", lambda: tmp_path)
     monkeypatch.setattr(dictation, "session", _FakeSession(recording=True))
-    monkeypatch.setattr(dictation, "model", object())
+    dictation.shared_whisper.set_model(object())
     with pytest.raises(RuntimeError, match=".+"):
         dictation.retranscribe_recovery_wav(tmp_path / "x.wav")
 
@@ -52,7 +52,7 @@ def test_retranscribe_success(monkeypatch, tmp_path: Path) -> None:
     copied: list[str] = []
 
     monkeypatch.setattr(dictation, "session", _FakeSession())
-    monkeypatch.setattr(dictation, "model", fake_model)
+    dictation.shared_whisper.set_model(fake_model)
     monkeypatch.setattr(dictation, "LANGUAGE", "nl")
     monkeypatch.setattr(dictation, "AUTO_PASTE", True)
     monkeypatch.setattr(dictation, "wait_until_modifier_keys_released", lambda: None)
@@ -76,6 +76,6 @@ def test_retranscribe_rejects_outside_recovery(monkeypatch, tmp_path: Path) -> N
     outsider = tmp_path / "other.wav"
     outsider.write_bytes(b"x")
     monkeypatch.setattr(dictation, "session", _FakeSession())
-    monkeypatch.setattr(dictation, "model", _FakeModel(["hi"]))
+    dictation.shared_whisper.set_model(_FakeModel(["hi"]))
     with pytest.raises(ValueError):
         dictation.retranscribe_recovery_wav(outsider)

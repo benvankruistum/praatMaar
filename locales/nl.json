@@ -180,6 +180,8 @@
   "modules.save": "Opslaan",
   "modules.inbox_mirror.name": "Inbox-spiegel",
   "modules.inbox_mirror.description": "Kopieert elk opgeslagen transcript naar de inbox-map voor externe verwerking.",
+  "modules.speaker_detection.name": "Speaker Detection",
+  "modules.speaker_detection.description": "Bepaalt sprekerrollen (ik/ander/onbekend) op basis van audiobron; beschikbaar voor andere modules via capabilities.",
 
   "help.title": "praatMaar — Help",
   "help.close": "Sluiten",
