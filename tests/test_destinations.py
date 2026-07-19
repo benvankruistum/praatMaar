@@ -52,6 +52,29 @@ def test_sanitize_drops_reserved_and_normalized_duplicates(tmp_path: Path):
         {"name": "notities", "path": str(tmp_path / "n")},
     ]
     assert d.sanitize_destinations(raw) == [
-        {"name": "Project-A", "path": str(tmp_path / "a")},
-        {"name": "notities", "path": str(tmp_path / "n")},
+        {"name": "Project-A", "path": str(tmp_path / "a"), "auto_paste": False},
+        {"name": "notities", "path": str(tmp_path / "n"), "auto_paste": False},
     ]
+
+
+def test_sanitize_preserves_auto_paste(tmp_path: Path):
+    raw = [
+        {"name": "a", "path": str(tmp_path / "a"), "auto_paste": True},
+        {"name": "b", "path": str(tmp_path / "b")},
+    ]
+    assert d.sanitize_destinations(raw) == [
+        {"name": "a", "path": str(tmp_path / "a"), "auto_paste": True},
+        {"name": "b", "path": str(tmp_path / "b"), "auto_paste": False},
+    ]
+
+
+def test_resolve_auto_paste():
+    dests = [
+        {"name": "notes", "path": "D:/n", "auto_paste": False},
+        {"name": "chat", "path": "D:/c", "auto_paste": True},
+    ]
+    assert d.resolve_auto_paste(None, dests, True) is True
+    assert d.resolve_auto_paste(None, dests, False) is False
+    assert d.resolve_auto_paste("notes", dests, True) is False
+    assert d.resolve_auto_paste("chat", dests, False) is True
+    assert d.resolve_auto_paste("missing", dests, True) is True

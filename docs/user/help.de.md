@@ -8,6 +8,10 @@ Diktieren wird das Transkript im Ordner des aktiven Ziels gespeichert.
 **Sticky:** das aktive Ziel bleibt gesetzt, bis Sie wechseln oder auf Standard
 zurücksetzen. Sie müssen den Namen nicht jedes Mal erneut sagen.
 
+**Automatisches Einfügen:** pro Ziel können Sie Zwischenablage + Einfügen erlauben.
+Standard ist **aus** (nur im Ordner speichern). Ohne aktives Ziel gilt die globale
+Einstellung.
+
 **Pill:** die kleine Bildschirm-Anzeige zeigt den Namen des aktiven Ziels (sichtbar
 auch ohne laufende Aufnahme). Kein Label bedeutet: Standardordner.
 

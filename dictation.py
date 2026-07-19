@@ -655,6 +655,7 @@ def _build_session() -> Opnamesessie:
         preserve_audio=recovery.preserve_audio,
         on_destination_command=_handle_destination_command,
         get_destinations=lambda: DESTINATIONS,
+        get_active_destination=lambda: ACTIVE_DESTINATION,
         on_user_error=_report_user_error,
     )
 

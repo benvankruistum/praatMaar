@@ -8,6 +8,10 @@ the transcript is saved in the active destination's folder.
 **Sticky:** the active destination stays selected until you switch or reset to default.
 You do not need to say the name again every time.
 
+**Auto-paste:** per destination you can allow clipboard + paste. Default is **off**
+(save to the folder only). With no active destination, the global Settings option
+applies.
+
 **Pill:** the small on-screen indicator shows the active destination name (visible
 even when you are not recording). No label means: default folder.
 

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import i18n
-from destinations import match_command
+from destinations import match_command, resolve_auto_paste
 from indicator import (
     RecordingState,
 )
@@ -79,7 +79,8 @@ class Opnamesessie:
         save_transcript: Callable[[str], Path] | None = None,
         preserve_audio: Callable[[Path], Path] | None = None,
         on_destination_command: Callable[[str, str | None], None] | None = None,
-        get_destinations: Callable[[], list[dict[str, str]]] | None = None,
+        get_destinations: Callable[[], list[dict[str, Any]]] | None = None,
+        get_active_destination: Callable[[], str | None] | None = None,
         on_user_error: Callable[[str], None] | None = None,
     ) -> None:
         self.host = host
@@ -104,6 +105,7 @@ class Opnamesessie:
         self._preserve_audio = preserve_audio
         self._on_destination_command = on_destination_command
         self._get_destinations = get_destinations
+        self._get_active_destination = get_active_destination
         self._on_user_error = on_user_error
 
         self._lock = threading.RLock()
@@ -534,16 +536,22 @@ class Opnamesessie:
                 except OSError as exc:
                     print(i18n.t("rec.save_warn", error=exc))
 
-            if self._copy_text is not None:
-                try:
-                    self._copy_text(transcript)
-                    print(i18n.t("rec.clipboard"))
-                except Exception as exc:
-                    print(i18n.t("rec.clipboard_warn", error=exc))
-                    if saved_path is not None:
-                        print(i18n.t("rec.saved_anyway", path=saved_path))
+            active = self._get_active_destination() if self._get_active_destination else None
+            deliver = resolve_auto_paste(active, dests, self.auto_paste)
 
-            if self.auto_paste:
+            if not deliver:
+                if saved_path is not None:
+                    print(i18n.t("rec.saved_only"))
+            else:
+                if self._copy_text is not None:
+                    try:
+                        self._copy_text(transcript)
+                        print(i18n.t("rec.clipboard"))
+                    except Exception as exc:
+                        print(i18n.t("rec.clipboard_warn", error=exc))
+                        if saved_path is not None:
+                            print(i18n.t("rec.saved_anyway", path=saved_path))
+
                 self.wait_until_modifiers_clear()
                 time.sleep(self.paste_delay_seconds)
                 try:
