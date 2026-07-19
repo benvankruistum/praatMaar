@@ -102,6 +102,7 @@ def test_speaker_detection_registers_on_start(tmp_path: Path, monkeypatch) -> No
             "speaker-detection": {"enabled": True},
             "inbox-mirror": {"enabled": False},
             "audio-capture": {"enabled": False},
+            "speech-to-text": {"enabled": False},
         },
         whisper=SharedWhisper(),
         capabilities=caps,
@@ -119,6 +120,7 @@ def test_capability_removed_after_shutdown(tmp_path: Path, monkeypatch) -> None:
             "speaker-detection": {"enabled": True},
             "inbox-mirror": {"enabled": False},
             "audio-capture": {"enabled": False},
+            "speech-to-text": {"enabled": False},
         },
         capabilities=caps,
     )

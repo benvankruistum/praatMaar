@@ -54,3 +54,16 @@ class SharedWhisper:
             if self._model is None:
                 raise RuntimeError("Whisper-model is niet geladen.")
             yield self._model
+
+    @contextmanager
+    def try_locked_model(self, timeout: float = 0.0) -> Iterator[Any | None]:
+        """Levert het model, of ``None`` als de lock niet tijdig beschikbaar is."""
+
+        acquired = self._lock.acquire(timeout=timeout)
+        if not acquired:
+            yield None
+            return
+        try:
+            yield self._model
+        finally:
+            self._lock.release()

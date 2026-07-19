@@ -184,6 +184,8 @@
   "modules.speaker_detection.description": "Assigns speaker roles (me/other/unknown) from audio source; available to other modules via capabilities.",
   "modules.audio_capture.name": "Audio capture",
   "modules.audio_capture.description": "Continuously captures microphone audio on Windows for Meeting Buddy.",
+  "modules.speech_to_text.name": "Speech to text",
+  "modules.speech_to_text.description": "Transcribes Meeting Buddy audio locally without blocking active dictation.",
 
   "help.title": "praatMaar — Help",
   "help.close": "Close",

@@ -29,6 +29,7 @@ def test_load_enabled_modules_respects_config(tmp_path, monkeypatch) -> None:
         {
             "inbox-mirror": {"enabled": False},
             "audio-capture": {"enabled": False},
+            "speech-to-text": {"enabled": False},
         }
     )
     assert modules == []
@@ -36,3 +37,7 @@ def test_load_enabled_modules_respects_config(tmp_path, monkeypatch) -> None:
 
 def test_audio_capture_is_a_builtin_module() -> None:
     assert "audio-capture" in {module.id for module in all_builtin_modules()}
+
+
+def test_speech_to_text_is_a_builtin_module() -> None:
+    assert "speech-to-text" in {module.id for module in all_builtin_modules()}

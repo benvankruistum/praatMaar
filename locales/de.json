@@ -184,6 +184,8 @@
   "modules.speaker_detection.description": "Bestimmt Sprecherrollen (ich/andere/unbekannt) anhand der Audioquelle; für andere Module über Capabilities verfügbar.",
   "modules.audio_capture.name": "Audioaufnahme",
   "modules.audio_capture.description": "Nimmt unter Windows kontinuierlich Mikrofonaudio für Meeting Buddy auf.",
+  "modules.speech_to_text.name": "Sprache-zu-Text",
+  "modules.speech_to_text.description": "Transkribiert Meeting-Buddy-Audio lokal, ohne aktives Diktieren zu blockieren.",
 
   "help.title": "praatMaar — Hilfe",
   "help.close": "Schließen",

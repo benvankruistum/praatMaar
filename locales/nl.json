@@ -184,6 +184,8 @@
   "modules.speaker_detection.description": "Bepaalt sprekerrollen (ik/ander/onbekend) op basis van audiobron; beschikbaar voor andere modules via capabilities.",
   "modules.audio_capture.name": "Audio-opname",
   "modules.audio_capture.description": "Neemt op Windows continu microfoonaudio op voor Meeting Buddy.",
+  "modules.speech_to_text.name": "Spraak-naar-tekst",
+  "modules.speech_to_text.description": "Transcribeert Meeting Buddy-audio lokaal zonder actief dicteren te blokkeren.",
 
   "help.title": "praatMaar — Help",
   "help.close": "Sluiten",
