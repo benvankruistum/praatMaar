@@ -10,7 +10,7 @@ from uuid import uuid4
 from modules.capabilities.speech_to_text import TranscriptDelta
 
 from .config import MeetingBuddyConfig
-from .state import MeetingState, TopicStatus
+from .state import MeetingState, QuestionStatus, TopicStatus
 from .state_service import StateProposal
 
 _STOPWORDS = {
@@ -60,6 +60,7 @@ class HeuristicsEngine:
         window_text = " ".join(text for _, text in recent)
 
         proposals = self._topic_proposals(delta, state, config, now_s, window_text)
+        proposals.extend(self._question_proposals(delta, state, config, now_s, normalized))
         if "?" in delta.text or _QUESTION_PATTERN.search(normalized):
             proposals.append(
                 self._proposal(
@@ -80,6 +81,43 @@ class HeuristicsEngine:
                     {
                         "description": delta.text.strip(),
                         "owner": "UNKNOWN",
+                        "created_at": now_s,
+                    },
+                )
+            )
+        return proposals
+
+    def _question_proposals(
+        self,
+        delta: TranscriptDelta,
+        state: MeetingState,
+        config: MeetingBuddyConfig,
+        now_s: float,
+        normalized: str,
+    ) -> list[StateProposal]:
+        delta_id = f"{delta.session_id}:{delta.sequence}"
+        delta_tokens = set(_tokens(normalized))
+        proposals = []
+        for question in state.questions:
+            question_tokens = set(_tokens(_normalize(question.text)))
+            age = now_s - question.created_at if question.created_at is not None else 0
+            if (
+                question.status != QuestionStatus.OPEN
+                or question.source_delta_id == delta_id
+                or age > config.topic_match_window_s
+                or not _has_sufficient_overlap(question_tokens, delta_tokens, config)
+            ):
+                continue
+            proposals.append(
+                self._proposal(
+                    "update_question",
+                    delta,
+                    state,
+                    now_s,
+                    {
+                        "question_id": question.id,
+                        "status": QuestionStatus.POSSIBLY_ANSWERED.value,
+                        "resolved_at": now_s,
                     },
                 )
             )
@@ -150,3 +188,17 @@ def _normalize(text: str) -> str:
 
 def _tokens(text: str) -> tuple[str, ...]:
     return tuple(token for token in text.split() if token not in _STOPWORDS)
+
+
+def _has_sufficient_overlap(
+    expected_tokens: set[str],
+    actual_tokens: set[str],
+    config: MeetingBuddyConfig,
+) -> bool:
+    if not expected_tokens:
+        return False
+    matched = expected_tokens & actual_tokens
+    return (
+        len(matched) >= config.matched_tokens_min
+        and len(matched) / len(expected_tokens) >= config.topic_match_score
+    )

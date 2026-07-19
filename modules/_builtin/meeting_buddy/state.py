@@ -63,6 +63,7 @@ class ActionItem:
     owner: str = "UNKNOWN"
     status: ActionItemStatus = ActionItemStatus.CANDIDATE
     source_delta_id: str | None = None
+    created_at: float | None = None
     confidence: float = 1.0
 
 

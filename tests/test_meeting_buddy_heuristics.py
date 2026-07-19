@@ -4,6 +4,8 @@ from modules._builtin.meeting_buddy.config import MeetingBuddyConfig
 from modules._builtin.meeting_buddy.heuristics import HeuristicsEngine
 from modules._builtin.meeting_buddy.state import (
     MeetingState,
+    Question,
+    QuestionStatus,
     Topic,
     TopicSource,
     TopicStatus,
@@ -20,6 +22,39 @@ def test_question_mark_opens_question() -> None:
     )
 
     assert any(proposal.type == "add_question" for proposal in proposals)
+
+
+def test_later_overlap_marks_open_question_possibly_answered() -> None:
+    question = Question(
+        id="q1",
+        text="Hoe gaan we de website controleren?",
+        status=QuestionStatus.OPEN,
+        source_delta_id="t1:1",
+        created_at=10.0,
+        confidence=0.9,
+    )
+    state = replace(MeetingState.empty("m1"), questions=(question,))
+    delta = TranscriptDelta(
+        "t1",
+        2,
+        1000,
+        2000,
+        "We gaan de website morgen controleren.",
+        True,
+        0.9,
+    )
+
+    proposals = HeuristicsEngine().proposals_for(
+        delta, state, MeetingBuddyConfig.defaults(), now_s=20.0
+    )
+
+    updates = [proposal for proposal in proposals if proposal.type == "update_question"]
+    assert len(updates) == 1
+    assert updates[0].payload == {
+        "question_id": "q1",
+        "status": "possibly_answered",
+        "resolved_at": 20.0,
+    }
 
 
 def test_topic_match_requires_score_and_tokens() -> None:

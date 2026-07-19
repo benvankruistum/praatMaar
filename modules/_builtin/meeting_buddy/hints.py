@@ -40,7 +40,7 @@ class HintEngine:
             *self._action_candidates(state, config, now_s),
         ]
         candidates.sort(key=lambda hint: (-hint.priority, -hint.confidence, hint.id))
-        selected = candidates[: config.max_visible_hints]
+        selected = candidates[: max(0, min(config.max_visible_hints, 3))]
         for hint in selected:
             self._last_emitted_at[hint.cooldown_key] = now_s
         return selected
@@ -96,8 +96,6 @@ class HintEngine:
         self, state: MeetingState, config: MeetingBuddyConfig, now_s: float
     ) -> list[Hint]:
         hint_type = HintType.CANDIDATE_ACTION_WITHOUT_OWNER
-        if now_s < config.hint_min_wait_s[hint_type.value]:
-            return []
         return [
             self._hint(
                 hint_type,
@@ -110,6 +108,8 @@ class HintEngine:
             for action in state.action_items
             if action.status == ActionItemStatus.CANDIDATE
             and action.owner.strip().casefold() in {"", "unknown"}
+            and action.created_at is not None
+            and now_s - action.created_at >= config.hint_min_wait_s[hint_type.value]
             and self._may_emit(hint_type, action.id, action.confidence, config, now_s)
         ]
 
@@ -127,7 +127,7 @@ class HintEngine:
         last_emitted_at = self._last_emitted_at.get(cooldown_key)
         if last_emitted_at is None:
             return True
-        return now_s - last_emitted_at >= config.hint_cooldown[hint_type.value]
+        return now_s - last_emitted_at >= _cooldown_s(hint_type, config)
 
     @staticmethod
     def _hint(
@@ -146,6 +146,12 @@ class HintEngine:
             confidence=confidence,
             related_entity_id=entity_id,
             created_at=now_s,
-            expires_at=now_s + config.hint_cooldown[hint_type.value],
+            expires_at=now_s + _cooldown_s(hint_type, config),
             cooldown_key=f"{hint_type.value}:{entity_id}",
         )
+
+
+def _cooldown_s(hint_type: HintType, config: MeetingBuddyConfig) -> float:
+    if hint_type == HintType.QUESTION_OPEN:
+        return config.question_hint_cooldown_s
+    return config.hint_cooldown[hint_type.value]

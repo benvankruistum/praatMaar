@@ -127,6 +127,7 @@ class MeetingStateService:
             owner=str(payload.get("owner", "UNKNOWN")),
             status=ActionItemStatus(payload.get("status", ActionItemStatus.CANDIDATE)),
             source_delta_id=payload.get("source_delta_id", _first_source_delta(proposal)),
+            created_at=payload.get("created_at", proposal.created_at),
             confidence=float(payload.get("confidence", proposal.confidence)),
         )
         return replace(state, action_items=(*state.action_items, action))
@@ -136,7 +137,14 @@ class MeetingStateService:
         payload = proposal.payload
         action_id = str(payload["action_id"])
         action = _find_by_id(state.action_items, action_id, "Action item")
-        changes = _present_values(payload, "description", "owner", "source_delta_id", "confidence")
+        changes = _present_values(
+            payload,
+            "description",
+            "owner",
+            "source_delta_id",
+            "created_at",
+            "confidence",
+        )
         if "status" in payload:
             changes["status"] = ActionItemStatus(payload["status"])
         updated = replace(action, **changes)
