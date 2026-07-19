@@ -67,6 +67,8 @@ bestemmingsnaam; reset-frase **`standaard`** zet terug naar de defaultmap
 - **Logica:** `destinations.py` (normaliseren, matchen, padresolutie);
   wiring in `dictation.py`; commando-check in `Opnamesessie` vóór plakken.
 - **Opslaan:** `recovery.save_transcript` naar actieve map; prune alleen default.
+- **Plakken:** per bestemming `auto_paste` (default uit). Actief → die flag
+  (klembord + plakken of alleen opslaan); geen actieve → globale Instellingen.
 
 ### herstel-audio
 

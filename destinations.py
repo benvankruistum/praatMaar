@@ -15,7 +15,7 @@ def normalize_phrase(text: str) -> str:
     return cleaned
 
 
-def match_command(transcript: str, destinations: list[dict[str, str]]) -> tuple[str, str | None]:
+def match_command(transcript: str, destinations: list[dict[str, Any]]) -> tuple[str, str | None]:
     needle = normalize_phrase(transcript)
     if not needle:
         return ("none", None)
@@ -29,13 +29,32 @@ def match_command(transcript: str, destinations: list[dict[str, str]]) -> tuple[
 
 
 def resolve_save_dir(
-    active_name: str | None, destinations: list[dict[str, str]], default_dir: Path
+    active_name: str | None, destinations: list[dict[str, Any]], default_dir: Path
 ) -> Path:
     if active_name:
         for item in destinations:
             if item.get("name") == active_name:
-                return Path(item["path"])
+                return Path(str(item["path"]))
     return default_dir
+
+
+def resolve_auto_paste(
+    active_name: str | None,
+    destinations: list[dict[str, Any]],
+    global_auto_paste: bool,
+) -> bool:
+    """
+    Effectieve plak/klembord-modus.
+
+    Met actieve bestemming wint die flag; zonder actieve geldt de globale setting.
+    Ontbrekende `auto_paste` op een bestemming telt als False.
+    """
+
+    if active_name:
+        for item in destinations:
+            if item.get("name") == active_name:
+                return bool(item.get("auto_paste", False))
+    return bool(global_auto_paste)
 
 
 def open_in_explorer(path: Path) -> None:
@@ -57,7 +76,7 @@ def is_reserved_name(name: str) -> bool:
 
 def find_normalized_collision(
     name: str,
-    destinations: list[dict[str, str]],
+    destinations: list[dict[str, Any]],
     *,
     exclude_index: int | None = None,
 ) -> str | None:
@@ -73,10 +92,10 @@ def find_normalized_collision(
     return None
 
 
-def sanitize_destinations(raw: Any) -> list[dict[str, str]]:
+def sanitize_destinations(raw: Any) -> list[dict[str, Any]]:
     if not isinstance(raw, list):
         return []
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     seen_normalized: set[str] = set()
     for item in raw:
         if not isinstance(item, dict):
@@ -91,5 +110,11 @@ def sanitize_destinations(raw: Any) -> list[dict[str, str]]:
         if normalized in seen_normalized:
             continue
         seen_normalized.add(normalized)
-        out.append({"name": name, "path": path})
+        out.append(
+            {
+                "name": name,
+                "path": path,
+                "auto_paste": bool(item.get("auto_paste", False)),
+            }
+        )
     return out

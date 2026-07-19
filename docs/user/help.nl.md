@@ -8,6 +8,10 @@ wordt het transcript opgeslagen in de map van de actieve bestemming.
 **Sticky:** de actieve bestemming blijft aan staan totdat je wisselt of terugzet naar
 standaard. Je hoeft de naam niet elke keer opnieuw te zeggen.
 
+**Automatisch plakken:** per bestemming kun je instellen of tekst naar klembord +
+invoerveld mag. Standaard staat dat **uit** (alleen opslaan in de map). Zonder
+actieve bestemming geldt de globale optie in Instellingen.
+
 **Pill:** de kleine indicator op je scherm toont de naam van de actieve bestemming
 (zichtbaar ook als je niet aan het opnemen bent). Geen label betekent: standaardmap.
 

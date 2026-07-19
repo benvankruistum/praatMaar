@@ -20,7 +20,7 @@ import recovery
 _open_dialog: tk.Toplevel | None = None
 
 
-def _revalidate_active(dest_list: list[dict[str, str]], active: str | None) -> str | None:
+def _revalidate_active(dest_list: list[dict[str, Any]], active: str | None) -> str | None:
     if active is None:
         return None
     if any(d["name"] == active for d in dest_list):
@@ -34,8 +34,9 @@ def _edit_destination(
     *,
     initial_name: str = "",
     initial_path: str = "",
-) -> tuple[str, str] | None:
-    """Kleine subdialoog voor naam + pad; retourneert None bij annuleren."""
+    initial_auto_paste: bool = False,
+) -> tuple[str, str, bool] | None:
+    """Kleine subdialoog voor naam + pad + plakken; retourneert None bij annuleren."""
 
     dlg = tk.Toplevel(parent)
     dlg.withdraw()
@@ -47,6 +48,7 @@ def _edit_destination(
 
     name_var = tk.StringVar(value=initial_name)
     path_var = tk.StringVar(value=initial_path)
+    paste_var = tk.BooleanVar(value=initial_auto_paste)
 
     ttk.Label(dlg, text=i18n.t("destinations.name")).grid(
         row=0, column=0, sticky="w", padx=(12, 8), pady=(12, 6)
@@ -69,7 +71,13 @@ def _edit_destination(
         row=1, column=2, padx=(0, 12), pady=(0, 6)
     )
 
-    result: dict[str, tuple[str, str] | None] = {"value": None}
+    ttk.Checkbutton(
+        dlg,
+        text=i18n.t("destinations.auto_paste"),
+        variable=paste_var,
+    ).grid(row=2, column=0, columnspan=3, sticky="w", padx=12, pady=(4, 0))
+
+    result: dict[str, tuple[str, str, bool] | None] = {"value": None}
 
     def confirm() -> None:
         name = name_var.get().strip()
@@ -88,14 +96,14 @@ def _edit_destination(
                 parent=dlg,
             )
             return
-        result["value"] = (name, path)
+        result["value"] = (name, path, bool(paste_var.get()))
         dlg.destroy()
 
     def cancel() -> None:
         dlg.destroy()
 
     buttons = ttk.Frame(dlg)
-    buttons.grid(row=2, column=0, columnspan=3, sticky="e", padx=12, pady=(6, 12))
+    buttons.grid(row=3, column=0, columnspan=3, sticky="e", padx=12, pady=(6, 12))
     ttk.Button(buttons, text=i18n.t("destinations.cancel"), command=cancel).grid(
         row=0, column=0, padx=(0, 8)
     )
@@ -135,7 +143,7 @@ def open_destinations_dialog(
     win.columnconfigure(0, weight=1)
     win.rowconfigure(1, weight=1)
 
-    dest_list: list[dict[str, str]] = copy.deepcopy(
+    dest_list: list[dict[str, Any]] = copy.deepcopy(
         destinations.sanitize_destinations(current.get("destinations"))
     )
     active_var = tk.StringVar(
@@ -150,12 +158,14 @@ def open_destinations_dialog(
     list_frame.columnconfigure(0, weight=1)
     list_frame.rowconfigure(0, weight=1)
 
-    columns = ("name", "path")
+    columns = ("name", "path", "auto_paste")
     tree = ttk.Treeview(list_frame, columns=columns, show="headings", selectmode="browse", height=8)
     tree.heading("name", text=i18n.t("destinations.column.name"))
     tree.heading("path", text=i18n.t("destinations.column.path"))
+    tree.heading("auto_paste", text=i18n.t("destinations.column.auto_paste"))
     tree.column("name", width=140, stretch=False)
-    tree.column("path", width=320, stretch=True)
+    tree.column("path", width=280, stretch=True)
+    tree.column("auto_paste", width=90, stretch=False)
     tree.grid(row=0, column=0, sticky="nsew")
 
     scroll = ttk.Scrollbar(list_frame, orient="vertical", command=tree.yview)
@@ -172,7 +182,17 @@ def open_destinations_dialog(
     def _sync_tree() -> None:
         tree.delete(*tree.get_children())
         for index, item in enumerate(dest_list):
-            tree.insert("", "end", iid=str(index), values=(item["name"], item["path"]))
+            paste_label = (
+                i18n.t("destinations.auto_paste.yes")
+                if item.get("auto_paste")
+                else i18n.t("destinations.auto_paste.no")
+            )
+            tree.insert(
+                "",
+                "end",
+                iid=str(index),
+                values=(item["name"], item["path"], paste_label),
+            )
 
     def _selected_index() -> int | None:
         selection = tree.selection()
@@ -203,7 +223,7 @@ def open_destinations_dialog(
         result = _edit_destination(win, i18n.t("destinations.add"))
         if result is None:
             return
-        name, path = result
+        name, path, auto_paste = result
         error = _validate_name(name)
         if error is not None:
             messagebox.showwarning(
@@ -212,7 +232,7 @@ def open_destinations_dialog(
                 parent=win,
             )
             return
-        dest_list.append({"name": name, "path": path})
+        dest_list.append({"name": name, "path": path, "auto_paste": auto_paste})
         _revalidate_and_refresh()
 
     def edit_item() -> None:
@@ -230,10 +250,11 @@ def open_destinations_dialog(
             i18n.t("destinations.edit"),
             initial_name=item["name"],
             initial_path=item["path"],
+            initial_auto_paste=bool(item.get("auto_paste", False)),
         )
         if result is None:
             return
-        name, path = result
+        name, path, auto_paste = result
         error = _validate_name(name, skip_index=index)
         if error is not None:
             messagebox.showwarning(
@@ -243,7 +264,7 @@ def open_destinations_dialog(
             )
             return
         old_name = item["name"]
-        dest_list[index] = {"name": name, "path": path}
+        dest_list[index] = {"name": name, "path": path, "auto_paste": auto_paste}
         if active_var.get().strip() == old_name:
             active_var.set(name)
         _revalidate_and_refresh()

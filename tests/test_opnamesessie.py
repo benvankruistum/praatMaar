@@ -347,6 +347,60 @@ def _record_short_audio(session: Opnamesessie, sd: FakeSoundDevice) -> None:
     _wait_for_processing(session)
 
 
+def test_active_destination_without_auto_paste_skips_clipboard(
+    host: FakeHost,
+    sd: FakeSoundDevice,
+    states: list[RecordingState],
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import recovery
+
+    monkeypatch.setattr(recovery, "config_dir", lambda: tmp_path)
+
+    clipboard: list[str] = []
+    save_calls: list[str] = []
+    dests = [
+        {
+            "name": "Boodschappen",
+            "path": str(tmp_path / "boodschappen"),
+            "auto_paste": False,
+        }
+    ]
+
+    sess = Opnamesessie(
+        host=host,
+        sample_rate=16000,
+        channels=1,
+        minimum_recording_seconds=0.05,
+        auto_paste=True,
+        paste_delay_seconds=0.0,
+        language="nl",
+        delete_temp_audio=True,
+        mode="toggle",
+        warm_microphone=False,
+        wait_until_modifiers_clear=lambda: None,
+        on_ready=lambda: None,
+        notify=lambda state, mode=None: states.append(state),
+        push_level=lambda _level: None,
+        reset_levels=lambda: None,
+        copy_text=clipboard.append,
+        save_transcript=lambda text: (save_calls.append(text), recovery.save_transcript(text))[1],
+        preserve_audio=recovery.preserve_audio,
+        get_destinations=lambda: dests,
+        get_active_destination=lambda: "Boodschappen",
+    )
+    sess.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=_write_wav)
+    sess.model = FakeModel(text="melk en brood")
+
+    _record_short_audio(sess, sd)
+
+    assert save_calls == ["melk en brood"]
+    assert clipboard == []
+    assert host.paste_calls == 0
+    assert states[-1] == RecordingState.IDLE
+
+
 def test_destination_command_skips_paste_and_save(
     host: FakeHost,
     sd: FakeSoundDevice,
