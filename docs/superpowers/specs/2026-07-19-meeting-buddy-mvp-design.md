@@ -1,7 +1,7 @@
 # Design — Meeting Buddy MVP (verticale snede)
 
 - **Datum:** 2026-07-19
-- **Status:** Geïmplementeerd (branch `feat/meeting-buddy-mvp`)
+- **Status:** In implementatie (branch `feat/meeting-buddy-mvp`)
 - **Basis:** RFC-MeetingBuddy-01..04, RFC-AudioCapture-01, ADR-0003,
   capability-registry / speaker-detection / module-capabilities specs
 

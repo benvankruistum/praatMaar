@@ -76,7 +76,6 @@ packages = [
     "modules._builtin",
     "modules._builtin.meeting_buddy",
     "modules.capabilities",
-    "modules.testing",
 ]
 
 [tool.setuptools.package-data]
