@@ -26,6 +26,8 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 - Transcriptmap en actieve bestemmingsmap openen vanuit de Bestemmingen-dialoog
 - macOS-port: native NSPanel-indicator (`indicator._mac`, ADR-0002), tray op
   main thread, `host._mac`, TCC- en release-docs, PyObjC-dependency op Darwin
+- Cursor project-skills: `/update-documentation` en `/prepare-release`
+  (`.cursor/skills/`; zie `CLAUDE.md`)
 
 ### Fixed
 

@@ -29,10 +29,6 @@ In `.cursor/skills/` (deze repo):
 Issues en specs: markdown onder `.scratch/<feature-slug>/`.
 Zie `docs/agents/issue-tracker.md`. Publieke issues: GitHub Issues.
 
-### Triage labels
-
-Zie `docs/agents/triage-labels.md` als die aanwezig is.
-
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/`. Zie `docs/agents/domain.md`.
