@@ -1,8 +1,8 @@
-# Bestemmingen + Help Implementation Plan
+# Destinations implementation plan — STATUS: gedaan (2026-07-18)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Sticky bestemmingen (naam→map) met stem-wisseling via exacte match, zichtbaar in de pill; transcriptmap openen vanuit Instellingen; Help als tray-item naast Instellingen.
+**Goal:** Sticky bestemmingen (naam→map) met stem-wisseling via exacte match, zichtbaar in de pill; transcriptmap openen vanuit Bestemmingen-dialoog; Help als tray-item naast Instellingen.
 
 **Architecture:** Pure logica in `destinations.py` (normaliseren, matchen, padresolutie). `recovery.save_transcript` krijgt een optionele doelmap (prune alleen default). `Opnamesessie` checkt na transcriptie op bestemming-/reset-commando vóór plakken. Pill toont actieve naam in idle als er een bestemming actief is. Help is een Tk-venster met lokale markdown per UI-taal.
 

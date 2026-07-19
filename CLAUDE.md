@@ -1,7 +1,8 @@
 # praatMaar
 
-Lokale, Nederlandstalige dicteertool. Neemt spraak op via een sneltoets, transcribeert
-lokaal met Faster-Whisper (geen cloud) en plakt de tekst in het actieve invoerveld.
+Lokale Windows-dicteertool (UI/spraak: nl/en/de). Neemt spraak op via een
+sneltoets, transcribeert lokaal met Faster-Whisper (geen cloud) en plakt de tekst
+in het actieve invoerveld.
 
 **Gebruikersdocs:** [README.md](README.md) · status: [docs/STATUS.md](docs/STATUS.md)
 

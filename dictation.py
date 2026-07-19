@@ -511,12 +511,6 @@ def _handle_destination_command(kind: str, name: str | None) -> None:
         indicator.call_on_main(lambda: indicator.set_destination(active))
 
 
-def open_folder(path: Path) -> None:
-    """Opent een map in Verkenner (Windows)."""
-
-    destinations.open_in_explorer(path)
-
-
 def _build_session() -> Opnamesessie:
     """Bouwt de Opnamesessie met de huidige config en geïnjecteerde seams."""
 

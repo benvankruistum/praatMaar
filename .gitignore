@@ -18,6 +18,9 @@ installer/Output/
 # Interne werkdocumenten (issues/specs)
 .scratch/
 
+# Agent-sessie-artefacten (briefs/diffs/reports)
+.superpowers/
+
 # Tests
 .pytest_cache/
 .coverage

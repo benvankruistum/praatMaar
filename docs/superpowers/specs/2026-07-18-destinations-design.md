@@ -5,7 +5,7 @@
 
 ## Doel
 
-1. Vanuit Instellingen eenvoudig de (default) transcriptmap openen.
+1. Vanuit tray **Bestemmingen** eenvoudig de (default) transcriptmap openen.
 2. Genoemde **bestemmingen** (naam + map): sticky actieve bestemming,
    zichtbaar in de pill; wisselen met stem via een take die *alleen* die naam is.
 

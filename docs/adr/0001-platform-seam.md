@@ -13,7 +13,7 @@ automatisch meestarten in een eigen `autostart.py` (`winreg`), en de datamap in
 (`ctypes`/`WS_EX_NOACTIVATE`) hoort ook tot die categorie.
 
 Aanleiding was het onderzoek naar een macOS-port (zie
-[docs/HANDOFF-mac-port.md](../HANDOFF-mac-port.md)): er was geen enkele plek om een
+[docs/archive/HANDOFF-mac-port.md](../archive/HANDOFF-mac-port.md)): er was geen enkele plek om een
 tweede besturingssysteem achter te hangen. Een Mac-adapter toevoegen betekende
 edits in vier modules. De OS-afhankelijkheid had geen naam en geen testoppervlak.
 

@@ -3,10 +3,9 @@ macOS-adapter voor de platform-seam (`host`).
 
 Tegenhanger van `_win.py`. `paste()` en `app_dir()` zijn volledig en volgen de
 macOS-conventies. Het automatisch meestarten gebruikt een LaunchAgent-plist onder
-`~/Library/LaunchAgents/`.
-
-LaunchAgent-plist onder `~/Library/LaunchAgents/`. Op een echte Mac nog
-handmatig verifiëren (paste + login-item); unit-tests dekken app_dir/plist.
+`~/Library/LaunchAgents/`. Op een echte Mac nog handmatig verifiëren
+(paste + login-item); unit-tests dekken app_dir/plist.
+Zie ook `docs/archive/HANDOFF-mac-port.md`.
 """
 
 from __future__ import annotations

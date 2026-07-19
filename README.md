@@ -1,7 +1,8 @@
 # praatMaar
 
-Lokale, Nederlandstalige dicteertool. Neemt spraak op via een sneltoets,
-transcribeert lokaal met [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)
+Lokale dicteertool (UI/spraak: Nederlands, Engels, Duits). Neemt spraak op via
+een sneltoets, transcribeert lokaal met
+[Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)
 (geen cloud-API) en plakt de tekst in het actieve invoerveld.
 
 > **Platform:** Windows 10/11 is primair ondersteund. **macOS** heeft een

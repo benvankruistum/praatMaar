@@ -14,10 +14,13 @@ Laatst bijgewerkt: 2026-07-18.
 
 - Dicteercyclus (opname → Faster-Whisper → klembord/plakken)
 - Status-pill zonder focus te stelen (`indicator._win`)
-- Systeemvak + instellingen (`tray.py`, `settings.py`)
+- Systeemvak: Instellingen, Bestemmingen, Help (`tray.py`, dialogen)
+- Meertaligheid UI + spraak (`nl`/`en`/`de`)
+- Sticky bestemmingen (transcript naar gekozen map)
 - Laadscherm met model-downloadvoortgang (`splash.py`)
 - Herstel: transcripts + recovery-audio (`recovery.py`)
 - Platform-seam: paste, autostart, app-dir, single-instance (`host/`)
+- Windows-release: Inno Setup + CI (tag `v0.1.0`)
 
 ## macOS (nieuw)
 
@@ -39,6 +42,7 @@ permissies-doc. Eerste prioriteit: dicteercyclus + geen focus-diefstal + paste.
 1. macOS runtime-verificatie + eventuele fixes na eerste Mac-run.
 2. Recovery-audio opruimen / UI.
 3. Formele releases: Windows Setup.exe + zip; macOS `.app` (signing later).
+   CHANGELOG `[Unreleased]` bevat o.a. i18n, warm mic, bestemmingen, Help.
 
 ## Historische handoffs
 
