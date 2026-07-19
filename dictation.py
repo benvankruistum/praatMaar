@@ -25,7 +25,9 @@ from modules import (
     ModuleBus,
     load_enabled_modules,
     modules_config_for_settings,
+    noop_ui_dispatch,
     sanitize_modules_config,
+    tray_action_entries,
 )
 from opnamesessie import Opnamesessie
 from splash import Splash
@@ -158,6 +160,8 @@ INCREMENTAL_TRANSCRIPTION = bool(_user_config.get("incremental_transcription", F
 module_bus = ModuleBus()
 module_bus.set_modules(load_enabled_modules(MODULES_CONFIG))
 
+_ui_dispatch = noop_ui_dispatch
+
 
 def _emit_cycle_event(event: CycleEvent) -> None:
     module_bus.emit(event)
@@ -166,7 +170,10 @@ def _emit_cycle_event(event: CycleEvent) -> None:
 def _reload_modules() -> None:
     """Herlaadt enabled modules na een instellingenwijziging."""
 
-    module_bus.set_modules(load_enabled_modules(MODULES_CONFIG))
+    module_bus.shutdown()
+    module_bus.set_modules(load_enabled_modules(MODULES_CONFIG, ui_dispatch=_ui_dispatch))
+    if _tray is not None:
+        _tray.refresh_modules_menu()
 
 
 # =========================================================
@@ -1084,6 +1091,13 @@ def main() -> None:
     _indicator = indicator
     indicator.set_destination(ACTIVE_DESTINATION)
 
+    global _ui_dispatch
+    _ui_dispatch = indicator.call_on_main
+    _reload_modules()
+
+    def run_module_action(module_id: str, action_id: str) -> None:
+        indicator.call_on_main(lambda: module_bus.run_action(module_id, action_id))
+
     # Systeemvak-/menubalk. "Afsluiten" en Ctrl+C funnelen naar request_stop +
     # tray.stop; "Instellingen" wordt naar de hoofdthread gemarshald.
     def open_settings() -> None:
@@ -1175,6 +1189,8 @@ def main() -> None:
                 indicator.root,
                 current_settings(),
                 lambda new: apply_settings(new, indicator),
+                on_module_action=run_module_action,
+                enabled_module_ids={module.id for module in module_bus.modules},
             )
         )
 
@@ -1206,6 +1222,8 @@ def main() -> None:
         on_destinations=open_destinations,
         on_modules=open_modules,
         on_help=open_help,
+        on_module_action=run_module_action,
+        get_module_tray_actions=lambda: tray_action_entries(list(module_bus.modules)),
     )
     _tray = tray
 
@@ -1255,6 +1273,7 @@ def main() -> None:
             session.cancel()
 
         session.stop_audio_stream()
+        module_bus.shutdown()
         indicator.destroy()
 
 
@@ -1263,6 +1282,7 @@ if __name__ == "__main__":
     for _flag in (
         "--praatmaar-settings-ui",
         "--praatmaar-destinations-ui",
+        "--praatmaar-modules-ui",
         "--praatmaar-help-ui",
     ):
         if _flag in sys.argv:

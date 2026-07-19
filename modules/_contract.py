@@ -7,13 +7,17 @@ delen dezelfde `CycleEvent`-payload.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 SCHEMA_VERSION = 1
+
+UiDispatch = Callable[[Callable[[], None]], None]
+"""Plan een callable op de UI-thread (tkinter / Cocoa main)."""
 
 
 class CycleEventType(StrEnum):
@@ -80,9 +84,28 @@ class CycleEvent:
 
 @dataclass(frozen=True)
 class ModuleContext:
-    """Read-only context die modules bij opstarten krijgen."""
+    """Context die modules bij opstarten krijgen."""
 
     app_dir: Path
+    ui_dispatch: UiDispatch
+
+    def module_dir(self, module_id: str) -> Path:
+        """Datamap voor één module (mapnaam = kebab-case id)."""
+
+        from modules.settings_store import module_dir as _module_dir
+
+        return _module_dir(self.app_dir, module_id)
+
+
+@dataclass(frozen=True)
+class ModuleAction:
+    """Eén gebruikersactie die een module aanbiedt."""
+
+    id: str
+    label_key: str
+    handler: Callable[[], None]
+    in_tray: bool = False
+    """True → ook onder tray → Modules tonen (optioneel)."""
 
 
 class PraatMaarModule(Protocol):
@@ -100,3 +123,37 @@ class PraatMaarModule(Protocol):
     def on_app_start(self, ctx: ModuleContext) -> None: ...
 
     def on_event(self, event: CycleEvent) -> None: ...
+
+
+@runtime_checkable
+class ModuleWithActions(Protocol):
+    """Optioneel: module biedt acties aan (Modules-dialoog, optioneel tray)."""
+
+    def actions(self) -> list[ModuleAction]: ...
+
+
+@runtime_checkable
+class ModuleWithShutdown(Protocol):
+    """Optioneel: module ruimt op bij afsluiten praatMaar."""
+
+    def on_app_shutdown(self) -> None: ...
+
+
+def module_actions(module: PraatMaarModule) -> list[ModuleAction]:
+    """Acties van een module, of lege lijst als niet ondersteund."""
+
+    if not isinstance(module, ModuleWithActions):
+        return []
+    return list(module.actions())
+
+
+def module_tray_actions(module: PraatMaarModule) -> list[ModuleAction]:
+    """Acties die ook in het tray-submenu mogen verschijnen."""
+
+    return [action for action in module_actions(module) if action.in_tray]
+
+
+def noop_ui_dispatch(fn: Callable[[], None]) -> None:
+    """Fallback: voer direct uit (tests, vóór indicator beschikbaar is)."""
+
+    fn()

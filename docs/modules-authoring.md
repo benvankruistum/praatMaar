@@ -26,18 +26,25 @@ Implementeer het `PraatMaarModule`-Protocol (`modules/_contract.py`):
 | `display_name_key()` | ja | i18n-key voor UI |
 | `description_key()` | ja | i18n-key voor UI |
 | `default_enabled()` | ja | Default als key ontbreekt in config |
-| `on_app_start(ctx)` | ja | Eenmalig; `ctx.app_dir` = app-datamap |
+| `on_app_start(ctx)` | ja | Eenmalig; `ctx.app_dir`, `ctx.ui_dispatch`, `ctx.module_dir(id)` |
 | `on_event(event)` | ja | Alle `CycleEvent`s; filter zelf op `event.type` |
 
-Referentie-implementatie: `modules/_builtin/inbox_mirror.py`.
+Optionele protocols (duck typing — bestaande modules hoeven niets te wijzigen):
+
+| Protocol | Wanneer |
+|----------|---------|
+| `ModuleWithActions` | `actions()` → knoppen in Modules-dialoog; optioneel tray via `in_tray=True` |
+| `ModuleWithShutdown` | `on_app_shutdown()` — threads/vensters opruimen |
+
+Referentie-implementatie (minimaal): `modules/_builtin/inbox_mirror.py`.
 
 ### Event-afhandeling
 
 - Reageer op expliciete types (`CycleEventType.TRANSCRIPT_SAVED`, …).
 - Gooi **niet** ongevangen exceptions door — `ModuleBus` vangt af, maar logt
   wel; kapotte modules mogen dicteren niet verstoren.
-- Threading: events kunnen van de transcriptie-thread komen; geen tkinter/GUI
-  in `on_event` zonder marshalling naar de hoofdthread.
+- Threading: events kunnen van de transcriptie-thread komen; **geen tkinter/GUI**
+  in `on_event` — gebruik `ctx.ui_dispatch(...)` (na `on_app_start`).
 - Finaal gedrag: `transcript.saved` + `path` is het betrouwbare moment om
   bestanden te lezen/kopiëren.
 
@@ -122,20 +129,64 @@ python -m ruff check modules tests/test_modules_*.py
 python -m ruff format .
 ```
 
-## Module-specifieke config (v1)
+## Module-acties
 
-**Niet** in v1: per-module settings in de UI of extra keys in `config.json`.
-Als je configuratie nodig hebt:
+Implementeer `ModuleWithActions`:
 
-- Hardcode een veilig default, of
-- Gebruik vaste paden onder `ctx.app_dir`, of
-- Wacht op een vervolgfeature (module settings in dialoog)
+```python
+from modules._contract import ModuleAction, ModuleContext
+
+def actions(self) -> list[ModuleAction]:
+    return [
+        ModuleAction(
+            id="open",
+            label_key="modules.my_module.open",
+            handler=self._open_window,
+        ),
+        ModuleAction(
+            id="start",
+            label_key="modules.my_module.start",
+            handler=self._start,
+            in_tray=True,  # optioneel: ook onder tray → Modules
+        ),
+    ]
+```
+
+- Standaard verschijnen acties als **knoppen in de Modules-dialoog** (alleen als
+  de module ingeschakeld is).
+- `in_tray=True` → extra entry onder tray → **Modules** (submenu).
+- macOS: dialoog draait in subprocess → actieknoppen alleen via tray
+  (`in_tray=True`) tot er IPC komt.
+
+## Module-instellingen
+
+Gebruik `modules.settings_store` (eigen map per module):
+
+```python
+from modules.settings_store import load_config, save_config
+
+def on_app_start(self, ctx: ModuleContext) -> None:
+    self._config = load_config(ctx.app_dir, self.id, default={"mic": None})
+    self._app_dir = ctx.app_dir
+
+def _persist(self) -> None:
+    save_config(self._app_dir, self.id, self._config)
+```
+
+Pad: `%APPDATA%\\praatMaar\\<module-id>\\config.json`. Nog geen UI in de
+Modules-dialoog — module beheert eigen instellingenvenster.
+
+## Afsluiten en UI-thread
+
+- **`on_app_shutdown`:** stop threads, sluit vensters (via `ui_dispatch` indien nodig).
+- **`ctx.ui_dispatch(fn)`:** plan tkinter-werk op de hoofdthread (Windows: pill-root;
+  macOS: main-thread runloop).
 
 ## UI
 
 Nieuwe modules verschijnen **automatisch** in tray → **Modules** (checkbox
-aan/uit). Geen wijziging in `modules_dialog.py` nodig, tenzij je custom UI
-toevoegt (buiten scope v1).
+aan/uit). Acties en tray-submenu worden automatisch opgebouwd als je
+`ModuleWithActions` implementeert.
 
 macOS: dialoog draait via `settings_process.py` (`--praatmaar-modules-ui`).
 

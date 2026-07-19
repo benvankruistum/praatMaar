@@ -28,6 +28,7 @@ from pystray import Menu, MenuItem
 
 import i18n
 from indicator import RecordingState
+from modules._contract import ModuleAction, PraatMaarModule
 
 # Kleuren per toestand (RGBA), afgestemd op de pill.
 # Idle is bewust donker (niet lichtgrijs): op de Windows-taakbalk oogt
@@ -86,12 +87,18 @@ class TrayIcon:
         on_destinations: Callable[[], None],
         on_modules: Callable[[], None],
         on_help: Callable[[], None],
+        *,
+        on_module_action: Callable[[str, str], None] | None = None,
+        get_module_tray_actions: Callable[[], list[tuple[PraatMaarModule, ModuleAction]]]
+        | None = None,
     ) -> None:
         self._on_quit = on_quit
         self._on_settings = on_settings
         self._on_destinations = on_destinations
         self._on_modules = on_modules
         self._on_help = on_help
+        self._on_module_action = on_module_action
+        self._get_module_tray_actions = get_module_tray_actions
         self._state = RecordingState.IDLE
         self._running_main = False
 
@@ -104,11 +111,52 @@ class TrayIcon:
             menu=self._build_menu(),
         )
 
+    def _build_modules_menu(self) -> MenuItem:
+        entries = self._get_module_tray_actions() if self._get_module_tray_actions else []
+        if not entries:
+            return MenuItem(i18n.t("tray.modules"), self._handle_modules)
+
+        by_module: dict[str, tuple[PraatMaarModule, list[ModuleAction]]] = {}
+        for module, action in entries:
+            bucket = by_module.setdefault(module.id, (module, []))
+            bucket[1].append(action)
+
+        items: list[MenuItem | pystray.Menu] = [
+            MenuItem(i18n.t("modules.manage"), self._handle_modules, default=True),
+            Menu.SEPARATOR,
+        ]
+
+        for module, actions in by_module.values():
+            if len(actions) == 1:
+                action = actions[0]
+                items.append(
+                    MenuItem(
+                        i18n.t(action.label_key),
+                        lambda _i, _it, mid=module.id, aid=action.id: self._handle_module_action(
+                            mid, aid
+                        ),
+                    )
+                )
+                continue
+
+            action_items = [
+                MenuItem(
+                    i18n.t(action.label_key),
+                    lambda _i, _it, mid=module.id, aid=action.id: self._handle_module_action(
+                        mid, aid
+                    ),
+                )
+                for action in actions
+            ]
+            items.append(MenuItem(i18n.t(module.display_name_key()), Menu(*action_items)))
+
+        return MenuItem(i18n.t("tray.modules"), Menu(*items))
+
     def _build_menu(self) -> Menu:
         return Menu(
             MenuItem(i18n.t("tray.settings"), self._handle_settings, default=True),
             MenuItem(i18n.t("tray.destinations"), self._handle_destinations),
-            MenuItem(i18n.t("tray.modules"), self._handle_modules),
+            self._build_modules_menu(),
             MenuItem(i18n.t("tray.help"), self._handle_help),
             Menu.SEPARATOR,
             MenuItem(i18n.t("tray.quit"), self._handle_quit),
@@ -120,6 +168,15 @@ class TrayIcon:
         try:
             self._icon.menu = self._build_menu()
             self._icon.title = _tooltip(self._state)
+            self._icon.update_menu()
+        except Exception:
+            pass
+
+    def refresh_modules_menu(self) -> None:
+        """Vernieuwt het Modules-submenu na wijziging van ingeschakelde modules."""
+
+        try:
+            self._icon.menu = self._build_menu()
             self._icon.update_menu()
         except Exception:
             pass
@@ -141,6 +198,10 @@ class TrayIcon:
 
     def _handle_help(self, icon: pystray.Icon, item: MenuItem) -> None:
         self._on_help()
+
+    def _handle_module_action(self, module_id: str, action_id: str) -> None:
+        if self._on_module_action is not None:
+            self._on_module_action(module_id, action_id)
 
     def _handle_quit(self, icon: pystray.Icon, item: MenuItem) -> None:
         self._on_quit()

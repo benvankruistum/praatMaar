@@ -23,6 +23,8 @@ Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
   transcriberen (met vraag om WAV te verwijderen na succes)
 - **Modules:** tray-dialoog (aan/uit), event-journal (`events/events.jsonl`),
   inbox-spiegel, incrementele transcriptie (`incremental_transcription`)
+- **Module-capabilities:** acties (Modules-dialoog + optioneel tray), shutdown-hook,
+  `ui_dispatch`, per-module `config.json` onder app-dir
 - Per bestemming optioneel automatisch plakken (`auto_paste`, default uit)
 - macOS-port: native NSPanel-indicator (`indicator._mac`, ADR-0002), tray op
   main thread, `host._mac`, TCC- en release-docs, PyObjC-dependency op Darwin
