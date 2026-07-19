@@ -113,9 +113,12 @@ class MeetingOrchestrator:
                 capture_session_id=capture_session.session_id,
                 capture=capture,
             )
-        except Exception:
-            capture.stop_session(capture_session.session_id)
-            raise
+        except Exception as exc:
+            try:
+                capture.stop_session(capture_session.session_id)
+            except Exception:
+                pass
+            raise RuntimeError(f"Meeting Buddy starten mislukt: {exc}") from exc
 
         meeting_session_id = str(uuid4())
         self._binding = MeetingSessionBinding(
@@ -128,38 +131,70 @@ class MeetingOrchestrator:
         self._started_at = time.monotonic()
         self._state = MeetingState.empty(meeting_session_id)
 
-        capture.subscribe(capture_session.session_id, self.on_capture_status)
-        stt.subscribe(transcription_session.session_id, self.on_stt_event)
-        self._apply_agenda()
-        log_event(
-            self._observer,
-            "meeting_started",
-            meeting_session_id=meeting_session_id,
-            capture_session_id=capture_session.session_id,
-            transcription_session_id=transcription_session.session_id,
-        )
-        self._notify_ui()
+        try:
+            capture.subscribe(capture_session.session_id, self.on_capture_status)
+            stt.subscribe(transcription_session.session_id, self.on_stt_event)
+            self._apply_agenda()
+            log_event(
+                self._observer,
+                "meeting_started",
+                meeting_session_id=meeting_session_id,
+                capture_session_id=capture_session.session_id,
+                transcription_session_id=transcription_session.session_id,
+            )
+            self._notify_ui()
+        except Exception as exc:
+            self._cleanup_sessions(self._binding)
+            self._clear_running_state()
+            raise RuntimeError(f"Meeting Buddy starten mislukt: {exc}") from exc
 
     def stop(self) -> None:
         binding = self._binding
         if binding is None:
             return
 
-        self._stt.unsubscribe(binding.transcription_session_id, self.on_stt_event)
-        self._capture.unsubscribe(binding.capture_session_id, self.on_capture_status)
-        self._stt.stop_session(binding.transcription_session_id)
-        self._capture.stop_session(binding.capture_session_id)
-        duration_ms = int(self._elapsed_s() * 1000)
-        log_event(
-            self._observer,
-            "meeting_stopped",
-            meeting_session_id=binding.meeting_session_id,
-            duration_ms=duration_ms,
-        )
+        try:
+            self._cleanup_sessions(binding)
+            try:
+                log_event(
+                    self._observer,
+                    "meeting_stopped",
+                    meeting_session_id=binding.meeting_session_id,
+                    duration_ms=int(self._elapsed_s() * 1000),
+                )
+            except Exception:
+                pass
+            try:
+                self._notify_ui()
+            except Exception:
+                pass
+        finally:
+            self._clear_running_state()
+
+    def _cleanup_sessions(self, binding: MeetingSessionBinding) -> None:
+        try:
+            self._stt.unsubscribe(binding.transcription_session_id, self.on_stt_event)
+        except Exception:
+            pass
+        try:
+            self._capture.unsubscribe(binding.capture_session_id, self.on_capture_status)
+        except Exception:
+            pass
+        try:
+            self._stt.stop_session(binding.transcription_session_id)
+        except Exception:
+            pass
+        try:
+            self._capture.stop_session(binding.capture_session_id)
+        except Exception:
+            pass
+
+    def _clear_running_state(self) -> None:
         self._binding = None
         self._capture = None
         self._stt = None
         self._started_at = None
+        self._state = None
 
     def on_stt_event(self, event: object) -> None:
         binding = self._binding
