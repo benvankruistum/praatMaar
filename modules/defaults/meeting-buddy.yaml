@@ -1,0 +1,23 @@
+topic_match_score: 0.55
+matched_tokens_min: 2
+topic_match_window_s: 45
+
+question_hint_min_wait_s: 60
+question_hint_cooldown_s: 120
+question_hint_suppress_after_s: 600
+
+hint_cooldown:
+  topic_not_discussed: 180
+  question_open: 120
+  candidate_action_without_owner: 90
+
+hint_min_wait_s:
+  topic_not_discussed: 120
+  question_open: 60
+  candidate_action_without_owner: 5
+
+max_visible_hints: 3
+min_hint_confidence: 0.5
+
+max_whisper_queue_duration_s: 10
+max_audio_buffer_duration_s: 30

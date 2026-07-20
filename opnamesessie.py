@@ -94,6 +94,7 @@ class Opnamesessie:
         get_destinations: Callable[[], list[dict[str, Any]]] | None = None,
         get_active_destination: Callable[[], str | None] | None = None,
         on_user_error: Callable[[str], None] | None = None,
+        on_mic_ready: Callable[[], None] | None = None,
         shared_whisper: SharedWhisper | None = None,
     ) -> None:
         self.host = host
@@ -124,6 +125,7 @@ class Opnamesessie:
         self._get_destinations = get_destinations
         self._get_active_destination = get_active_destination
         self._on_user_error = on_user_error
+        self._on_mic_ready = on_mic_ready
 
         self._lock = threading.RLock()
         self._recording = False
@@ -167,7 +169,7 @@ class Opnamesessie:
         self._sd = sounddevice_mod
         self._write_wav = write_wav
 
-    def warmup_microphone(self) -> None:
+    def warmup_microphone(self) -> bool:
         """
         Opent de microfoonstream alvast (na model-load).
 
@@ -175,18 +177,39 @@ class Opnamesessie:
         warmup kost de eerste InputStream.open op Windows vaak 0,5–2 s
         (zeker Bluetooth). Op macOS nooit warm: anders blijft de systeembrede
         mic-indicator permanent in de menubalk staan.
+
+        Retourneert True als de microfoon bruikbaar is (of warm houden uit staat
+        en een stille probe slaagt).
         """
 
         if not self._keep_stream_warm():
-            return
+            return True
 
         try:
             self._ensure_stream()
             print(i18n.t("mic.warm"))
+            if self._on_mic_ready is not None:
+                self._on_mic_ready()
+            return True
         except Exception as exc:
             # Warmup is best-effort: geen dialoog (GUI bestaat vaak nog niet).
             print(i18n.t("mic.warm_failed", error=exc))
             print(format_recording_start_error(exc))
+            return False
+
+    def probe_microphone(self) -> bool:
+        """Controleert stilletjes of een inputstream geopend kan worden."""
+
+        try:
+            self._ensure_stream()
+            if self._on_mic_ready is not None:
+                self._on_mic_ready()
+            return True
+        except Exception:
+            return False
+        finally:
+            if not self._keep_stream_warm():
+                self.stop_audio_stream()
 
     def _keep_stream_warm(self) -> bool:
         """Effectief warm houden: user-optie, nooit op macOS (menubalk-indicator)."""
@@ -493,6 +516,8 @@ class Opnamesessie:
 
         try:
             self._ensure_stream()
+            if self._on_mic_ready is not None:
+                self._on_mic_ready()
         except Exception as exc:
             with self._lock:
                 self._recording = False

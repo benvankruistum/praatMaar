@@ -73,6 +73,23 @@ def _make_icon(color: tuple[int, int, int, int]) -> Image.Image:
     return img
 
 
+def _draw_attention_badge(base: Image.Image) -> Image.Image:
+    """Voegt een amber uitroepteken-badge toe (actie vereist)."""
+
+    img = base.copy()
+    draw = ImageDraw.Draw(img)
+    cx = ICON_SIZE - 14
+    cy = ICON_SIZE - 14
+    radius = 12
+    draw.ellipse(
+        [cx - radius, cy - radius, cx + radius, cy + radius],
+        fill=(255, 176, 32, 255),
+    )
+    draw.rectangle([cx - 2, cy - 7, cx + 2, cy + 2], fill=(255, 255, 255, 255))
+    draw.rectangle([cx - 2, cy + 4, cx + 2, cy + 7], fill=(255, 255, 255, 255))
+    return img
+
+
 def _tooltip(state: RecordingState) -> str:
     return i18n.t(_TOOLTIP_KEYS.get(state, "tray.tooltip.idle"))
 
@@ -100,6 +117,8 @@ class TrayIcon:
         self._on_module_action = on_module_action
         self._get_module_tray_actions = get_module_tray_actions
         self._state = RecordingState.IDLE
+        self._attention = False
+        self._attention_tooltip_key = "tray.tooltip.attention_mic"
         self._running_main = False
 
         self._icons = {state: _make_icon(color) for state, color in _STATE_COLORS.items()}
@@ -113,42 +132,47 @@ class TrayIcon:
 
     def _build_modules_menu(self) -> MenuItem:
         entries = self._get_module_tray_actions() if self._get_module_tray_actions else []
+
+        # Geen tray-acties: één klik opent het modules-overzicht (geen leeg submenu).
         if not entries:
             return MenuItem(i18n.t("tray.modules"), self._handle_modules)
 
-        by_module: dict[str, tuple[PraatMaarModule, list[ModuleAction]]] = {}
-        for module, action in entries:
-            bucket = by_module.setdefault(module.id, (module, []))
-            bucket[1].append(action)
-
         items: list[MenuItem | pystray.Menu] = [
             MenuItem(i18n.t("modules.manage"), self._handle_modules, default=True),
-            Menu.SEPARATOR,
         ]
 
-        for module, actions in by_module.values():
-            if len(actions) == 1:
-                action = actions[0]
-                items.append(
+        if entries:
+            by_module: dict[str, tuple[PraatMaarModule, list[ModuleAction]]] = {}
+            for module, action in entries:
+                bucket = by_module.setdefault(module.id, (module, []))
+                bucket[1].append(action)
+
+            items.append(Menu.SEPARATOR)
+
+            for module, actions in by_module.values():
+                if len(actions) == 1:
+                    action = actions[0]
+                    items.append(
+                        MenuItem(
+                            i18n.t(action.label_key),
+                            lambda _i,
+                            _it,
+                            mid=module.id,
+                            aid=action.id: self._handle_module_action(mid, aid),
+                        )
+                    )
+                    continue
+
+                action_items = [
                     MenuItem(
                         i18n.t(action.label_key),
                         lambda _i, _it, mid=module.id, aid=action.id: self._handle_module_action(
                             mid, aid
                         ),
                     )
-                )
-                continue
-
-            action_items = [
-                MenuItem(
-                    i18n.t(action.label_key),
-                    lambda _i, _it, mid=module.id, aid=action.id: self._handle_module_action(
-                        mid, aid
-                    ),
-                )
-                for action in actions
-            ]
-            items.append(MenuItem(i18n.t(module.display_name_key()), Menu(*action_items)))
+                    for action in actions
+                ]
+                items.append(MenuItem(i18n.t(module.display_name_key()), Menu(*action_items)))
 
         return MenuItem(i18n.t("tray.modules"), Menu(*items))
 
@@ -167,7 +191,7 @@ class TrayIcon:
 
         try:
             self._icon.menu = self._build_menu()
-            self._icon.title = _tooltip(self._state)
+            self._apply_icon_and_title()
             self._icon.update_menu()
         except Exception:
             pass
@@ -240,10 +264,39 @@ class TrayIcon:
         except Exception:
             pass
 
+    def set_attention_needed(
+        self,
+        active: bool,
+        *,
+        tooltip_key: str = "tray.tooltip.attention_mic",
+    ) -> None:
+        """Toont een uitroepteken op het icoon zolang actie nodig is (bijv. microfoon)."""
+
+        self._attention = active
+        self._attention_tooltip_key = tooltip_key
+        try:
+            self._apply_icon_and_title()
+        except Exception:
+            pass
+
+    def _tooltip_for(self) -> str:
+        if self._attention:
+            return i18n.t(self._attention_tooltip_key)
+        return _tooltip(self._state)
+
+    def _icon_for(self, state: RecordingState) -> Image.Image:
+        base = self._icons.get(state, self._icons[RecordingState.IDLE])
+        if self._attention:
+            return _draw_attention_badge(base)
+        return base
+
+    def _apply_icon_and_title(self) -> None:
+        self._icon.icon = self._icon_for(self._state)
+        self._icon.title = self._tooltip_for()
+
     def set_state(self, state: RecordingState, mode: str = "toggle") -> None:
         self._state = state
         try:
-            self._icon.icon = self._icons.get(state, self._icons[RecordingState.IDLE])
-            self._icon.title = _tooltip(state)
+            self._apply_icon_and_title()
         except Exception:
             pass

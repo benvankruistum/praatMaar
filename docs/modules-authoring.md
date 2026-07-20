@@ -100,6 +100,10 @@ Voeg keys toe in **alle drie** `locales/*.json`:
 "modules.my_module.description": "…"
 ```
 
+Beschrijf **wat deze module zelf doet** — niet andere modules bij naam. Andere
+modules mag je generiek noemen (“andere modules”, “via capabilities”), of het
+type input/output (audiostroom, transcriptdelta's). Geen “voor Meeting Buddy”.
+
 De modules-dialoog (`modules_dialog.py`) toont naam + beschrijving automatisch
 voor elke entry in `all_builtin_modules()`.
 
@@ -235,6 +239,15 @@ capabilities van de module (`unregister_owner`) — ook als `on_app_shutdown` fa
 
 Zie [capability-registry design](superpowers/specs/2026-07-19-capability-registry-design.md)
 en [speaker-detection design](superpowers/specs/2026-07-19-speaker-detection-design.md).
+
+### Experimentele streaming-capabilities
+
+De ingebouwde modules `audio-capture`, `speech-to-text` en `meeting-buddy`
+leveren respectievelijk continue Windows-microfooncapture, incrementele lokale
+transcriptie en meetingorkestratie met hints. Gebruik de capability-contracten
+`audio.continuous_capture` en `transcription.speech_to_text`; importeer geen
+implementatiedetails uit een andere module. Zie het
+[Meeting Buddy MVP-design](superpowers/specs/2026-07-19-meeting-buddy-mvp-design.md).
 
 ## UI
 

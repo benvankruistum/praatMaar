@@ -32,6 +32,7 @@ dependencies = [
     "pyperclip==1.11.0",
     "numpy==2.5.1",
     "scipy==1.18.0",
+    "PyYAML==6.0.3",
     "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
 ]
@@ -68,7 +69,17 @@ py-modules = [
     "i18n",
     "mac_input",
 ]
-packages = ["host", "indicator"]
+packages = [
+    "host",
+    "indicator",
+    "modules",
+    "modules._builtin",
+    "modules._builtin.meeting_buddy",
+    "modules.capabilities",
+]
+
+[tool.setuptools.package-data]
+modules = ["defaults/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

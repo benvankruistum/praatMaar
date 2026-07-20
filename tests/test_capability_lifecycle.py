@@ -98,7 +98,12 @@ def test_speaker_detection_registers_on_start(tmp_path: Path, monkeypatch) -> No
     monkeypatch.setattr("host.app_dir", lambda: tmp_path)
     caps = CapabilityRegistry()
     modules = load_enabled_modules(
-        {"speaker-detection": {"enabled": True}, "inbox-mirror": {"enabled": False}},
+        {
+            "speaker-detection": {"enabled": True},
+            "inbox-mirror": {"enabled": False},
+            "audio-capture": {"enabled": False},
+            "speech-to-text": {"enabled": False},
+        },
         whisper=SharedWhisper(),
         capabilities=caps,
     )
@@ -111,7 +116,12 @@ def test_capability_removed_after_shutdown(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("host.app_dir", lambda: tmp_path)
     caps = CapabilityRegistry()
     modules = load_enabled_modules(
-        {"speaker-detection": {"enabled": True}, "inbox-mirror": {"enabled": False}},
+        {
+            "speaker-detection": {"enabled": True},
+            "inbox-mirror": {"enabled": False},
+            "audio-capture": {"enabled": False},
+            "speech-to-text": {"enabled": False},
+        },
         capabilities=caps,
     )
     assert caps.get(CAPABILITY_ID) is not None

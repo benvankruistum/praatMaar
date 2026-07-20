@@ -26,6 +26,18 @@ Laatst bijgewerkt: 2026-07-19.
   ([ADR-0003](adr/0003-hybrid-module-system.md))
 - Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.1.0`)
 
+## Experimentele modules
+
+- `audio-capture`: continue microfooncapture op Windows (mic-only)
+- `speech-to-text`: incrementele lokale transcriptie via het gedeelde
+  Faster-Whisper-model
+- `meeting-buddy`: meetingstate, heuristische hints en compacte overlay; staat
+  standaard uit en kan via tray **Modules** worden ingeschakeld
+
+Deze Meeting Buddy-MVP is experimenteel en bevat nog geen loopback/system audio,
+AI-provider of review/export. Zie het
+[MVP-design](superpowers/specs/2026-07-19-meeting-buddy-mvp-design.md).
+
 ## macOS
 
 Geïmplementeerd én runtime-geverifieerd op Apple Silicon (macOS 26.x):

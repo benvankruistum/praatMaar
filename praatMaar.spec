@@ -16,7 +16,11 @@ import sys
 
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('locales', 'locales'), ('docs/user', 'docs/user')]
+datas = [
+    ("locales", "locales"),
+    ("docs/user", "docs/user"),
+    ("modules/defaults", "modules/defaults"),
+]
 binaries = []
 hiddenimports = []
 
@@ -70,6 +74,11 @@ hiddenimports += [
     "mac_input",
     "win_identity",
     "i18n",
+    "modules",
+    "modules._builtin.audio_capture",
+    "modules._builtin.speech_to_text",
+    "modules._builtin.meeting_buddy",
+    "modules.capabilities",
     # Platform-seam: de adapters worden lazy (in host._select) geïmporteerd,
     # dus expliciet opnemen zodat ze zeker in de bundle zitten.
     "host",

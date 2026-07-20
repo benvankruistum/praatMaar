@@ -728,8 +728,23 @@ def _handle_destination_command(kind: str, name: str | None) -> None:
         indicator.call_on_main(lambda: indicator.set_destination(active))
 
 
+def _set_mic_attention(needed: bool) -> None:
+    """Markeert het tray-icoon als er microfoonactie nodig is."""
+
+    tray = _tray
+    if tray is None:
+        return
+    tray.set_attention_needed(needed)
+
+
+def _refresh_mic_attention() -> None:
+    _set_mic_attention(not session.probe_microphone())
+
+
 def _report_user_error(message: str) -> None:
     """Toont een gebruikersfout in een dialoog zodra de indicator-GUI bestaat."""
+
+    _set_mic_attention(True)
 
     indicator = _indicator
     if indicator is None:
@@ -778,6 +793,7 @@ def _build_session() -> Opnamesessie:
         get_destinations=lambda: DESTINATIONS,
         get_active_destination=lambda: ACTIVE_DESTINATION,
         on_user_error=_report_user_error,
+        on_mic_ready=lambda: _set_mic_attention(False),
         shared_whisper=shared_whisper,
     )
 
@@ -1025,6 +1041,8 @@ def apply_settings(
     elif (not old_warm) and WARM_MICROPHONE:
         session.warmup_microphone()
 
+    _refresh_mic_attention()
+
     config.save_config(_user_config_dict())
 
     # Automatisch meestarten staat buiten config.json (register op Windows,
@@ -1249,6 +1267,7 @@ def main() -> None:
     # De pill is de enige toestandseigenaar; die stuurt het tray-icoon aan.
     indicator.state_listener = tray.set_state
     tray.start()
+    _refresh_mic_attention()
 
     # macOS 26+: géén pynput.Listener (TSM-crash op achtergrondthread).
     # NSEvent-monitor op de Cocoa-mainloop i.p.v. pynput.

@@ -29,6 +29,9 @@ Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
   `ModuleContext.whisper` — geen tweede model-load naast dicteren
 - **Capability registry:** modules bieden services aan via stabiele ID’s
   (`ctx.capabilities`); eerste provider: Speaker Detection (`audio.speaker_detection`)
+- **Meeting Buddy MVP (experimenteel):** Windows mic-only continue capture,
+  incrementele lokale transcriptie, immutable meetingstate en maximaal drie
+  heuristische hints in een compacte overlay; `meeting-buddy` staat standaard uit
 
 - Per bestemming optioneel automatisch plakken (`auto_paste`, default uit)
 - macOS-port: native NSPanel-indicator (`indicator._mac`, ADR-0002), tray op
