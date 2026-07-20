@@ -268,6 +268,14 @@ def test_stop_waits_for_capture_callback_and_suppresses_late_events() -> None:
 
     def pause_after_stopping_check(state: object) -> list[TranscriptGap]:
         callback_started.set()
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            with stt._lock:
+                if getattr(state, "stopping", False):
+                    break
+            time.sleep(0.001)
+        else:
+            raise AssertionError("stop_session zette stopping niet binnen 2s")
         assert finish_callback.wait(timeout=2)
         return original_trim_queue(state)
 

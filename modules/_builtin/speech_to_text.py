@@ -157,6 +157,9 @@ class IncrementalSpeechToText:
             with self._lock:
                 state.queue.append(event.chunk)
                 gaps = self._trim_queue(state)
+                stopping = state.stopping
+            if stopping:
+                return
             if gaps:
                 self._set_status(state, TranscriptionStatus.DELAYED)
             for gap in gaps:
