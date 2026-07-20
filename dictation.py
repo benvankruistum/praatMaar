@@ -1085,6 +1085,7 @@ def main() -> None:
 
     # Bestandslog: onder pythonw / windowed exe is er geen console.
     log_file = app_logging.setup_logging()
+    config.ensure_app_data_dirs()
     print(i18n.t("log.path", path=log_file))
 
     # Slechts één instantie tegelijk. Een tweede start (bijv. autostart én een

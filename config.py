@@ -29,6 +29,25 @@ def config_path() -> Path:
     return config_dir() / "config.json"
 
 
+# Standaard submappen onder de app-datamap (documentatie + externe tools).
+_APP_DATA_SUBDIRS = ("transcripts", "recovery", "events", "inbox")
+
+
+def ensure_app_data_dirs() -> Path:
+    """
+    Maakt de app-datamap en standaard submappen aan.
+
+    Idempotent; veilig bij elke start aan te roepen vóór modules of dicteren
+    iets wegschrijven.
+    """
+
+    base = config_dir()
+    base.mkdir(parents=True, exist_ok=True)
+    for name in _APP_DATA_SUBDIRS:
+        (base / name).mkdir(parents=True, exist_ok=True)
+    return base
+
+
 def load_config() -> dict[str, Any]:
     """Leest de config; geeft een leeg dict terug als die er niet is of stuk is."""
 
