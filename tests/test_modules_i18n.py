@@ -23,8 +23,12 @@ def test_builtin_module_i18n_keys_exist_in_all_locales() -> None:
     for lang in LANGUAGES:
         strings = _load_locale(lang)
         for module in all_builtin_modules():
-            assert strings.get(module.display_name_key()), f"{lang}: missing {module.display_name_key()}"
-            assert strings.get(module.description_key()), f"{lang}: missing {module.description_key()}"
+            assert strings.get(module.display_name_key()), (
+                f"{lang}: missing {module.display_name_key()}"
+            )
+            assert strings.get(module.description_key()), (
+                f"{lang}: missing {module.description_key()}"
+            )
 
 
 def test_module_descriptions_do_not_name_other_modules() -> None:

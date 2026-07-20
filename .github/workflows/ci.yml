@@ -43,8 +43,8 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          # Unit tests: pure modules + Opnamesessie (numpy voor audiobuffers).
-          python -m pip install pytest==9.1.1 numpy==2.5.1
+          # Runtime deps (o.a. PyYAML voor meeting-buddy, pystray voor tray-tests).
+          python -m pip install -r requirements.txt pytest==9.1.1
 
       - name: Run tests
         run: python -m pytest -q

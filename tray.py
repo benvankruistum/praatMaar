@@ -155,9 +155,10 @@ class TrayIcon:
                     items.append(
                         MenuItem(
                             i18n.t(action.label_key),
-                            lambda _i, _it, mid=module.id, aid=action.id: self._handle_module_action(
-                                mid, aid
-                            ),
+                            lambda _i,
+                            _it,
+                            mid=module.id,
+                            aid=action.id: self._handle_module_action(mid, aid),
                         )
                     )
                     continue
