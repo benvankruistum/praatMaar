@@ -100,6 +100,10 @@ Voeg keys toe in **alle drie** `locales/*.json`:
 "modules.my_module.description": "…"
 ```
 
+Beschrijf **wat deze module zelf doet** — niet andere modules bij naam. Andere
+modules mag je generiek noemen (“andere modules”, “via capabilities”), of het
+type input/output (audiostroom, transcriptdelta's). Geen “voor Meeting Buddy”.
+
 De modules-dialoog (`modules_dialog.py`) toont naam + beschrijving automatisch
 voor elke entry in `all_builtin_modules()`.
 

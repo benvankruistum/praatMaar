@@ -33,8 +33,13 @@ def open_modules_dialog(
     global _open_dialog
 
     if _open_dialog is not None and _open_dialog.winfo_exists():
+        _open_dialog.deiconify()
         _open_dialog.lift()
+        _open_dialog.attributes("-topmost", True)
+        _open_dialog.after(300, lambda: _open_dialog.attributes("-topmost", False))
         _open_dialog.focus_force()
+        if wait:
+            parent.wait_window(_open_dialog)
         return
 
     modules_config = modules_config_for_settings(current.get("modules") or {})
@@ -46,7 +51,6 @@ def open_modules_dialog(
     dlg.withdraw()
     dlg.title(i18n.t("modules.title"))
     dlg.resizable(False, False)
-    dlg.transient(parent)
     dlg.columnconfigure(0, weight=1)
 
     frame = ttk.Frame(dlg, padding=12)
@@ -137,6 +141,17 @@ def open_modules_dialog(
     dlg.bind("<Destroy>", _on_destroy)
 
     dlg.update_idletasks()
+    width = max(dlg.winfo_reqwidth(), 480)
+    height = max(dlg.winfo_reqheight(), 400)
+    x = (dlg.winfo_screenwidth() - width) // 2
+    y = (dlg.winfo_screenheight() - height) // 3
+    dlg.geometry(f"{width}x{height}+{x}+{y}")
+
     dlg.deiconify()
+    dlg.lift()
+    dlg.attributes("-topmost", True)
+    dlg.after(300, lambda: dlg.attributes("-topmost", False))
+    dlg.focus_force()
+
     if wait:
         parent.wait_window(dlg)
