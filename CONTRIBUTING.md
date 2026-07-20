@@ -48,6 +48,16 @@ v1: geen plugin-installatie buiten de repo; modules worden geregistreerd in
   `ruff check` en `ruff format --check`. Voor commit: `ruff check --fix .`
   en `ruff format .`.
 
+## Tests en CI
+
+- Lokaal: `requirements-dev.txt` (runtime + pytest + ruff).
+- CI test installeert `requirements.txt` + pytest — dezelfde runtime-deps als de app.
+- Veel tests importeren via `modules.registry`; dat laadt **alle** ingebouwde
+  modules eager. Nieuwe runtime-deps horen in `requirements.txt` / `pyproject.toml`,
+  anders faalt CI met importfouten (niet alleen de nieuwe tests).
+
+Zie ook [docs/modules-authoring.md](docs/modules-authoring.md) (valkuilen).
+
 ## Git-workflow
 
 We werken **altijd via feature-branches**. Direct op `main` committen of
