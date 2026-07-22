@@ -1,7 +1,7 @@
 # Design — Meeting Buddy tray- & agenda-UX
 
 - **Datum:** 2026-07-22
-- **Status:** Review (herzien na feedback; wacht op goedkeuring)
+- **Status:** Geïmplementeerd (branch `feat/meeting-buddy-tray-ux`)
 - **Branch:** `feat/meeting-buddy-tray-ux`
 - **Gerelateerd:**
   [2026-07-19-meeting-buddy-mvp-design.md](2026-07-19-meeting-buddy-mvp-design.md),

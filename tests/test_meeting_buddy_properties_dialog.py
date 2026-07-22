@@ -70,13 +70,16 @@ def test_build_properties_result_loopback_disabled_clears_device() -> None:
 def test_show_properties_dialog_cancel_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
     import tkinter as tk
 
+    try:
+        root = tk.Tk()
+    except tk.TclError as exc:
+        pytest.skip(f"Tk unavailable: {exc}")
+    root.withdraw()
+
     monkeypatch.setattr(
         "modules._builtin.meeting_buddy.properties_dialog.list_loopback_output_devices",
         lambda: [("Default", None)],
     )
-
-    root = tk.Tk()
-    root.withdraw()
 
     original_topllevel = tk.Toplevel
 
@@ -102,10 +105,12 @@ def test_show_properties_dialog_cancel_returns_none(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(tk, "Toplevel", patched_topllevel)
 
-    result = show_properties_dialog(
-        enable_loopback=True,
-        loopback_device=None,
-        parent=root,
-    )
-    root.destroy()
+    try:
+        result = show_properties_dialog(
+            enable_loopback=True,
+            loopback_device=None,
+            parent=root,
+        )
+    finally:
+        root.destroy()
     assert result is None

@@ -95,9 +95,18 @@ wenn Sie vertrauliche Inhalte diktieren.
 
 ## Meeting Buddy und Microsoft Teams (Windows)
 
-**Meeting Buddy** (Tray → **Module**) hört während eines Meetings mit und zeigt
-kompakte Hinweise. Unter Windows kann es neben dem Mikrofon optional
-**Meeting-Audio** vom Standard-Windows-Ausgabegerät per Loopback aufnehmen.
+Aktivieren Sie **Meeting Buddy** über Tray → **Module**. Nach **Speichern** bleibt
+das Fenster offen und zeigt Schaltflächen für Start, Schnellstart, Stopp, Agenda
+und Eigenschaften. Im Tray gibt es außerdem **Meeting Buddy ▸** mit denselben
+Aktionen.
+
+- **Besprechung starten…** öffnet die Agenda (Bibliothek mit Zuletzt + alle `.md`-Agenden).
+- **Besprechung starten (schnell)** startet mit der aktuellen Agenda ohne Dialog.
+- **Agenda bearbeiten** zum Speichern/Laden ohne Start.
+- **Eigenschaften** für Meeting-Audio (Windows-Loopback) und Ausgabegerät.
+
+Unter Windows kann Meeting Buddy neben dem Mikrofon optional **Meeting-Audio** vom
+gewählten Windows-Ausgabegerät per Loopback aufnehmen.
 
 Für Teams-Anrufe:
 
@@ -107,6 +116,3 @@ Für Teams-Anrufe:
 
 Das Meeting-Buddy-Overlay zeigt, ob Meeting-Audio aktiv ist. Ist Loopback nicht
 verfügbar, wird nur das Mikrofon aufgenommen und das Overlay warnt Sie.
-
-Bei **Meeting starten** können Sie im Vorbereitungsdialog das Windows-
-**Ausgabegerät** für Meeting-Audio wählen (Standard = Windows-Standardausgabe).
