@@ -25,3 +25,10 @@ def test_load_config_invalid_json_returns_empty(tmp_path: Path, monkeypatch) -> 
     monkeypatch.setattr(config, "config_dir", lambda: tmp_path)
     (tmp_path / "config.json").write_text("{niet-json", encoding="utf-8")
     assert config.load_config() == {}
+
+
+def test_ensure_app_data_dirs_creates_standard_layout(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(config, "config_dir", lambda: tmp_path)
+    assert config.ensure_app_data_dirs() == tmp_path
+    for name in ("transcripts", "recovery", "events", "inbox"):
+        assert (tmp_path / name).is_dir()
