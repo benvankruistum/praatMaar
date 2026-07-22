@@ -13,7 +13,8 @@ Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
 ### Added
 
 - Meeting Buddy (Windows): loopback-status zichtbaar in overlay; prep-dialoog om
-  meetinggeluid-uitvoer te kiezen; automatische loopback-reconnect bij device-wissel
+  meetinggeluid-uitvoer te kiezen; automatische loopback-reconnect bij device-wissel;
+  configureerbare mix-gewichten; overlay voor bewuste mic-only modus
 - Optionele warme microfoon (`warm_microphone`, default uit)
 - **Bestemmingen:** sticky transcriptdoelen (naam→map), stemwissel via exacte
   match, actieve naam in de pill, beheer via tray-dialoog

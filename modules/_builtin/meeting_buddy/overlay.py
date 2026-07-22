@@ -382,6 +382,13 @@ class MeetingBuddyOverlay:
                 else "modules.meeting_buddy.overlay.recording.mic_only_unavailable"
             )
             return i18n.t(key)
+        if not loopback_requested:
+            key = (
+                "modules.meeting_buddy.overlay.recording.mic_only_delayed"
+                if delayed
+                else "modules.meeting_buddy.overlay.recording.mic_only"
+            )
+            return i18n.t(key)
         if delayed:
             return i18n.t("modules.meeting_buddy.overlay.recording.active_delayed")
         return i18n.t("modules.meeting_buddy.overlay.recording.active")
@@ -399,17 +406,23 @@ class MeetingBuddyOverlay:
         if capture == "error":
             return i18n.t("modules.meeting_buddy.overlay.listening.error")
         if capture in {"starting", "reconnecting"}:
+            if capture == "reconnecting" and loopback_requested:
+                return i18n.t("modules.meeting_buddy.overlay.listening.reconnecting_loopback")
             return i18n.t("modules.meeting_buddy.overlay.listening.starting")
         if capture == "active" and stt == "delayed":
             if loopback_active is True:
                 return i18n.t("modules.meeting_buddy.overlay.listening.active_loopback_delayed")
             if loopback_requested and loopback_active is False:
                 return i18n.t("modules.meeting_buddy.overlay.listening.mic_only_unavailable")
+            if not loopback_requested:
+                return i18n.t("modules.meeting_buddy.overlay.listening.mic_only_delayed")
             return i18n.t("modules.meeting_buddy.overlay.listening.delayed")
         if capture == "active" and loopback_active is True:
             return i18n.t("modules.meeting_buddy.overlay.listening.active_loopback")
         if capture == "active" and loopback_requested and loopback_active is False:
             return i18n.t("modules.meeting_buddy.overlay.listening.mic_only_unavailable")
+        if capture == "active" and not loopback_requested:
+            return i18n.t("modules.meeting_buddy.overlay.listening.mic_only")
         if capture == "active" and stt == "active":
             return i18n.t("modules.meeting_buddy.overlay.listening.active")
         if capture == "active":

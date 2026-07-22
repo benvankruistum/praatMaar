@@ -82,3 +82,35 @@ def test_listening_text_when_loopback_unavailable() -> None:
     )
     assert "alleen microfoon" in text.lower()
     assert "meetinggeluid niet beschikbaar" in text.lower()
+
+
+def test_listening_text_when_mic_only_mode_selected() -> None:
+    import i18n
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
+    from modules.capabilities.continuous_capture import CaptureStatus
+    from modules.capabilities.speech_to_text import TranscriptionStatus
+
+    i18n.set_ui_language("nl")
+    text = MeetingBuddyOverlay._listening_text(
+        CaptureStatus.ACTIVE,
+        TranscriptionStatus.ACTIVE,
+        loopback_active=False,
+        loopback_requested=False,
+    )
+    assert text == "Opname: alleen microfoon"
+    assert "niet beschikbaar" not in text
+
+
+def test_listening_text_when_reconnecting_loopback() -> None:
+    import i18n
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
+    from modules.capabilities.continuous_capture import CaptureStatus
+    from modules.capabilities.speech_to_text import TranscriptionStatus
+
+    i18n.set_ui_language("nl")
+    text = MeetingBuddyOverlay._listening_text(
+        CaptureStatus.RECONNECTING,
+        TranscriptionStatus.ACTIVE,
+        loopback_requested=True,
+    )
+    assert "meetinggeluid" in text.lower()
