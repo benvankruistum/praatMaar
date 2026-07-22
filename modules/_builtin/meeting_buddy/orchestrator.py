@@ -39,7 +39,7 @@ from .heuristics import HeuristicsEngine
 from .hints import HintEngine
 from .observability import EventObserver, log_event
 from .prep import parse_agenda
-from .state import Hint, MeetingState, TopicSource
+from .state import Hint, HintStatus, MeetingState, TopicSource
 from .state_service import MeetingStateService, StateProposal
 
 UiUpdate = Callable[[MeetingState], None]
@@ -78,6 +78,7 @@ class MeetingOrchestrator:
         self._started_at: float | None = None
         self._capture_status = CaptureStatus.IDLE
         self._transcription_status = TranscriptionStatus.IDLE
+        self._last_ui_notify_at = 0.0
 
     @property
     def binding(self) -> MeetingSessionBinding | None:
@@ -122,11 +123,7 @@ class MeetingOrchestrator:
             minimum_contract_version=STT_CONTRACT_VERSION,
         )
 
-        capture_session = capture.start_session(
-            config={
-                "max_audio_buffer_duration_s": self._config.max_audio_buffer_duration_s,
-            }
-        )
+        capture_session = capture.start_session(self._capture_config())
         try:
             transcription_session = stt.start_session(
                 capture_session_id=capture_session.session_id,
@@ -166,7 +163,7 @@ class MeetingOrchestrator:
                 capture_session_id=capture_session.session_id,
                 transcription_session_id=transcription_session.session_id,
             )
-            self._notify_ui()
+            self._notify_ui(force=True)
         except Exception as exc:
             self._cleanup_sessions(self._binding)
             self._clear_running_state()
@@ -186,16 +183,12 @@ class MeetingOrchestrator:
             capture_session_id=binding.capture_session_id,
         )
         self._capture_status = CaptureStatus.RECONNECTING
-        self._notify_ui()
+        self._notify_ui(force=True)
         self._cleanup_sessions(binding)
 
         capture_session = None
         try:
-            capture_session = self._capture.start_session(
-                config={
-                    "max_audio_buffer_duration_s": (self._config.max_audio_buffer_duration_s),
-                }
-            )
+            capture_session = self._capture.start_session(self._capture_config())
             transcription_session = self._stt.start_session(
                 capture_session_id=capture_session.session_id,
                 capture=self._capture,
@@ -220,10 +213,10 @@ class MeetingOrchestrator:
                     pass
             self._capture_status = CaptureStatus.ERROR
             self._transcription_status = TranscriptionStatus.ERROR
-            self._notify_ui()
+            self._notify_ui(force=True)
             raise RuntimeError(f"Microfoon herverbinden mislukt: {exc}") from exc
 
-        self._notify_ui()
+        self._notify_ui(force=True)
 
     def stop(self) -> None:
         binding = self._binding
@@ -242,7 +235,7 @@ class MeetingOrchestrator:
             except Exception:
                 pass
             try:
-                self._notify_ui()
+                self._notify_ui(force=True)
             except Exception:
                 pass
         finally:
@@ -283,7 +276,7 @@ class MeetingOrchestrator:
             if event.session_id != binding.transcription_session_id:
                 return
             self._transcription_status = event.status
-            self._notify_ui()
+            self._notify_ui(force=True)
             return
         if isinstance(event, TranscriptGap):
             log_event(
@@ -296,7 +289,7 @@ class MeetingOrchestrator:
                 reason=event.reason,
             )
             self._transcription_status = TranscriptionStatus.DELAYED
-            self._notify_ui()
+            self._notify_ui(force=True)
             return
         if not isinstance(event, TranscriptDeltaReceived):
             return
@@ -304,6 +297,7 @@ class MeetingOrchestrator:
             return
 
         now_s = self._elapsed_s()
+        version_before = self.state.version
         for proposal in self._heuristics.proposals_for(
             event.delta,
             self.state,
@@ -321,8 +315,11 @@ class MeetingOrchestrator:
                 proposal_type=proposal.type,
             )
 
+        hints_before = self.state.emitted_hints
         self._update_hints(now_s)
-        self._notify_ui()
+        state_changed = self.state.version != version_before
+        hints_changed = self.state.emitted_hints != hints_before
+        self._notify_ui(force=state_changed or hints_changed)
 
     def on_capture_status(self, event: object) -> None:
         binding = self._binding
@@ -332,7 +329,7 @@ class MeetingOrchestrator:
             if event.session_id != binding.capture_session_id:
                 return
             self._capture_status = event.status
-            self._notify_ui()
+            self._notify_ui(force=True)
         elif isinstance(event, CaptureGap):
             log_event(
                 self._observer,
@@ -356,7 +353,7 @@ class MeetingOrchestrator:
             related_entity_id=hint.related_entity_id,
             state_version=self.state.version,
         )
-        self._notify_ui()
+        self._notify_ui(force=True)
 
     def confirm_hint(self, hint_id: str) -> None:
         hint = self._find_hint(hint_id)
@@ -391,7 +388,7 @@ class MeetingOrchestrator:
             action_item_id=hint.related_entity_id,
             state_version=self.state.version,
         )
-        self._notify_ui()
+        self._notify_ui(force=True)
 
     def _find_hint(self, hint_id: str) -> Hint:
         try:
@@ -429,20 +426,21 @@ class MeetingOrchestrator:
         self._state = self._state_service.apply(self.state, proposal)
 
     def _update_hints(self, now_s: float) -> None:
-        hints = self._hints.evaluate(self.state, self._config, now_s)
-        if tuple(hints) == self.state.emitted_hints:
+        fresh = self._hints.evaluate(self.state, self._config, now_s)
+        merged = _merge_visible_hints(self.state.emitted_hints, fresh, now_s)
+        if _hints_equivalent(self.state.emitted_hints, merged):
             return
         proposal = StateProposal(
             proposal_id=f"hints-{uuid4()}",
             meeting_session_id=self.state.meeting_session_id,
             type="set_hints",
-            payload={"hints": [_hint_payload(hint) for hint in hints]},
+            payload={"hints": [_hint_payload(hint) for hint in merged]},
             source_delta_ids=(),
             confidence=1.0,
             created_at=now_s,
         )
         self._state = self._state_service.apply(self.state, proposal)
-        for hint in hints:
+        for hint in merged:
             log_event(
                 self._observer,
                 "hint_emitted",
@@ -457,8 +455,67 @@ class MeetingOrchestrator:
             return 0.0
         return time.monotonic() - self._started_at
 
-    def _notify_ui(self) -> None:
+    def _capture_config(self) -> dict[str, object]:
+        """Build audio-capture options: app mic + Meeting Buddy loopback settings."""
+
+        from config import load_config
+
+        app_settings = load_config()
+        microphone_device = app_settings.get("microphone_device")
+        device = microphone_device if isinstance(microphone_device, int) else None
+        return {
+            "max_audio_buffer_duration_s": self._config.max_audio_buffer_duration_s,
+            "device": device,
+            "enable_loopback": self._config.enable_loopback,
+            "loopback_device": self._config.loopback_device,
+        }
+
+    def _notify_ui(self, *, force: bool = False) -> None:
+        if self._state is None:
+            return
+        if not force:
+            now = time.monotonic()
+            if now - self._last_ui_notify_at < 0.5:
+                return
+            self._last_ui_notify_at = now
+        else:
+            self._last_ui_notify_at = time.monotonic()
         self._on_ui_update(self.state)
+
+
+def _merge_visible_hints(
+    current: tuple[Hint, ...],
+    fresh: list[Hint],
+    now_s: float,
+) -> list[Hint]:
+    """Keep active hints during cooldown gaps; refresh by cooldown_key."""
+
+    active = {
+        hint.cooldown_key: hint
+        for hint in current
+        if hint.status == HintStatus.ACTIVE
+        and hint.cooldown_key
+        and (hint.expires_at is None or hint.expires_at > now_s)
+    }
+    for hint in fresh:
+        active[hint.cooldown_key] = hint
+    merged = list(active.values())
+    merged.sort(key=lambda hint: (-hint.priority, -hint.confidence, hint.id))
+    return merged[:3]
+
+
+def _hints_equivalent(current: tuple[Hint, ...], merged: list[Hint]) -> bool:
+    if len(current) != len(merged):
+        return False
+    for left, right in zip(current, merged, strict=True):
+        if (
+            left.id != right.id
+            or left.message != right.message
+            or left.status != right.status
+            or left.priority != right.priority
+        ):
+            return False
+    return True
 
 
 def _hint_payload(hint: Hint) -> dict[str, object]:

@@ -99,3 +99,9 @@ def test_destination_pill_dismiss_noop_without_destination() -> None:
     model = DestinationPillModel()
     model.dismiss()
     assert not model.idle_visible
+
+
+def test_mode_tag_meeting() -> None:
+    from indicator._contract import mode_tag
+
+    assert "meeting" in mode_tag("meeting").lower()

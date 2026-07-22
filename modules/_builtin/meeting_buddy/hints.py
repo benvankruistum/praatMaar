@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from enum import Enum
-from uuid import uuid4
 
 from .config import MeetingBuddyConfig
+from .hint_text import format_action_hint, format_question_hint, format_topic_hint
 from .state import (
     ActionItemStatus,
     Hint,
@@ -60,7 +60,7 @@ class HintEngine:
         return [
             self._hint(
                 hint_type,
-                f"Nog niet besproken: {topic.title}",
+                format_topic_hint(topic.title),
                 topic.id,
                 topic.confidence,
                 config,
@@ -89,7 +89,7 @@ class HintEngine:
             candidates.append(
                 self._hint(
                     hint_type,
-                    f"Open vraag: {question.text}",
+                    format_question_hint(question.text),
                     question.id,
                     question.confidence,
                     config,
@@ -105,7 +105,7 @@ class HintEngine:
         return [
             self._hint(
                 hint_type,
-                f"Mogelijk actiepunt zonder eigenaar: {action.description}",
+                format_action_hint(action.description),
                 action.id,
                 action.confidence,
                 config,
@@ -144,8 +144,9 @@ class HintEngine:
         config: MeetingBuddyConfig,
         now_s: float,
     ) -> Hint:
+        cooldown_key = f"{hint_type.value}:{entity_id}"
         return Hint(
-            id=f"hint-{uuid4()}",
+            id=cooldown_key,
             type=hint_type,
             message=message,
             priority=_PRIORITY[hint_type],
@@ -153,7 +154,7 @@ class HintEngine:
             related_entity_id=entity_id,
             created_at=now_s,
             expires_at=now_s + _cooldown_s(hint_type, config),
-            cooldown_key=f"{hint_type.value}:{entity_id}",
+            cooldown_key=cooldown_key,
         )
 
 

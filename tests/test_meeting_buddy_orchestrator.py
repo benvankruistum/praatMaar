@@ -14,7 +14,12 @@ from modules._builtin.meeting_buddy.state import (
     Hint,
     HintStatus,
 )
-from modules._contract import ModuleContext, module_tray_actions, noop_ui_dispatch
+from modules._contract import (
+    ModuleContext,
+    module_tray_actions,
+    module_tray_root_actions,
+    noop_ui_dispatch,
+)
 from modules.capabilities.continuous_capture import (
     CAPABILITY_ID as CAP_CAPTURE,
 )
@@ -87,7 +92,14 @@ def test_start_passes_backpressure_config_to_capture_and_stt(tmp_path: Path) -> 
 
     orchestrator.start()
 
-    assert capture.start_configs == [{"max_audio_buffer_duration_s": 12.5}]
+    assert capture.start_configs == [
+        {
+            "max_audio_buffer_duration_s": 12.5,
+            "device": None,
+            "enable_loopback": True,
+            "loopback_device": None,
+        }
+    ]
     assert stt.start_configs == [{"max_whisper_queue_duration_s": 4.25}]
 
 
@@ -299,10 +311,10 @@ def test_module_registers_disabled_with_tray_actions(tmp_path: Path) -> None:
 
     assert module.id == "meeting-buddy"
     assert module.default_enabled() is False
-    assert [action.id for action in module_tray_actions(module)] == [
+    assert [action.id for action in module_tray_actions(module)] == []
+    assert [action.id for action in module_tray_root_actions(module)] == [
         "start_meeting",
         "stop_meeting",
-        "prepare_agenda",
     ]
     assert any(item.id == "meeting-buddy" for item in all_builtin_modules())
 
@@ -328,6 +340,9 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
             pass
 
     monkeypatch.setattr(meeting_buddy_module, "MeetingBuddyOverlay", FakeOverlay)
+    monkeypatch.setattr("tkinter.simpledialog.askstring", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *_args, **_kwargs: None)
     module = MeetingBuddyModule()
     module.on_app_start(
         ModuleContext(
@@ -339,7 +354,8 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
 
     module.start_meeting()
     assert len(dispatched) == 1
-    dispatched.pop()()
+    while dispatched:
+        dispatched.pop()()
 
     assert len(overlays) == 1
     assert overlays[0].updates[0][1] == {
@@ -347,3 +363,19 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
         "transcription_status": TranscriptionStatus.ACTIVE,
     }
     assert overlays[0].callbacks["on_reconnect"] == module.orchestrator.reconnect_capture
+
+
+def test_capture_config_uses_app_microphone_and_loopback_settings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("config.load_config", lambda: {"microphone_device": 5})
+    capabilities, _, _ = _capabilities()
+    orchestrator = MeetingOrchestrator(capabilities=capabilities, app_dir=tmp_path)
+
+    config = orchestrator._capture_config()
+
+    assert config["device"] == 5
+    assert config["enable_loopback"] is True
+    assert config["loopback_device"] is None
+    assert config["max_audio_buffer_duration_s"] == 30

@@ -38,3 +38,13 @@ def test_pick_emphasis_is_highest_priority_active_hint() -> None:
 
 def test_pick_emphasis_returns_none_without_active_hints() -> None:
     assert pick_emphasis([_hint("h1", 1, status=HintStatus.DISMISSED)]) is None
+
+
+def test_listening_text_when_capture_active() -> None:
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
+    from modules.capabilities.continuous_capture import CaptureStatus
+    from modules.capabilities.speech_to_text import TranscriptionStatus
+
+    assert "opname actief" in MeetingBuddyOverlay._listening_text(
+        CaptureStatus.ACTIVE, TranscriptionStatus.ACTIVE
+    ).lower()

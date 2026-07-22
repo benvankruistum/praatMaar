@@ -75,6 +75,8 @@ def mode_tag(mode: str) -> str:
 
     import i18n
 
+    if mode == "meeting":
+        return f"● {i18n.t('state.tag.meeting')}"
     if mode == "ptt":
         return f"● {i18n.t('state.tag.ptt')}"
     return f"↔ {i18n.t('state.tag.toggle')}"

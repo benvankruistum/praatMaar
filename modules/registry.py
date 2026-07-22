@@ -21,6 +21,7 @@ from modules._contract import (
     UiDispatch,
     module_actions,
     module_tray_actions,
+    module_tray_root_actions,
     noop_ui_dispatch,
 )
 from modules.capabilities.registry import CapabilityRegistry
@@ -115,11 +116,23 @@ def run_module_action(modules: list[PraatMaarModule], module_id: str, action_id:
 def tray_action_entries(
     modules: list[PraatMaarModule],
 ) -> list[tuple[PraatMaarModule, ModuleAction]]:
-    """Alle tray-zichtbare acties van ingeschakelde modules."""
+    """Alle tray → Modules-submenu-acties van ingeschakelde modules."""
 
     entries: list[tuple[PraatMaarModule, ModuleAction]] = []
     for module in modules:
         for action in module_tray_actions(module):
+            entries.append((module, action))
+    return entries
+
+
+def tray_root_action_entries(
+    modules: list[PraatMaarModule],
+) -> list[tuple[PraatMaarModule, ModuleAction]]:
+    """Acties voor het topniveau van het tray-contextmenu."""
+
+    entries: list[tuple[PraatMaarModule, ModuleAction]] = []
+    for module in modules:
+        for action in module_tray_root_actions(module):
             entries.append((module, action))
     return entries
 

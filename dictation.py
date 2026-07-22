@@ -30,6 +30,7 @@ from modules import (
     noop_ui_dispatch,
     sanitize_modules_config,
     tray_action_entries,
+    tray_root_action_entries,
 )
 from opnamesessie import Opnamesessie
 from splash import Splash
@@ -1261,6 +1262,7 @@ def main() -> None:
         on_help=open_help,
         on_module_action=run_module_action,
         get_module_tray_actions=lambda: tray_action_entries(list(module_bus.modules)),
+        get_module_tray_root_actions=lambda: tray_root_action_entries(list(module_bus.modules)),
     )
     _tray = tray
 

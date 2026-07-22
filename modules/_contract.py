@@ -112,7 +112,9 @@ class ModuleAction:
     label_key: str
     handler: Callable[[], None]
     in_tray: bool = False
-    """True → ook onder tray → Modules tonen (optioneel)."""
+    """True → ook onder tray → Modules (submenu)."""
+    in_tray_root: bool = False
+    """True → direct in het tray-contextmenu (topniveau)."""
 
 
 class PraatMaarModule(Protocol):
@@ -155,9 +157,15 @@ def module_actions(module: PraatMaarModule) -> list[ModuleAction]:
 
 
 def module_tray_actions(module: PraatMaarModule) -> list[ModuleAction]:
-    """Acties die ook in het tray-submenu mogen verschijnen."""
+    """Acties die in het tray → Modules-submenu mogen verschijnen."""
 
     return [action for action in module_actions(module) if action.in_tray]
+
+
+def module_tray_root_actions(module: PraatMaarModule) -> list[ModuleAction]:
+    """Acties die direct in het tray-contextmenu mogen verschijnen."""
+
+    return [action for action in module_actions(module) if action.in_tray_root]
 
 
 def noop_ui_dispatch(fn: Callable[[], None]) -> None:
