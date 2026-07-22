@@ -10,14 +10,23 @@ from modules._builtin.meeting_buddy.state import (
     TopicSource,
     TopicStatus,
 )
-from modules._builtin.meeting_buddy.state_service import MeetingStateService, StateProposal
+from modules._builtin.meeting_buddy.state_service import (
+    MeetingStateService,
+    StateProposal,
+    StateProposalType,
+)
 
 
-def proposal(proposal_type: str, payload: dict[str, object]) -> StateProposal:
+def proposal(proposal_type: str | StateProposalType, payload: dict[str, object]) -> StateProposal:
+    resolved_type = (
+        proposal_type
+        if isinstance(proposal_type, StateProposalType)
+        else StateProposalType(proposal_type)
+    )
     return StateProposal(
-        proposal_id=f"p-{proposal_type}",
+        proposal_id=f"p-{resolved_type.value}",
         meeting_session_id="m1",
-        type=proposal_type,
+        type=resolved_type,
         payload=payload,
         source_delta_ids=("d1",),
         confidence=0.8,
@@ -139,7 +148,7 @@ def test_apply_rejects_wrong_session_and_unknown_type() -> None:
     wrong_session = StateProposal(
         proposal_id="p1",
         meeting_session_id="m2",
-        type="add_topics",
+        type=StateProposalType.ADD_TOPICS,
         payload={"titles": ["Budget"]},
         source_delta_ids=(),
         confidence=1.0,
@@ -147,5 +156,7 @@ def test_apply_rejects_wrong_session_and_unknown_type() -> None:
 
     with pytest.raises(ValueError, match="session"):
         MeetingStateService().apply(state, wrong_session)
+    invalid = proposal("add_topics", {"titles": ["Budget"]})
+    object.__setattr__(invalid, "type", "no_such_type")
     with pytest.raises(ValueError, match="Unsupported"):
-        MeetingStateService().apply(state, proposal("no_such_type", {}))
+        MeetingStateService().apply(state, invalid)

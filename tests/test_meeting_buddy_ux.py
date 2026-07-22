@@ -2,8 +2,8 @@ import pytest
 
 from modules._builtin.meeting_buddy.config import MeetingBuddyConfig
 from modules._builtin.meeting_buddy.heuristics import HeuristicsEngine
+from modules._builtin.meeting_buddy.hint_coordinator import _hints_equivalent, _merge_visible_hints
 from modules._builtin.meeting_buddy.hints import HintType
-from modules._builtin.meeting_buddy.orchestrator import _hints_equivalent, _merge_visible_hints
 from modules._builtin.meeting_buddy.state import Hint, HintStatus, MeetingState
 
 

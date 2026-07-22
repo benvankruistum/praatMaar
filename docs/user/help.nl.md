@@ -89,3 +89,21 @@ Kies korte maar unieke namen, bijvoorbeeld "boodschappenlijst" of "project-alpha
 Transcripts worden als gewone tekstbestanden op schijf opgeslagen, zonder versleuteling.
 Gebruik geen bestemmingen in gedeelde of onbeveiligde mappen als je gevoelige inhoud
 dicteert.
+
+## Meeting Buddy en Microsoft Teams (Windows)
+
+**Meeting Buddy** (systeemvak → **Modules**) luistert mee tijdens een vergadering en
+toont compacte hints. Op Windows kan het naast je microfoon ook **meetinggeluid**
+opnemen van het standaard Windows-uitvoerapparaat via loopback.
+
+Voor Teams-gesprekken:
+
+1. Zet Windows-**geluidsuitvoer** op het apparaat waar Teams doorheen speelt (vaak je headset).
+2. Zet de Teams-**luidspreker** op hetzelfde apparaat.
+3. Gebruik een **headset** om echo te beperken (je microfoon hoort de luidsprekers niet).
+
+De Meeting Buddy-overlay toont of meetinggeluid actief is. Als loopback niet
+beschikbaar is, neemt praatMaar alleen je microfoon op en zie je een waarschuwing.
+
+Bij **Meeting starten** kun je in de prep-dialoog het Windows-**uitvoerapparaat**
+voor meetinggeluid kiezen (standaard = Windows-standaarduitvoer).

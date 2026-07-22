@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from enum import Enum
 from typing import Any
 
 from .state import (
@@ -20,11 +21,22 @@ from .state import (
 )
 
 
+class StateProposalType(str, Enum):
+    ADD_TOPICS = "add_topics"
+    MARK_TOPIC_DISCUSSED = "mark_topic_discussed"
+    ADD_QUESTION = "add_question"
+    UPDATE_QUESTION = "update_question"
+    ADD_ACTION = "add_action"
+    UPDATE_ACTION = "update_action"
+    UPSERT_HINTS = "upsert_hints"
+    SET_HINTS = "set_hints"
+
+
 @dataclass(frozen=True)
 class StateProposal:
     proposal_id: str
     meeting_session_id: str
-    type: str
+    type: StateProposalType
     payload: Mapping[str, Any]
     source_delta_ids: tuple[str, ...] | list[str]
     confidence: float
@@ -42,14 +54,14 @@ class MeetingStateService:
             raise ValueError("Proposal and state session IDs do not match")
 
         handlers = {
-            "add_topics": self._add_topics,
-            "mark_topic_discussed": self._mark_topic_discussed,
-            "add_question": self._add_question,
-            "update_question": self._update_question,
-            "add_action": self._add_action,
-            "update_action": self._update_action,
-            "upsert_hints": self._upsert_hints,
-            "set_hints": self._set_hints,
+            StateProposalType.ADD_TOPICS: self._add_topics,
+            StateProposalType.MARK_TOPIC_DISCUSSED: self._mark_topic_discussed,
+            StateProposalType.ADD_QUESTION: self._add_question,
+            StateProposalType.UPDATE_QUESTION: self._update_question,
+            StateProposalType.ADD_ACTION: self._add_action,
+            StateProposalType.UPDATE_ACTION: self._update_action,
+            StateProposalType.UPSERT_HINTS: self._upsert_hints,
+            StateProposalType.SET_HINTS: self._set_hints,
         }
         try:
             handler = handlers[proposal.type]

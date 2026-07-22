@@ -45,5 +45,14 @@ def log_event(
         }
     )
     _LOG.debug("Meeting Buddy event: %s", event)
+    if name == "capture_sources":
+        _LOG.info(
+            "Meeting capture sources: mic_device=%s loopback_device=%s "
+            "loopback_requested=%s loopback_active=%s",
+            fields.get("mic_device"),
+            fields.get("loopback_device"),
+            fields.get("loopback_requested"),
+            fields.get("loopback_active"),
+        )
     if observer is not None:
         observer.record(event)

@@ -30,10 +30,10 @@ def pick_emphasis(hints: Sequence[Hint]) -> str | None:
 
 
 class MeetingBuddyOverlay:
-    """Small always-on-top status and hints window.
+    """Small always-on-top status and hints window for supported desktop UIs.
 
-    The overlay is the Windows/Linux action surface. On macOS the Modules dialog
-    does not expose action buttons, so tray actions remain the leading controls.
+    On macOS the Modules dialog does not expose action buttons, so tray actions
+    remain the leading controls.
     """
 
     def __init__(
@@ -72,6 +72,8 @@ class MeetingBuddyOverlay:
         self._listening = tk.StringVar()
         self._recording_banner = tk.StringVar()
         self._capture_status: object = None
+        self._loopback_active: bool | None = None
+        self._loopback_requested = True
         self._pulse_on = False
 
         header = tk.Frame(self.window, background="#F4F7FA")
@@ -139,6 +141,8 @@ class MeetingBuddyOverlay:
         *,
         capture_status: object,
         transcription_status: object,
+        loopback_active: bool | None = None,
+        loopback_requested: bool = True,
     ) -> None:
         """Render one immutable state snapshot, capped at three active hints."""
 
@@ -148,8 +152,22 @@ class MeetingBuddyOverlay:
         emphasis_id = pick_emphasis(visible)
         self._render_hints(visible, emphasis_id)
         self._capture_status = capture_status
-        self._listening.set(self._listening_text(capture_status, transcription_status))
-        self._update_recording_banner(capture_status, transcription_status)
+        self._loopback_active = loopback_active
+        self._loopback_requested = loopback_requested
+        self._listening.set(
+            self._listening_text(
+                capture_status,
+                transcription_status,
+                loopback_active=loopback_active,
+                loopback_requested=loopback_requested,
+            )
+        )
+        self._update_recording_banner(
+            capture_status,
+            transcription_status,
+            loopback_active=loopback_active,
+            loopback_requested=loopback_requested,
+        )
         self._update_listening_dot(capture_status, transcription_status)
         self._status.set(
             "  ·  ".join(
@@ -280,15 +298,28 @@ class MeetingBuddyOverlay:
         self.window.after(1000, self._tick)
 
     def _update_recording_banner(
-        self, capture_status: object, transcription_status: object
+        self,
+        capture_status: object,
+        transcription_status: object,
+        *,
+        loopback_active: bool | None = None,
+        loopback_requested: bool = True,
     ) -> None:
         capture = _enum_value(capture_status)
         if capture == "active":
             stt = _enum_value(transcription_status)
             if stt == "delayed":
-                text = i18n.t("modules.meeting_buddy.overlay.recording.active_delayed")
+                text = self._active_recording_text(
+                    delayed=True,
+                    loopback_active=loopback_active,
+                    loopback_requested=loopback_requested,
+                )
             else:
-                text = i18n.t("modules.meeting_buddy.overlay.recording.active")
+                text = self._active_recording_text(
+                    delayed=False,
+                    loopback_active=loopback_active,
+                    loopback_requested=loopback_requested,
+                )
             self._recording_banner.set(text)
             if not self._recording_frame.winfo_manager():
                 self._recording_frame.pack(fill="x", pady=(0, 8), before=self._hints)
@@ -331,7 +362,38 @@ class MeetingBuddyOverlay:
         return f"{label}: {translated}"
 
     @staticmethod
-    def _listening_text(capture_status: object, transcription_status: object) -> str:
+    def _active_recording_text(
+        *,
+        delayed: bool,
+        loopback_active: bool | None,
+        loopback_requested: bool,
+    ) -> str:
+        if loopback_active is True:
+            key = (
+                "modules.meeting_buddy.overlay.recording.active_loopback_delayed"
+                if delayed
+                else "modules.meeting_buddy.overlay.recording.active_loopback"
+            )
+            return i18n.t(key)
+        if loopback_requested and loopback_active is False:
+            key = (
+                "modules.meeting_buddy.overlay.recording.mic_only_unavailable_delayed"
+                if delayed
+                else "modules.meeting_buddy.overlay.recording.mic_only_unavailable"
+            )
+            return i18n.t(key)
+        if delayed:
+            return i18n.t("modules.meeting_buddy.overlay.recording.active_delayed")
+        return i18n.t("modules.meeting_buddy.overlay.recording.active")
+
+    @staticmethod
+    def _listening_text(
+        capture_status: object,
+        transcription_status: object,
+        *,
+        loopback_active: bool | None = None,
+        loopback_requested: bool = True,
+    ) -> str:
         capture = _enum_value(capture_status)
         stt = _enum_value(transcription_status)
         if capture == "error":
@@ -339,7 +401,15 @@ class MeetingBuddyOverlay:
         if capture in {"starting", "reconnecting"}:
             return i18n.t("modules.meeting_buddy.overlay.listening.starting")
         if capture == "active" and stt == "delayed":
+            if loopback_active is True:
+                return i18n.t("modules.meeting_buddy.overlay.listening.active_loopback_delayed")
+            if loopback_requested and loopback_active is False:
+                return i18n.t("modules.meeting_buddy.overlay.listening.mic_only_unavailable")
             return i18n.t("modules.meeting_buddy.overlay.listening.delayed")
+        if capture == "active" and loopback_active is True:
+            return i18n.t("modules.meeting_buddy.overlay.listening.active_loopback")
+        if capture == "active" and loopback_requested and loopback_active is False:
+            return i18n.t("modules.meeting_buddy.overlay.listening.mic_only_unavailable")
         if capture == "active" and stt == "active":
             return i18n.t("modules.meeting_buddy.overlay.listening.active")
         if capture == "active":

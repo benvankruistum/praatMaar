@@ -87,3 +87,21 @@ Choose short but unique names, e.g. "shopping-list" or "project-alpha".
 **Unencrypted files**
 Transcripts are stored as plain text files on disk, without encryption. Do not use
 destinations in shared or unsecured folders if you dictate sensitive content.
+
+## Meeting Buddy and Microsoft Teams (Windows)
+
+**Meeting Buddy** (tray → **Modules**) listens during a meeting and shows compact
+hints. On Windows it can capture **meeting audio** from the default Windows output
+device via loopback, mixed with your microphone.
+
+For Teams calls:
+
+1. Set Windows **sound output** to the device Teams plays through (often your headset).
+2. Set Teams **speaker** to the same device.
+3. Use a **headset** to reduce echo (your mic should not pick up speakers).
+
+The Meeting Buddy overlay shows whether meeting audio is active. If loopback is
+unavailable, only your microphone is captured and the overlay warns you.
+
+When you **Start meeting**, the prep dialog lets you choose the Windows **output
+device** for meeting audio (default = Windows default output).

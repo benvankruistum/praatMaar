@@ -34,6 +34,8 @@ CHANNELS = 1
 CHUNK_DURATION_MS = 3_000
 CHUNK_OVERLAP_MS = 500
 MAX_BUFFER_DURATION_S = 30.0
+MAX_LOOPBACK_RECONNECT_ATTEMPTS = 4
+LOOPBACK_RECONNECT_BACKOFF_S = (0.5, 1.0, 2.0, 4.0)
 
 log = logging.getLogger("praatmaar.audio_capture")
 
@@ -133,6 +135,10 @@ class _CaptureState:
     captured_samples: int = 0
     loopback_enabled: bool = False
     loopback_sample_rate: int = SAMPLE_RATE
+    loopback_requested: bool = False
+    capture_options: dict[str, Any] = field(default_factory=dict)
+    loopback_reconnect_attempts: int = 0
+    loopback_reconnect_thread: Thread | None = None
     mix_lock: RLock = field(default_factory=RLock)
     mic_pending: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
     loopback_pending: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
@@ -165,6 +171,8 @@ class AudioCaptureEngine:
             stop_event=Event(),
             handlers=[],
         )
+        state.capture_options = dict(options)
+        state.loopback_requested = bool(options.get("enable_loopback"))
         buffer.on_gap = lambda gap: self._publish(state, gap)
         with self._lock:
             self._sessions[session_id] = state
@@ -262,11 +270,7 @@ class AudioCaptureEngine:
         with self._lock:
             if handler not in state.handlers:
                 state.handlers.append(handler)
-            current_status = CaptureStatusChanged(
-                session_id=state.session_id,
-                status=state.status,
-                message=state.status_message,
-            )
+            current_status = self._status_event(state)
         self._notify_handler(state, handler, current_status)
 
     def unsubscribe(self, session_id: str, handler: CaptureEventHandler) -> None:
@@ -278,6 +282,9 @@ class AudioCaptureEngine:
     def stop_session(self, session_id: str) -> None:
         state = self._require_session(session_id)
         state.stop_event.set()
+        reconnect = state.loopback_reconnect_thread
+        if reconnect is not None and reconnect is not threading.current_thread():
+            reconnect.join(timeout=2)
         self._close_streams(state)
         worker = state.worker
         if worker is not None and worker is not threading.current_thread():
@@ -336,7 +343,7 @@ class AudioCaptureEngine:
             self._loopback_audio_callback(state, data, frames, time_info, status)
         except Exception as exc:
             log.warning("Loopbackcapture faalde voor sessie %s: %s", state.session_id, exc)
-            self._disable_loopback(state)
+            self._disable_loopback(state, reason=str(exc))
 
     def _mic_audio_callback(
         self,
@@ -431,9 +438,15 @@ class AudioCaptureEngine:
         if state.stop_event.is_set():
             return
         log.warning("Loopback device disconnected voor sessie %s", state.session_id)
-        self._disable_loopback(state)
+        self._disable_loopback(state, reason="device disconnected")
 
-    def _disable_loopback(self, state: _CaptureState) -> None:
+    def _disable_loopback(
+        self,
+        state: _CaptureState,
+        *,
+        reason: str | None = None,
+        try_reconnect: bool = True,
+    ) -> None:
         if not state.loopback_enabled:
             return
         state.loopback_enabled = False
@@ -445,6 +458,77 @@ class AudioCaptureEngine:
                 stream.stop()
             finally:
                 stream.close()
+        if reason:
+            log.warning(
+                "Loopback uitgeschakeld voor sessie %s: %s",
+                state.session_id,
+                reason,
+            )
+        if (
+            try_reconnect
+            and state.loopback_requested
+            and not state.stop_event.is_set()
+            and state.status in {CaptureStatus.ACTIVE, CaptureStatus.RECONNECTING}
+            and state.loopback_reconnect_attempts < MAX_LOOPBACK_RECONNECT_ATTEMPTS
+        ):
+            self._schedule_loopback_reconnect(state, reason)
+            return
+        if state.status == CaptureStatus.ACTIVE:
+            self._publish(state, self._status_event(state))
+
+    def _schedule_loopback_reconnect(
+        self,
+        state: _CaptureState,
+        reason: str | None,
+    ) -> None:
+        reconnect = state.loopback_reconnect_thread
+        if reconnect is not None and reconnect.is_alive():
+            return
+        self._set_status(
+            state,
+            CaptureStatus.RECONNECTING,
+            reason or "loopback disconnected",
+        )
+        state.loopback_reconnect_thread = Thread(
+            target=self._loopback_reconnect_worker,
+            args=(state,),
+            name=f"loopback-reconnect-{state.session_id[:8]}",
+            daemon=True,
+        )
+        state.loopback_reconnect_thread.start()
+
+    def _loopback_reconnect_worker(self, state: _CaptureState) -> None:
+        attempt = state.loopback_reconnect_attempts
+        backoff_index = min(attempt, len(LOOPBACK_RECONNECT_BACKOFF_S) - 1)
+        if state.stop_event.wait(LOOPBACK_RECONNECT_BACKOFF_S[backoff_index]):
+            return
+        if state.stop_event.is_set():
+            return
+
+        state.loopback_reconnect_attempts += 1
+        try:
+            sounddevice = self._get_sounddevice()
+            self._try_start_loopback_stream(state, sounddevice, state.capture_options)
+            if state.loopback_stream is not None:
+                state.loopback_stream.start()
+                state.loopback_reconnect_attempts = 0
+                self._set_status(state, CaptureStatus.ACTIVE)
+                log.info("Loopback hersteld voor sessie %s", state.session_id)
+                return
+        except Exception as exc:
+            log.warning(
+                "Loopback reconnect poging %s mislukt voor sessie %s: %s",
+                state.loopback_reconnect_attempts,
+                state.session_id,
+                exc,
+            )
+
+        if state.stop_event.is_set():
+            return
+        if state.loopback_reconnect_attempts < MAX_LOOPBACK_RECONNECT_ATTEMPTS:
+            self._schedule_loopback_reconnect(state, "loopback reconnect failed")
+            return
+        self._set_status(state, CaptureStatus.ACTIVE, "loopback unavailable")
 
     def _fail_capture(self, state: _CaptureState, message: str) -> None:
         with self._lock:
@@ -481,13 +565,25 @@ class AudioCaptureEngine:
     ) -> None:
         state.status = status
         state.status_message = message
-        self._publish(
-            state,
-            CaptureStatusChanged(
-                session_id=state.session_id,
-                status=status,
-                message=message,
-            ),
+        self._publish(state, self._status_event(state, status=status, message=message))
+
+    @staticmethod
+    def _status_event(
+        state: _CaptureState,
+        *,
+        status: CaptureStatus | None = None,
+        message: str | None = None,
+    ) -> CaptureStatusChanged:
+        resolved_status = status if status is not None else state.status
+        resolved_message = message if message is not None else state.status_message
+        loopback_active = (
+            state.loopback_enabled if resolved_status == CaptureStatus.ACTIVE else None
+        )
+        return CaptureStatusChanged(
+            session_id=state.session_id,
+            status=resolved_status,
+            message=resolved_message,
+            loopback_active=loopback_active,
         )
 
     def _publish(self, state: _CaptureState, event: object) -> None:

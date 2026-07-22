@@ -12,7 +12,8 @@ Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
 
 ### Added
 
-- Meertaligheid: `speech_language` + `ui_language` (`nl`/`en`/`de`), JSON-locales en `i18n.py`
+- Meeting Buddy (Windows): loopback-status zichtbaar in overlay; prep-dialoog om
+  meetinggeluid-uitvoer te kiezen; automatische loopback-reconnect bij device-wissel
 - Optionele warme microfoon (`warm_microphone`, default uit)
 - **Bestemmingen:** sticky transcriptdoelen (naam→map), stemwissel via exacte
   match, actieve naam in de pill, beheer via tray-dialoog

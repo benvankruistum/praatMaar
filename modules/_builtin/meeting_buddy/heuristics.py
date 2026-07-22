@@ -12,7 +12,7 @@ from modules.capabilities.speech_to_text import TranscriptDelta
 from .config import MeetingBuddyConfig
 from .hint_text import clean_question_text, question_is_substantial
 from .state import ActionItemStatus, MeetingState, Question, QuestionStatus, TopicStatus
-from .state_service import StateProposal
+from .state_service import StateProposal, StateProposalType
 
 _STOPWORDS = {
     "aan",
@@ -78,7 +78,7 @@ class HeuristicsEngine:
             if question_is_substantial(cleaned):
                 proposals.append(
                     self._proposal(
-                        "add_question",
+                        StateProposalType.ADD_QUESTION,
                         delta,
                         state,
                         now_s,
@@ -94,7 +94,7 @@ class HeuristicsEngine:
         ):
             proposals.append(
                 self._proposal(
-                    "add_action",
+                    StateProposalType.ADD_ACTION,
                     delta,
                     state,
                     now_s,
@@ -155,7 +155,7 @@ class HeuristicsEngine:
                 continue
             proposals.append(
                 self._proposal(
-                    "update_question",
+                    StateProposalType.UPDATE_QUESTION,
                     delta,
                     state,
                     now_s,
@@ -201,7 +201,7 @@ class HeuristicsEngine:
             if score >= config.topic_match_score and enough_tokens:
                 proposals.append(
                     self._proposal(
-                        "mark_topic_discussed",
+                        StateProposalType.MARK_TOPIC_DISCUSSED,
                         delta,
                         state,
                         now_s,
@@ -213,7 +213,7 @@ class HeuristicsEngine:
 
     @staticmethod
     def _proposal(
-        proposal_type: str,
+        proposal_type: StateProposalType,
         delta: TranscriptDelta,
         state: MeetingState,
         now_s: float,

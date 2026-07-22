@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import i18n
 from indicator import RecordingState, notify_state, reset_levels
 from modules._contract import CycleEvent, ModuleAction, ModuleContext
 from modules.capabilities.continuous_capture import CaptureStatus
 
+from .config import save_meeting_buddy_preferences
 from .orchestrator import MeetingOrchestrator
 from .overlay import MeetingBuddyOverlay
+from .prep_dialog import show_meeting_prep_dialog
 from .state import MeetingState
 
 
@@ -20,6 +24,7 @@ class MeetingBuddyModule:
         self._ui_dispatch = None
         self._overlay: MeetingBuddyOverlay | None = None
         self._pill_capture_status: CaptureStatus | None = None
+        self._app_dir = None
 
     @property
     def orchestrator(self) -> MeetingOrchestrator | None:
@@ -36,6 +41,7 @@ class MeetingBuddyModule:
 
     def on_app_start(self, ctx: ModuleContext) -> None:
         self._ui_dispatch = ctx.ui_dispatch
+        self._app_dir = ctx.app_dir
         self._orchestrator = MeetingOrchestrator(
             capabilities=ctx.capabilities,
             app_dir=ctx.app_dir,
@@ -94,7 +100,7 @@ class MeetingBuddyModule:
         self._ui_dispatch = None
 
     def _start_meeting_flow(self) -> None:
-        from tkinter import messagebox, simpledialog
+        from tkinter import messagebox
 
         orchestrator = self._require_orchestrator()
         if orchestrator.binding is not None:
@@ -104,31 +110,45 @@ class MeetingBuddyModule:
             )
             return
 
-        draft = simpledialog.askstring(
-            i18n.t("modules.meeting_buddy.dialog.title"),
-            i18n.t("modules.meeting_buddy.dialog.start_prompt"),
-            initialvalue=orchestrator.agenda_text,
+        prep = show_meeting_prep_dialog(
+            agenda_text=orchestrator.agenda_text,
+            enable_loopback=orchestrator.loopback_requested,
+            loopback_device=orchestrator.loopback_device,
         )
-        if draft is None:
+        if prep is None:
             return
 
-        orchestrator.set_agenda(draft)
+        app_dir = self._require_app_dir()
+        save_meeting_buddy_preferences(
+            app_dir,
+            enable_loopback=prep.enable_loopback,
+            loopback_device=prep.loopback_device,
+        )
+        orchestrator.reload_config()
+        orchestrator.set_agenda(prep.agenda_text)
         try:
             orchestrator.start()
         except RuntimeError as exc:
             messagebox.showerror(i18n.t("modules.meeting_buddy.dialog.title"), str(exc))
 
     def _show_agenda_dialog(self) -> None:
-        from tkinter import simpledialog
-
         orchestrator = self._require_orchestrator()
-        draft = simpledialog.askstring(
-            i18n.t("modules.meeting_buddy.dialog.title"),
-            i18n.t("modules.meeting_buddy.dialog.agenda_prompt"),
-            initialvalue=orchestrator.agenda_text,
+        prep = show_meeting_prep_dialog(
+            agenda_text=orchestrator.agenda_text,
+            enable_loopback=orchestrator.loopback_requested,
+            loopback_device=orchestrator.loopback_device,
         )
-        if draft is not None:
-            orchestrator.set_agenda(draft)
+        if prep is None:
+            return
+
+        app_dir = self._require_app_dir()
+        save_meeting_buddy_preferences(
+            app_dir,
+            enable_loopback=prep.enable_loopback,
+            loopback_device=prep.loopback_device,
+        )
+        orchestrator.reload_config()
+        orchestrator.set_agenda(prep.agenda_text)
 
     def _on_ui_update(self, state: MeetingState) -> None:
         if self._ui_dispatch is None:
@@ -136,12 +156,16 @@ class MeetingBuddyModule:
         orchestrator = self._require_orchestrator()
         capture_status = orchestrator.capture_status
         transcription_status = orchestrator.transcription_status
+        loopback_active = orchestrator.loopback_active
+        loopback_requested = orchestrator.loopback_requested
         self._sync_recording_pill(capture_status)
         self._ui_dispatch(
             lambda: self._show_overlay_update(
                 state,
                 capture_status=capture_status,
                 transcription_status=transcription_status,
+                loopback_active=loopback_active,
+                loopback_requested=loopback_requested,
             )
         )
 
@@ -151,6 +175,8 @@ class MeetingBuddyModule:
         *,
         capture_status: object,
         transcription_status: object,
+        loopback_active: bool | None = None,
+        loopback_requested: bool = True,
     ) -> None:
         if self._overlay is None:
             orchestrator = self._require_orchestrator()
@@ -164,6 +190,8 @@ class MeetingBuddyModule:
             state,
             capture_status=capture_status,
             transcription_status=transcription_status,
+            loopback_active=loopback_active,
+            loopback_requested=loopback_requested,
         )
 
     def _close_overlay(self) -> None:
@@ -205,3 +233,8 @@ class MeetingBuddyModule:
         if self._orchestrator is None:
             raise RuntimeError("Meeting Buddy module is niet gestart")
         return self._orchestrator
+
+    def _require_app_dir(self) -> Path:
+        if self._app_dir is None:
+            raise RuntimeError("Meeting Buddy module is niet gestart")
+        return self._app_dir

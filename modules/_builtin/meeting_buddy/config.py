@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from modules.settings_store import module_dir
+from modules.settings_store import load_config as load_module_json
+from modules.settings_store import module_dir, save_config
+
+log = logging.getLogger(__name__)
 
 _DEFAULTS_PATH = Path(__file__).resolve().parents[2] / "defaults" / "meeting-buddy.yaml"
 _MAPPING_FIELDS = frozenset({"hint_cooldown", "hint_min_wait_s"})
@@ -30,6 +34,26 @@ class MeetingBuddyConfig:
     max_audio_buffer_duration_s: float
     enable_loopback: bool = True
     loopback_device: int | None = None
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.topic_match_score <= 1.0:
+            raise ValueError("topic_match_score must be between 0 and 1")
+        if not 0 <= self.max_visible_hints <= 3:
+            raise ValueError("max_visible_hints must be between 0 and 3")
+        if not 0.0 <= self.min_hint_confidence <= 1.0:
+            raise ValueError("min_hint_confidence must be between 0 and 1")
+        if self.max_whisper_queue_duration_s <= 0:
+            raise ValueError("max_whisper_queue_duration_s must be positive")
+        if self.max_audio_buffer_duration_s <= 0:
+            raise ValueError("max_audio_buffer_duration_s must be positive")
+        if self.max_audio_buffer_duration_s < self.max_whisper_queue_duration_s:
+            raise ValueError("max_audio_buffer_duration_s must be >= max_whisper_queue_duration_s")
+        for key, value in self.hint_cooldown.items():
+            if value < 0:
+                raise ValueError(f"hint_cooldown.{key} must be non-negative")
+        for key, value in self.hint_min_wait_s.items():
+            if value < 0:
+                raise ValueError(f"hint_min_wait_s.{key} must be non-negative")
 
     @classmethod
     def defaults(cls) -> MeetingBuddyConfig:
@@ -55,9 +79,35 @@ def load_meeting_buddy_config(app_dir: Path) -> MeetingBuddyConfig:
                 overrides[key] = {**defaults[key], **overrides[key]}
         defaults.update(overrides)
 
+    json_overrides = load_module_json(app_dir, "meeting-buddy")
+    for key in ("enable_loopback", "loopback_device"):
+        if key in json_overrides:
+            defaults[key] = json_overrides[key]
+
     known_fields = {field.name for field in fields(MeetingBuddyConfig)}
     values = {key: value for key, value in defaults.items() if key in known_fields}
-    return MeetingBuddyConfig(**values)
+    try:
+        return MeetingBuddyConfig(**values)
+    except (TypeError, ValueError) as exc:
+        log.warning(
+            "Invalid Meeting Buddy config; falling back to defaults: %s",
+            exc,
+        )
+        return MeetingBuddyConfig.defaults()
+
+
+def save_meeting_buddy_preferences(
+    app_dir: Path,
+    *,
+    enable_loopback: bool,
+    loopback_device: int | None,
+) -> None:
+    """Persist loopback UI choices in the module ``config.json``."""
+
+    current = load_module_json(app_dir, "meeting-buddy")
+    current["enable_loopback"] = enable_loopback
+    current["loopback_device"] = loopback_device
+    save_config(app_dir, "meeting-buddy", current)
 
 
 def _read_yaml_mapping(path: Path) -> dict[str, Any]:

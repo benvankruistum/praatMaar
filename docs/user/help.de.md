@@ -91,3 +91,21 @@ vor. Wählen Sie kurze, aber eindeutige Namen, z. B. „einkaufsliste“ oder
 Transkripte werden als Klartextdateien auf der Festplatte gespeichert, ohne
 Verschlüsselung. Verwenden Sie keine Ziele in freigegebenen oder unsicheren Ordnern,
 wenn Sie vertrauliche Inhalte diktieren.
+
+## Meeting Buddy und Microsoft Teams (Windows)
+
+**Meeting Buddy** (Tray → **Module**) hört während eines Meetings mit und zeigt
+kompakte Hinweise. Unter Windows kann es neben dem Mikrofon optional
+**Meeting-Audio** vom Standard-Windows-Ausgabegerät per Loopback aufnehmen.
+
+Für Teams-Anrufe:
+
+1. Stellen Sie die Windows-**Soundausgabe** auf das Gerät, über das Teams abspielt (oft Ihr Headset).
+2. Stellen Sie den Teams-**Lautsprecher** auf dasselbe Gerät.
+3. Verwenden Sie ein **Headset**, um Echo zu reduzieren (Ihr Mikrofon soll die Lautsprecher nicht mitaufnehmen).
+
+Das Meeting-Buddy-Overlay zeigt, ob Meeting-Audio aktiv ist. Ist Loopback nicht
+verfügbar, wird nur das Mikrofon aufgenommen und das Overlay warnt Sie.
+
+Bei **Meeting starten** können Sie im Vorbereitungsdialog das Windows-
+**Ausgabegerät** für Meeting-Audio wählen (Standard = Windows-Standardausgabe).
