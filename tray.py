@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable
+from typing import Any
 
 import pystray
 from PIL import Image, ImageDraw
@@ -50,6 +51,10 @@ _TOOLTIP_KEYS: dict[RecordingState, str] = {
 }
 
 ICON_SIZE = 64
+
+# Contextmenuregels voor tray én pill (rechtsklik).
+# ("separator",) | ("item", label, callback) | ("submenu", label, [entries])
+MenuEntry = tuple[Any, ...]
 
 
 def _make_icon(color: tuple[int, int, int, int]) -> Image.Image:
@@ -94,6 +99,23 @@ def _tooltip(state: RecordingState) -> str:
     return i18n.t(_TOOLTIP_KEYS.get(state, "tray.tooltip.idle"))
 
 
+def _populate_tk_menu(menu: Any, entries: list[MenuEntry]) -> None:
+    import tkinter as tk
+
+    for entry in entries:
+        kind = entry[0]
+        if kind == "separator":
+            menu.add_separator()
+        elif kind == "item":
+            _label, callback = entry[1], entry[2]
+            menu.add_command(label=_label, command=callback)
+        elif kind == "submenu":
+            _label, children = entry[1], entry[2]
+            submenu = tk.Menu(menu, tearoff=0)
+            _populate_tk_menu(submenu, children)
+            menu.add_cascade(label=_label, menu=submenu)
+
+
 class TrayIcon:
     """Systeemvak-/menubalk-icoon. Zie module-doc voor threading per OS."""
 
@@ -133,86 +155,174 @@ class TrayIcon:
             menu=self._build_menu(),
         )
 
-    def _module_action_handler(self, module_id: str, action_id: str):
-        def handler(_icon: pystray.Icon, _item: MenuItem) -> None:
+    def _module_action_callback(self, module_id: str, action_id: str) -> Callable[[], None]:
+        def callback() -> None:
             self._handle_module_action(module_id, action_id)
 
-        return handler
+        return callback
 
-    def _build_modules_menu(self) -> MenuItem:
-        entries = self._get_module_tray_actions() if self._get_module_tray_actions else []
+    def context_menu_entries(self) -> list[MenuEntry]:
+        """Zelfde items als het tray-menu, bruikbaar voor de pill-rechtsklik."""
 
-        # Geen tray-acties: één klik opent het modules-overzicht (geen leeg submenu).
-        if not entries:
-            return MenuItem(i18n.t("tray.modules"), self._handle_modules)
-
-        items: list[MenuItem | pystray.Menu] = [
-            MenuItem(i18n.t("modules.manage"), self._handle_modules, default=True),
-        ]
-
-        if entries:
-            by_module: dict[str, tuple[PraatMaarModule, list[ModuleAction]]] = {}
-            for module, action in entries:
-                bucket = by_module.setdefault(module.id, (module, []))
-                bucket[1].append(action)
-
-            items.append(Menu.SEPARATOR)
-
-            for module, actions in by_module.values():
-                if len(actions) == 1:
-                    action = actions[0]
-                    items.append(
-                        MenuItem(
-                            i18n.t(action.label_key),
-                            self._module_action_handler(module.id, action.id),
-                        )
-                    )
-                    continue
-
-                action_items = [
-                    MenuItem(
-                        i18n.t(action.label_key),
-                        self._module_action_handler(module.id, action.id),
-                    )
-                    for action in actions
-                ]
-                items.append(MenuItem(i18n.t(module.display_name_key()), Menu(*action_items)))
-
-        return MenuItem(i18n.t("tray.modules"), Menu(*items))
-
-    def _build_root_module_items(
-        self, entries: list[tuple[PraatMaarModule, ModuleAction]]
-    ) -> list[MenuItem]:
-        return [
-            MenuItem(
-                i18n.t(action.label_key),
-                self._module_action_handler(module.id, action.id),
-            )
-            for module, action in entries
-        ]
-
-    def _build_menu(self) -> Menu:
-        items: list[MenuItem | pystray.Menu] = [
-            MenuItem(i18n.t("tray.settings"), self._handle_settings, default=True),
-            MenuItem(i18n.t("tray.destinations"), self._handle_destinations),
+        entries: list[MenuEntry] = [
+            ("item", i18n.t("tray.settings"), self._on_settings),
+            ("item", i18n.t("tray.destinations"), self._on_destinations),
         ]
 
         root_entries = (
             self._get_module_tray_root_actions() if self._get_module_tray_root_actions else []
         )
         if root_entries:
-            items.extend(self._build_root_module_items(root_entries))
-            items.append(Menu.SEPARATOR)
+            for module, action in root_entries:
+                entries.append(
+                    (
+                        "item",
+                        i18n.t(action.label_key),
+                        self._module_action_callback(module.id, action.id),
+                    )
+                )
+            entries.append(("separator",))
 
-        items.extend(
-            [
-                self._build_modules_menu(),
-                MenuItem(i18n.t("tray.help"), self._handle_help),
-                Menu.SEPARATOR,
-                MenuItem(i18n.t("tray.quit"), self._handle_quit),
+        entries.append(self._modules_menu_entry())
+        entries.append(("item", i18n.t("tray.help"), self._on_help))
+        entries.append(("separator",))
+        entries.append(("item", i18n.t("tray.quit"), self._on_quit))
+        return entries
+
+    def _modules_menu_entry(self) -> MenuEntry:
+        module_entries = self._get_module_tray_actions() if self._get_module_tray_actions else []
+        if not module_entries:
+            return ("item", i18n.t("tray.modules"), self._on_modules)
+
+        children: list[MenuEntry] = [
+            ("item", i18n.t("modules.manage"), self._on_modules),
+            ("separator",),
+        ]
+        by_module: dict[str, tuple[PraatMaarModule, list[ModuleAction]]] = {}
+        for module, action in module_entries:
+            bucket = by_module.setdefault(module.id, (module, []))
+            bucket[1].append(action)
+
+        for module, actions in by_module.values():
+            if len(actions) == 1:
+                action = actions[0]
+                children.append(
+                    (
+                        "item",
+                        i18n.t(action.label_key),
+                        self._module_action_callback(module.id, action.id),
+                    )
+                )
+                continue
+            action_children = [
+                (
+                    "item",
+                    i18n.t(action.label_key),
+                    self._module_action_callback(module.id, action.id),
+                )
+                for action in actions
             ]
-        )
-        return Menu(*items)
+            children.append(("submenu", i18n.t(module.display_name_key()), action_children))
+
+        return ("submenu", i18n.t("tray.modules"), children)
+
+    def popup_menu(self, x: int, y: int, *, tk_parent: Any | None = None) -> None:
+        """Toont het contextmenu op schermpositie `(x, y)` (pill-rechtsklik)."""
+
+        if sys.platform == "win32":
+            self._popup_tk(tk_parent, x, y)
+        elif sys.platform == "darwin":
+            self._popup_ns()
+
+    def _popup_tk(self, parent: Any | None, x: int, y: int) -> None:
+        if parent is None:
+            return
+        import tkinter as tk
+
+        menu = tk.Menu(parent, tearoff=0)
+        _populate_tk_menu(menu, self.context_menu_entries())
+        try:
+            menu.tk_popup(int(x), int(y))
+        finally:
+            menu.grab_release()
+
+    def _popup_ns(self) -> None:
+        try:
+            from AppKit import NSEvent, NSMenu, NSMenuItem  # type: ignore[import-not-found]
+            from Foundation import NSObject  # type: ignore[import-not-found]
+        except Exception:
+            return
+
+        # Houd een target-object levend voor AppKit-selectors.
+        if not hasattr(self, "_ns_menu_target"):
+
+            class _MenuTarget(NSObject):
+                _owner = None
+
+                def praatMaarMenuAction_(self, sender: Any) -> None:  # noqa: N802
+                    callback = sender.representedObject()
+                    if callable(callback):
+                        callback()
+
+            target = _MenuTarget.alloc().init()
+            target._owner = self
+            self._ns_menu_target = target
+
+        def build(entries: list[MenuEntry]) -> Any:
+            menu = NSMenu.alloc().init()
+            menu.setAutoenablesItems_(False)
+            for entry in entries:
+                kind = entry[0]
+                if kind == "separator":
+                    menu.addItem_(NSMenuItem.separatorItem())
+                    continue
+                if kind == "item":
+                    label, callback = entry[1], entry[2]
+                    item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+                        label, "praatMaarMenuAction:", ""
+                    )
+                    item.setEnabled_(True)
+                    item.setRepresentedObject_(callback)
+                    item.setTarget_(self._ns_menu_target)
+                    menu.addItem_(item)
+                    continue
+                if kind == "submenu":
+                    label, children = entry[1], entry[2]
+                    item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(label, None, "")
+                    item.setSubmenu_(build(children))
+                    menu.addItem_(item)
+            return menu
+
+        menu = build(self.context_menu_entries())
+        point = NSEvent.mouseLocation()
+        menu.popUpMenuPositioningItem_atLocation_inView_(None, point, None)
+
+    def _entries_to_pystray(self, entries: list[MenuEntry]) -> list[MenuItem | Menu]:
+        items: list[MenuItem | Menu] = []
+        for entry in entries:
+            kind = entry[0]
+            if kind == "separator":
+                items.append(Menu.SEPARATOR)
+            elif kind == "item":
+                label, callback = entry[1], entry[2]
+
+                def action(
+                    _icon: pystray.Icon | None = None,
+                    _item: MenuItem | None = None,
+                    *,
+                    _cb: Callable[[], None] = callback,
+                ) -> None:
+                    _cb()
+
+                default = callback is self._on_settings
+                items.append(MenuItem(label, action, default=default))
+            elif kind == "submenu":
+                label, children = entry[1], entry[2]
+                items.append(MenuItem(label, Menu(*self._entries_to_pystray(children))))
+        return items
+
+    def _build_menu(self) -> Menu:
+        return Menu(*self._entries_to_pystray(self.context_menu_entries()))
 
     def refresh_language(self) -> None:
         """Vernieuwt menu + tooltip na een UI-taalwissel."""
@@ -239,29 +349,9 @@ class TrayIcon:
 
         return sys.platform == "darwin"
 
-    def _handle_settings(self, icon: pystray.Icon, item: MenuItem) -> None:
-        self._on_settings()
-
-    def _handle_destinations(self, icon: pystray.Icon, item: MenuItem) -> None:
-        self._on_destinations()
-
-    def _handle_modules(self, icon: pystray.Icon, item: MenuItem) -> None:
-        self._on_modules()
-
-    def _handle_help(self, icon: pystray.Icon, item: MenuItem) -> None:
-        self._on_help()
-
     def _handle_module_action(self, module_id: str, action_id: str) -> None:
         if self._on_module_action is not None:
             self._on_module_action(module_id, action_id)
-
-    def _handle_quit(self, icon: pystray.Icon, item: MenuItem) -> None:
-        self._on_quit()
-        # Zorg dat een blokkerende `run()` (Darwin) terugkeert.
-        try:
-            self._icon.stop()
-        except Exception:
-            pass
 
     def start(self) -> None:
         """

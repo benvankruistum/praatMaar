@@ -103,8 +103,10 @@ MINIMUM_RECORDING_SECONDS = 0.30
 # Tijdelijke audiobestanden na verwerking verwijderen.
 DELETE_TEMP_AUDIO = True
 
-# Positie van de opname-indicator: "boven-midden" (standaard) of "onder-midden".
+# Positie van de opname-indicator: "boven-midden", "onder-midden" of
+# "laatst-geplaatst" (na slepen van de pill).
 INDICATOR_POSITION = "boven-midden"
+INDICATOR_XY: tuple[int, int] | None = None
 
 # Bedieningsmodus:
 # - "toggle" = indrukken start, nogmaals indrukken stopt en transcribeert
@@ -130,7 +132,12 @@ if "auto_paste" in _user_config:
 if "warm_microphone" in _user_config:
     WARM_MICROPHONE = bool(_user_config["warm_microphone"])
 if "indicator_position" in _user_config:
-    INDICATOR_POSITION = str(_user_config["indicator_position"])
+    from indicator._contract import normalize_indicator_position, sanitize_indicator_xy
+
+    INDICATOR_POSITION = normalize_indicator_position(_user_config["indicator_position"])
+    INDICATOR_XY = sanitize_indicator_xy(_user_config.get("indicator_xy"))
+    if INDICATOR_POSITION == "laatst-geplaatst" and INDICATOR_XY is None:
+        INDICATOR_POSITION = "boven-midden"
 if _user_config.get("mode") in ("toggle", "ptt"):
     MODE = str(_user_config["mode"])
 if isinstance(_user_config.get("hotkey"), list) and _user_config["hotkey"]:
@@ -516,6 +523,7 @@ def _user_config_dict() -> dict[str, Any]:
         "auto_paste": AUTO_PASTE,
         "warm_microphone": WARM_MICROPHONE,
         "indicator_position": INDICATOR_POSITION,
+        "indicator_xy": list(INDICATOR_XY) if INDICATOR_XY is not None else None,
         "mode": MODE,
         "hotkey": hotkeys.normalize(HOTKEY_TOKENS),
         "speech_language": LANGUAGE,
@@ -529,6 +537,11 @@ def _user_config_dict() -> dict[str, Any]:
 
 def _save_transcript_routed(text: str) -> Path:
     """Slaat transcript op in de actieve bestemmingsmap of de defaultmap."""
+
+    destination = destinations.find_destination(ACTIVE_DESTINATION, DESTINATIONS)
+    append_path = destinations.resolve_append_file(destination)
+    if append_path is not None:
+        return recovery.append_transcript(text, append_path)
 
     directory = destinations.resolve_save_dir(
         ACTIVE_DESTINATION,
@@ -924,6 +937,7 @@ def current_settings() -> dict[str, Any]:
         "auto_paste": AUTO_PASTE,
         "warm_microphone": WARM_MICROPHONE,
         "indicator_position": INDICATOR_POSITION,
+        "indicator_xy": list(INDICATOR_XY) if INDICATOR_XY is not None else None,
         "mode": MODE,
         "hotkey": hotkeys.normalize(HOTKEY_TOKENS),
         "speech_language": LANGUAGE,
@@ -948,20 +962,34 @@ def apply_settings(
     automatisch meestarten. Volgende opname: microfoon. Na herstart: model.
     """
 
-    global MODEL_NAME, MICROPHONE_DEVICE, AUTO_PASTE, INDICATOR_POSITION
+    global MODEL_NAME, MICROPHONE_DEVICE, AUTO_PASTE, INDICATOR_POSITION, INDICATOR_XY
     global MODE, HOTKEY_TOKENS, LANGUAGE, WARM_MICROPHONE
     global DESTINATIONS, ACTIVE_DESTINATION, MODULES_CONFIG, INCREMENTAL_TRANSCRIPTION
 
+    from indicator._contract import (
+        POSITION_LAST,
+        normalize_indicator_position,
+        sanitize_indicator_xy,
+    )
+
     new_model = str(new_settings.get("model", MODEL_NAME))
     model_changed = new_model != MODEL_NAME
-    new_position = str(new_settings.get("indicator_position", INDICATOR_POSITION))
-    position_changed = new_position != INDICATOR_POSITION
+    new_position = normalize_indicator_position(
+        new_settings.get("indicator_position", INDICATOR_POSITION)
+    )
+    new_xy = sanitize_indicator_xy(new_settings.get("indicator_xy", INDICATOR_XY))
+    if new_position == POSITION_LAST and new_xy is None:
+        new_xy = INDICATOR_XY
+    if new_position == POSITION_LAST and new_xy is None:
+        new_position = "boven-midden"
+    position_changed = new_position != INDICATOR_POSITION or new_xy != INDICATOR_XY
 
     MODEL_NAME = new_model
     MICROPHONE_DEVICE = new_settings.get("microphone_device", MICROPHONE_DEVICE)
     AUTO_PASTE = bool(new_settings.get("auto_paste", AUTO_PASTE))
     WARM_MICROPHONE = bool(new_settings.get("warm_microphone", WARM_MICROPHONE))
     INDICATOR_POSITION = new_position
+    INDICATOR_XY = new_xy
 
     if new_settings.get("mode") in ("toggle", "ptt"):
         MODE = str(new_settings["mode"])
@@ -1030,7 +1058,7 @@ def apply_settings(
 
     # Live toepassen waar mogelijk.
     if position_changed:
-        indicator.set_position(new_position)
+        indicator.set_position(new_position, xy=INDICATOR_XY)
 
     indicator.set_destination(ACTIVE_DESTINATION)
 
@@ -1103,7 +1131,44 @@ def main() -> None:
 
     # Harde afhankelijkheid: kan de indicator niet initialiseren, dan stopt de
     # app (RecordingIndicator gooit SystemExit — net als een mislukte model-load).
-    indicator = RecordingIndicator(position=INDICATOR_POSITION)
+    def _on_indicator_moved(position: str, x: int, y: int) -> None:
+        global INDICATOR_POSITION, INDICATOR_XY
+        INDICATOR_POSITION = position
+        INDICATOR_XY = (x, y)
+        config.save_config(_user_config_dict())
+
+    def pill_control_press() -> None:
+        """Start of stop via de pill-knop (zelfde regels als de sneltoets)."""
+
+        if session.is_recording:
+            print("\n" + i18n.t("dictation.stopped_hotkey"))
+            session.stop_and_transcribe()
+            return
+        if session.is_processing:
+            print("\n" + i18n.t("dictation.busy"))
+            return
+        if MODE == "ptt":
+            print("\n" + i18n.t("dictation.ptt_started"))
+        else:
+            print("\n" + i18n.t("dictation.started_hotkey"))
+        session.start()
+
+    def pill_control_release() -> None:
+        """Push-to-talk: loslaten van de pill-knop stopt de opname."""
+
+        if MODE != "ptt":
+            return
+        if session.is_recording:
+            print("\n" + i18n.t("dictation.ptt_stopped"))
+            session.stop_and_transcribe()
+
+    indicator = RecordingIndicator(
+        position=INDICATOR_POSITION,
+        xy=INDICATOR_XY,
+        on_moved=_on_indicator_moved,
+        on_control_press=pill_control_press,
+        on_control_release=pill_control_release,
+    )
     _indicator = indicator
     indicator.set_destination(ACTIVE_DESTINATION)
 
@@ -1246,6 +1311,12 @@ def main() -> None:
 
     # De pill is de enige toestandseigenaar; die stuurt het tray-icoon aan.
     indicator.state_listener = tray.set_state
+
+    def show_pill_context_menu(x: int, y: int) -> None:
+        parent = getattr(indicator, "root", None)
+        tray.popup_menu(x, y, tk_parent=parent)
+
+    indicator.on_context_menu = show_pill_context_menu
     tray.start()
     _refresh_mic_attention()
 

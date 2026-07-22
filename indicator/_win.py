@@ -21,20 +21,23 @@ from ._contract import (
     ERROR_DURATION_MS,
     INDICATOR_HEIGHT,
     INDICATOR_WIDTH,
-    MARGIN_FRACTION,
     MUTED_COLOR,
     NUM_BARS,
     PILL_BG,
     POLL_INTERVAL_MS,
+    POSITION_LAST,
     STATE_COLORS,
     TEXT_COLOR,
     WAVEFORM_GAIN,
     WINDOW_ALPHA,
     DestinationPillModel,
     RecordingState,
+    clamp_indicator_xy,
     destination_display_name,
     drain_status_queue,
     mode_tag,
+    normalize_indicator_position,
+    preset_indicator_xy,
     snapshot_levels,
     state_label,
 )
@@ -99,7 +102,16 @@ class RecordingIndicator:
     `request_stop()` laat 'm netjes eindigen.
     """
 
-    def __init__(self, position: str = "boven-midden") -> None:
+    def __init__(
+        self,
+        position: str = "boven-midden",
+        *,
+        xy: tuple[int, int] | None = None,
+        on_moved: Any | None = None,
+        on_control_press: Any | None = None,
+        on_control_release: Any | None = None,
+        on_context_menu: Any | None = None,
+    ) -> None:
         if sys.platform != "win32":
             raise SystemExit(
                 "De Windows-indicator werkt alleen op win32 (vereist de WS_EX_NOACTIVATE-shim)."
@@ -114,7 +126,14 @@ class RecordingIndicator:
         self._visible = False
         self._hide_after_id: str | None = None
         self._stop_requested = False
-        self._position = position
+        self._position = normalize_indicator_position(position)
+        self._xy = xy
+        self._on_moved = on_moved
+        self._control_press_cb = on_control_press
+        self._control_release_cb = on_control_release
+        self.on_context_menu = on_context_menu
+        self._drag: dict[str, Any] | None = None
+        self._control_held = False
         self._dest_pill = DestinationPillModel()
 
         # Wordt bij elke toestandswissel aangeroepen (op de hoofdthread); door
@@ -126,7 +145,7 @@ class RecordingIndicator:
         self._main_calls: queue.Queue[Any] = queue.Queue()
 
         try:
-            self._build_window(position)
+            self._build_window(self._position)
         except Exception as exc:
             raise SystemExit(f"De opname-indicator kon niet worden geïnitialiseerd: {exc}") from exc
 
@@ -156,6 +175,11 @@ class RecordingIndicator:
         )
         self.canvas.pack()
         self._build_canvas_items()
+        self.canvas.bind("<ButtonPress-1>", self._on_drag_press)
+        self.canvas.bind("<B1-Motion>", self._on_drag_motion)
+        self.canvas.bind("<ButtonRelease-1>", self._on_drag_release)
+        self.canvas.bind("<ButtonPress-3>", self._on_context_menu)
+        self.canvas.bind("<ButtonRelease-3>", lambda _e: "break")
 
         self.root.update_idletasks()
         self._hwnd = self.root.winfo_id()
@@ -168,19 +192,28 @@ class RecordingIndicator:
             ex_style | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
         )
 
-    def _place_window(self, position: str) -> None:
-        screen_w = self.root.winfo_screenwidth()
-        screen_h = self.root.winfo_screenheight()
+    def _screen_size(self) -> tuple[int, int]:
+        return self.root.winfo_screenwidth(), self.root.winfo_screenheight()
 
-        x = (screen_w - INDICATOR_WIDTH) // 2
-        margin = int(screen_h * MARGIN_FRACTION)
+    def _current_xy(self) -> tuple[int, int]:
+        self.root.update_idletasks()
+        return int(self.root.winfo_x()), int(self.root.winfo_y())
 
-        if position == "onder-midden":
-            y = screen_h - INDICATOR_HEIGHT - margin
-        else:
-            y = margin
-
+    def _apply_xy(self, x: int, y: int) -> None:
+        screen_w, screen_h = self._screen_size()
+        x, y = clamp_indicator_xy(x, y, screen_w, screen_h)
+        self._xy = (x, y)
         self.root.geometry(f"{INDICATOR_WIDTH}x{INDICATOR_HEIGHT}+{x}+{y}")
+
+    def _place_window(self, position: str) -> None:
+        position = normalize_indicator_position(position)
+        self._position = position
+        screen_w, screen_h = self._screen_size()
+        if position == POSITION_LAST and self._xy is not None:
+            self._apply_xy(self._xy[0], self._xy[1])
+            return
+        x, y = preset_indicator_xy(position, screen_w, screen_h)
+        self._apply_xy(x, y)
 
     def _build_canvas_items(self) -> None:
         c = self.canvas
@@ -238,13 +271,38 @@ class RecordingIndicator:
             self._mdots.append(dot)
 
         self._tag = c.create_text(
-            INDICATOR_WIDTH - 16,
+            INDICATOR_WIDTH - 52,
             cy,
             text="",
             anchor="e",
             fill=MUTED_COLOR,
             font=TAG_FONT,
         )
+
+        # Opname-/stopknop — idle+bestemming (●) of tijdens opname (■).
+        self._control_hit = c.create_rectangle(
+            INDICATOR_WIDTH - 72,
+            8,
+            INDICATOR_WIDTH - 44,
+            h - 8,
+            fill="",
+            outline="",
+            tags=("control",),
+            state="hidden",
+        )
+        self._control_btn = c.create_text(
+            INDICATOR_WIDTH - 58,
+            cy,
+            text="●",
+            anchor="center",
+            fill=COLOR_RECORDING,
+            font=("Segoe UI", 14),
+            tags=("control",),
+            state="hidden",
+        )
+        c.tag_bind("control", "<ButtonPress-1>", self._on_control_press)
+        c.tag_bind("control", "<ButtonRelease-1>", self._on_control_release)
+        c.tag_raise("control")
 
         # Sluitknop (×) — alleen idle + bestemming; ruime hit-area.
         self._dismiss_hit = c.create_rectangle(
@@ -268,6 +326,50 @@ class RecordingIndicator:
             state="hidden",
         )
         c.tag_bind("dismiss", "<Button-1>", self._on_dismiss_click)
+        c.tag_raise("dismiss")
+
+    def _on_context_menu(self, event: Any) -> str:
+        self._drag = None
+        if self.on_context_menu is not None:
+            try:
+                self.on_context_menu(int(event.x_root), int(event.y_root))
+            except Exception:
+                pass
+        return "break"
+
+    def _on_drag_press(self, event: Any) -> None:
+        current = self.canvas.find_withtag("current")
+        if current:
+            tags = self.canvas.gettags(current[0])
+            if "dismiss" in tags or "control" in tags:
+                return
+        self._drag = {
+            "offset_x": event.x_root - self.root.winfo_x(),
+            "offset_y": event.y_root - self.root.winfo_y(),
+            "moved": False,
+        }
+
+    def _on_drag_motion(self, event: Any) -> None:
+        if self._drag is None:
+            return
+        x = int(event.x_root - self._drag["offset_x"])
+        y = int(event.y_root - self._drag["offset_y"])
+        self._drag["moved"] = True
+        self._apply_xy(x, y)
+
+    def _on_drag_release(self, _event: Any = None) -> None:
+        drag = self._drag
+        self._drag = None
+        if drag is None or not drag.get("moved"):
+            return
+        x, y = self._current_xy()
+        self._position = POSITION_LAST
+        self._xy = (x, y)
+        if self._on_moved is not None:
+            try:
+                self._on_moved(POSITION_LAST, x, y)
+            except Exception:
+                pass
 
     def _create_folder_icon(self, left: float, cy: float) -> list[int]:
         """Tekent een klein map-icoon; items starten hidden."""
@@ -300,9 +402,63 @@ class RecordingIndicator:
         )
         return [tab, body]
 
+    def _on_control_press(self, _event: Any = None) -> str:
+        self._drag = None
+        self._control_held = True
+        if self._control_press_cb is not None:
+            try:
+                self._control_press_cb()
+            except Exception:
+                pass
+        return "break"
+
+    def _on_control_release(self, _event: Any = None) -> str:
+        if not self._control_held:
+            return "break"
+        self._control_held = False
+        if self._control_release_cb is not None:
+            try:
+                self._control_release_cb()
+            except Exception:
+                pass
+        return "break"
+
+    def _set_control_visible(self, kind: str | None) -> None:
+        """kind: 'record' | 'stop' | None."""
+
+        c = self.canvas
+        if kind is None:
+            c.itemconfigure(self._control_hit, state="hidden")
+            c.itemconfigure(self._control_btn, state="hidden")
+            return
+        if kind == "stop":
+            # Zelfde plek als × tijdens opname (× is dan verborgen).
+            c.coords(
+                self._control_hit,
+                INDICATOR_WIDTH - 40,
+                8,
+                INDICATOR_WIDTH - 8,
+                INDICATOR_HEIGHT - 8,
+            )
+            c.coords(self._control_btn, INDICATOR_WIDTH - 22, INDICATOR_HEIGHT / 2)
+            c.itemconfigure(self._control_btn, text="■", fill=TEXT_COLOR)
+        else:
+            c.coords(
+                self._control_hit,
+                INDICATOR_WIDTH - 72,
+                8,
+                INDICATOR_WIDTH - 44,
+                INDICATOR_HEIGHT - 8,
+            )
+            c.coords(self._control_btn, INDICATOR_WIDTH - 58, INDICATOR_HEIGHT / 2)
+            c.itemconfigure(self._control_btn, text="●", fill=COLOR_RECORDING)
+        c.itemconfigure(self._control_hit, state="normal")
+        c.itemconfigure(self._control_btn, state="normal")
+
     def _on_dismiss_click(self, _event: Any = None) -> str:
         """Verberg de bestemmingspill; sticky bestemming blijft actief."""
 
+        self._drag = None
         self._dest_pill.dismiss()
         self._apply_idle_visibility()
         if self._visible:
@@ -417,8 +573,14 @@ class RecordingIndicator:
     def call_on_main(self, fn: Any) -> None:
         self._main_calls.put(fn)
 
-    def set_position(self, position: str) -> None:
-        self._position = position
+    def set_position(
+        self,
+        position: str,
+        *,
+        xy: tuple[int, int] | None = None,
+    ) -> None:
+        if xy is not None:
+            self._xy = xy
         self._place_window(position)
 
     def set_destination(self, name: str | None) -> None:
@@ -460,7 +622,7 @@ class RecordingIndicator:
         cy = INDICATOR_HEIGHT / 2
         color = STATE_COLORS.get(state, MUTED_COLOR)
 
-        # Idle met sticky bestemming: map-icoon + naam + ×.
+        # Idle met sticky bestemming: map-icoon + naam + opname + ×.
         if state == RecordingState.IDLE and self._dest_pill.idle_visible:
             c.itemconfigure(
                 self._label,
@@ -472,6 +634,7 @@ class RecordingIndicator:
                 c.itemconfigure(item, state="normal")
             c.itemconfigure(self._dismiss_hit, state="normal")
             c.itemconfigure(self._dismiss_btn, state="normal")
+            self._set_control_visible("record")
             self._render_waveform(False, MUTED_COLOR, cy)
             self._render_marching_dots(False, cy)
             c.itemconfigure(self._tag, text="", state="hidden")
@@ -488,8 +651,10 @@ class RecordingIndicator:
         if state == RecordingState.RECORDING:
             pulse = 0.5 + 0.5 * math.sin(self._frame * 0.35)
             r = self._dot_r * (0.7 + 0.3 * pulse)
+            self._set_control_visible("stop")
         else:
             r = self._dot_r
+            self._set_control_visible(None)
         c.coords(
             self._dot,
             self._dot_cx - r,

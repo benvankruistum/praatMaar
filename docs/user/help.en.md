@@ -25,9 +25,9 @@ words before or after. praatMaar compares the entire take to your saved names
   and the name itself is not saved as a transcript.
 - **No match:** normal dictation flow — paste text and save in the current folder.
 
-**Back to default:** say only the word **standaard** (one take, exact). The active
-destination is cleared. (The reset word is always *standaard*, even when the UI is
-in English or German.)
+**Back to default:** say only **default**, **standard**, or **standaard**
+(one take, exact). The active destination is cleared. All three words work,
+regardless of speech or interface language.
 
 ## Where do your files go?
 

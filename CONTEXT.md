@@ -58,7 +58,7 @@ via `Opnamesessie.language`.
 Een benoemd transcriptdoel: **naam + map** in `config.json` (`destinations`).
 De actieve bestemming is **sticky** — blijft gelden tot je wisselt of reset.
 Wisselen via stem: na transcriptie exacte match (genormaliseerd) op de
-bestemmingsnaam; reset-frase **`standaard`** zet terug naar de defaultmap
+bestemmingsnaam; reset-frases **`standaard`** / **`default`** / **`standard`** zetten terug naar de defaultmap
 (`%APPDATA%\praatMaar\transcripts\`). Geen fuzzy match in v1.
 
 - **Pill:** toont de actieve naam in idle (`indicator.py` / `set_destination`).

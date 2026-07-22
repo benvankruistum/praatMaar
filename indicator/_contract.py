@@ -37,6 +37,65 @@ ERROR_DURATION_MS = 4000
 NUM_BARS = 18
 WAVEFORM_GAIN = 9.0
 
+# Pill-positiemodi (opgeslagen in config.json).
+POSITION_TOP = "boven-midden"
+POSITION_BOTTOM = "onder-midden"
+POSITION_LAST = "laatst-geplaatst"
+POSITION_PRESETS = frozenset({POSITION_TOP, POSITION_BOTTOM, POSITION_LAST})
+
+
+def normalize_indicator_position(value: object, default: str = POSITION_TOP) -> str:
+    text = str(value or "").strip()
+    if text in POSITION_PRESETS:
+        return text
+    return default if default in POSITION_PRESETS else POSITION_TOP
+
+
+def sanitize_indicator_xy(raw: object) -> tuple[int, int] | None:
+    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+        return None
+    try:
+        return int(raw[0]), int(raw[1])
+    except (TypeError, ValueError):
+        return None
+
+
+def clamp_indicator_xy(
+    x: int,
+    y: int,
+    screen_w: int,
+    screen_h: int,
+    *,
+    width: int = INDICATOR_WIDTH,
+    height: int = INDICATOR_HEIGHT,
+) -> tuple[int, int]:
+    """Houdt de pill binnen het scherm (top-left herkomst, Y naar beneden)."""
+
+    max_x = max(0, int(screen_w) - int(width))
+    max_y = max(0, int(screen_h) - int(height))
+    return max(0, min(int(x), max_x)), max(0, min(int(y), max_y))
+
+
+def preset_indicator_xy(
+    position: str,
+    screen_w: int,
+    screen_h: int,
+    *,
+    width: int = INDICATOR_WIDTH,
+    height: int = INDICATOR_HEIGHT,
+    margin_fraction: float = MARGIN_FRACTION,
+) -> tuple[int, int]:
+    """Top-/onder-midden in top-left schermcoördinaten."""
+
+    x = (int(screen_w) - int(width)) // 2
+    margin = int(int(screen_h) * margin_fraction)
+    if position == POSITION_BOTTOM:
+        y = int(screen_h) - int(height) - margin
+    else:
+        y = margin
+    return clamp_indicator_xy(x, y, screen_w, screen_h, width=width, height=height)
+
+
 # Max. tekens voor sticky bestemmingsnaam in de pill (voorkomt knippen).
 MAX_DESTINATION_DISPLAY_CHARS = 24
 
