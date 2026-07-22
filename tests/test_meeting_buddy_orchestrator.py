@@ -138,6 +138,8 @@ def test_start_passes_backpressure_config_to_capture_and_stt(tmp_path: Path) -> 
             "device": None,
             "enable_loopback": True,
             "loopback_device": None,
+            "mic_mix_gain": 0.5,
+            "loopback_mix_gain": 0.5,
         }
     ]
     assert stt.start_configs == [{"max_whisper_queue_duration_s": 4.25}]
@@ -430,6 +432,8 @@ def test_capture_config_uses_app_microphone_and_loopback_settings(
     assert config["device"] == 5
     assert config["enable_loopback"] is True
     assert config["loopback_device"] is None
+    assert config["mic_mix_gain"] == 0.5
+    assert config["loopback_mix_gain"] == 0.5
     assert config["max_audio_buffer_duration_s"] == 30
 
 
