@@ -129,6 +129,24 @@ def state_label(state: RecordingState) -> str:
     return i18n.t(key) if key else ""
 
 
+def transcribing_label(percent: int | None) -> str:
+    """Label voor TRANSCRIBING; met percent → 'Transcriberen 45%'."""
+
+    import i18n
+
+    if percent is None:
+        return i18n.t("state.transcribing")
+    return i18n.t("state.transcribing_progress", percent=int(percent))
+
+
+def transcription_percent(position_seconds: float, duration_seconds: float) -> int:
+    """Voortgang 0–99 tijdens segment-iteratie (100% pas bij afronden)."""
+
+    if duration_seconds <= 0:
+        return 0
+    return min(99, max(0, int(100.0 * float(position_seconds) / float(duration_seconds))))
+
+
 def mode_tag(mode: str) -> str:
     """Modus-tag voor de pill (●/↔ + vertaalde korte naam)."""
 
@@ -188,6 +206,8 @@ class DestinationPillModel:
 _status_queue: queue.Queue[tuple[RecordingState, str]] = queue.Queue()
 _level_lock = threading.Lock()
 _levels: deque[float] = deque(maxlen=NUM_BARS)
+_progress_lock = threading.Lock()
+_transcription_progress: int | None = None
 
 
 def notify_state(state: RecordingState, mode: str = "toggle") -> None:
@@ -197,6 +217,8 @@ def notify_state(state: RecordingState, mode: str = "toggle") -> None:
     `mode` is "toggle" of "ptt"; de indicator toont het als modus-tag.
     """
 
+    if state != RecordingState.TRANSCRIBING:
+        set_transcription_progress(None)
     _status_queue.put((state, mode))
 
 
@@ -212,6 +234,22 @@ def reset_levels() -> None:
 
     with _level_lock:
         _levels.clear()
+
+
+def set_transcription_progress(percent: int | None) -> None:
+    """Zet voortgang 0–100 tijdens TRANSCRIBING, of None om te wissen."""
+
+    global _transcription_progress
+    with _progress_lock:
+        if percent is None:
+            _transcription_progress = None
+        else:
+            _transcription_progress = max(0, min(100, int(percent)))
+
+
+def get_transcription_progress() -> int | None:
+    with _progress_lock:
+        return _transcription_progress
 
 
 def snapshot_levels() -> list[float]:

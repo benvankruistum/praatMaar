@@ -21,6 +21,7 @@ from ._contract import (
     notify_state,
     push_level,
     reset_levels,
+    set_transcription_progress,
 )
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "notify_state",
     "push_level",
     "reset_levels",
+    "set_transcription_progress",
 ]
 
 

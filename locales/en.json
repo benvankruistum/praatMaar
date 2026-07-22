@@ -13,6 +13,7 @@
 
   "state.recording": "Recording",
   "state.transcribing": "Transcribing",
+  "state.transcribing_progress": "Transcribing {percent}%",
   "state.cancelled": "Cancelled",
   "state.error": "Failed",
   "state.tag.toggle": "toggle",
@@ -123,6 +124,7 @@
   "rec.cancelled": "× RECORDING CANCELLED",
   "rec.cancelled_detail": "Nothing will be transcribed or pasted.",
   "rec.transcribing": "Transcribing locally...",
+  "rec.transcribing_progress": "  Transcribing: {percent}%",
   "rec.no_speech": "No spoken text was recognized.",
   "rec.transcript_header": "TRANSCRIPT",
   "rec.saved": "Transcript saved: {path}",

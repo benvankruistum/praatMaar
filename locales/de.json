@@ -13,6 +13,7 @@
 
   "state.recording": "Aufnahme",
   "state.transcribing": "Transkription",
+  "state.transcribing_progress": "Transkription {percent}%",
   "state.cancelled": "Abgebrochen",
   "state.error": "Fehlgeschlagen",
   "state.tag.toggle": "toggle",
@@ -123,6 +124,7 @@
   "rec.cancelled": "× AUFNAHME ABGEBROCHEN",
   "rec.cancelled_detail": "Es wird nichts transkribiert oder eingefügt.",
   "rec.transcribing": "Transkription läuft lokal...",
+  "rec.transcribing_progress": "  Transkription: {percent}%",
   "rec.no_speech": "Kein gesprochener Text erkannt.",
   "rec.transcript_header": "TRANSKRIPT",
   "rec.saved": "Transkript gespeichert: {path}",

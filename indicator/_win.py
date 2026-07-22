@@ -35,11 +35,13 @@ from ._contract import (
     clamp_indicator_xy,
     destination_display_name,
     drain_status_queue,
+    get_transcription_progress,
     mode_tag,
     normalize_indicator_position,
     preset_indicator_xy,
     snapshot_levels,
     state_label,
+    transcribing_label,
 )
 
 # Afgeronde hoeken via een transparante kleur-key. Op sommige Windows-setups
@@ -646,7 +648,11 @@ class RecordingIndicator:
         c.itemconfigure(self._dismiss_btn, state="hidden")
 
         # Label.
-        c.itemconfigure(self._label, text=state_label(state), fill=TEXT_COLOR)
+        if state == RecordingState.TRANSCRIBING:
+            label = transcribing_label(get_transcription_progress())
+        else:
+            label = state_label(state)
+        c.itemconfigure(self._label, text=label, fill=TEXT_COLOR)
 
         if state == RecordingState.RECORDING:
             pulse = 0.5 + 0.5 * math.sin(self._frame * 0.35)
