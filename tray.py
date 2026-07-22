@@ -56,6 +56,98 @@ ICON_SIZE = 64
 # ("separator",) | ("item", label, callback) | ("submenu", label, [entries])
 MenuEntry = tuple[Any, ...]
 
+ModuleActionCallback = Callable[[str, str], Callable[[], None]]
+
+
+def _group_module_actions(
+    module_entries: list[tuple[PraatMaarModule, ModuleAction]],
+) -> list[tuple[PraatMaarModule, list[ModuleAction]]]:
+    by_module: dict[str, tuple[PraatMaarModule, list[ModuleAction]]] = {}
+    for module, action in module_entries:
+        bucket = by_module.setdefault(module.id, (module, []))
+        bucket[1].append(action)
+    return list(by_module.values())
+
+
+def _module_action_menu_entries(
+    module: PraatMaarModule,
+    actions: list[ModuleAction],
+    module_action_callback: ModuleActionCallback,
+) -> list[MenuEntry]:
+    return [
+        (
+            "item",
+            i18n.t(action.label_key),
+            module_action_callback(module.id, action.id),
+        )
+        for action in actions
+    ]
+
+
+def _module_tray_cascade_entries(
+    module_entries: list[tuple[PraatMaarModule, ModuleAction]],
+    module_action_callback: ModuleActionCallback,
+) -> list[MenuEntry]:
+    cascades: list[MenuEntry] = []
+    for module, actions in _group_module_actions(module_entries):
+        action_children = _module_action_menu_entries(module, actions, module_action_callback)
+        cascades.append(("submenu", i18n.t(module.display_name_key()), action_children))
+    return cascades
+
+
+def _module_tray_root_entries(
+    root_entries: list[tuple[PraatMaarModule, ModuleAction]],
+    module_action_callback: ModuleActionCallback,
+) -> list[MenuEntry]:
+    entries: list[MenuEntry] = []
+    for module, actions in _group_module_actions(root_entries):
+        if len(actions) == 1:
+            action = actions[0]
+            entries.append(
+                (
+                    "item",
+                    i18n.t(action.label_key),
+                    module_action_callback(module.id, action.id),
+                )
+            )
+            continue
+        action_children = _module_action_menu_entries(module, actions, module_action_callback)
+        entries.append(("submenu", i18n.t(module.display_name_key()), action_children))
+    return entries
+
+
+def build_context_menu_entries(
+    *,
+    on_settings: Callable[[], None],
+    on_destinations: Callable[[], None],
+    on_modules: Callable[[], None],
+    on_help: Callable[[], None],
+    on_quit: Callable[[], None],
+    module_tray_actions: list[tuple[PraatMaarModule, ModuleAction]],
+    module_tray_root_actions: list[tuple[PraatMaarModule, ModuleAction]],
+    module_action_callback: ModuleActionCallback,
+) -> list[MenuEntry]:
+    """Bouwt tray-/pill-contextmenu-items (Instellingen t/m Afsluiten)."""
+
+    entries: list[MenuEntry] = [
+        ("item", i18n.t("tray.settings"), on_settings),
+        ("item", i18n.t("tray.destinations"), on_destinations),
+    ]
+
+    module_section = _module_tray_cascade_entries(module_tray_actions, module_action_callback)
+    module_section.extend(
+        _module_tray_root_entries(module_tray_root_actions, module_action_callback)
+    )
+    if module_section:
+        entries.extend(module_section)
+        entries.append(("separator",))
+
+    entries.append(("item", i18n.t("tray.modules"), on_modules))
+    entries.append(("item", i18n.t("tray.help"), on_help))
+    entries.append(("separator",))
+    entries.append(("item", i18n.t("tray.quit"), on_quit))
+    return entries
+
 
 def _make_icon(color: tuple[int, int, int, int]) -> Image.Image:
     """Tekent een microfoon-silhouet in `color` op een transparante achtergrond."""
@@ -164,67 +256,20 @@ class TrayIcon:
     def context_menu_entries(self) -> list[MenuEntry]:
         """Zelfde items als het tray-menu, bruikbaar voor de pill-rechtsklik."""
 
-        entries: list[MenuEntry] = [
-            ("item", i18n.t("tray.settings"), self._on_settings),
-            ("item", i18n.t("tray.destinations"), self._on_destinations),
-        ]
-
-        root_entries = (
-            self._get_module_tray_root_actions() if self._get_module_tray_root_actions else []
+        return build_context_menu_entries(
+            on_settings=self._on_settings,
+            on_destinations=self._on_destinations,
+            on_modules=self._on_modules,
+            on_help=self._on_help,
+            on_quit=self._on_quit,
+            module_tray_actions=(
+                self._get_module_tray_actions() if self._get_module_tray_actions else []
+            ),
+            module_tray_root_actions=(
+                self._get_module_tray_root_actions() if self._get_module_tray_root_actions else []
+            ),
+            module_action_callback=self._module_action_callback,
         )
-        if root_entries:
-            for module, action in root_entries:
-                entries.append(
-                    (
-                        "item",
-                        i18n.t(action.label_key),
-                        self._module_action_callback(module.id, action.id),
-                    )
-                )
-            entries.append(("separator",))
-
-        entries.append(self._modules_menu_entry())
-        entries.append(("item", i18n.t("tray.help"), self._on_help))
-        entries.append(("separator",))
-        entries.append(("item", i18n.t("tray.quit"), self._on_quit))
-        return entries
-
-    def _modules_menu_entry(self) -> MenuEntry:
-        module_entries = self._get_module_tray_actions() if self._get_module_tray_actions else []
-        if not module_entries:
-            return ("item", i18n.t("tray.modules"), self._on_modules)
-
-        children: list[MenuEntry] = [
-            ("item", i18n.t("modules.manage"), self._on_modules),
-            ("separator",),
-        ]
-        by_module: dict[str, tuple[PraatMaarModule, list[ModuleAction]]] = {}
-        for module, action in module_entries:
-            bucket = by_module.setdefault(module.id, (module, []))
-            bucket[1].append(action)
-
-        for module, actions in by_module.values():
-            if len(actions) == 1:
-                action = actions[0]
-                children.append(
-                    (
-                        "item",
-                        i18n.t(action.label_key),
-                        self._module_action_callback(module.id, action.id),
-                    )
-                )
-                continue
-            action_children = [
-                (
-                    "item",
-                    i18n.t(action.label_key),
-                    self._module_action_callback(module.id, action.id),
-                )
-                for action in actions
-            ]
-            children.append(("submenu", i18n.t(module.display_name_key()), action_children))
-
-        return ("submenu", i18n.t("tray.modules"), children)
 
     def popup_menu(self, x: int, y: int, *, tk_parent: Any | None = None) -> None:
         """Toont het contextmenu op schermpositie `(x, y)` (pill-rechtsklik)."""
@@ -335,7 +380,7 @@ class TrayIcon:
             pass
 
     def refresh_modules_menu(self) -> None:
-        """Vernieuwt het Modules-submenu na wijziging van ingeschakelde modules."""
+        """Vernieuwt module-cascades in het tray-menu na wijziging van ingeschakelde modules."""
 
         try:
             self._icon.menu = self._build_menu()
