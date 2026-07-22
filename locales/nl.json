@@ -13,6 +13,7 @@
 
   "state.recording": "Opname",
   "state.transcribing": "Transcriberen",
+  "state.transcribing_progress": "Transcriberen {percent}%",
   "state.cancelled": "Geannuleerd",
   "state.error": "Mislukt",
   "state.tag.toggle": "toggle",
@@ -123,6 +124,7 @@
   "rec.cancelled": "× OPNAME GEANNULEERD",
   "rec.cancelled_detail": "Er wordt niets getranscribeerd of geplakt.",
   "rec.transcribing": "Transcriptie wordt lokaal uitgevoerd...",
+  "rec.transcribing_progress": "  Transcriberen: {percent}%",
   "rec.no_speech": "Er is geen gesproken tekst herkend.",
   "rec.transcript_header": "TRANSCRIPTIE",
   "rec.saved": "Transcript opgeslagen: {path}",

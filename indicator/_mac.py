@@ -39,10 +39,12 @@ from ._contract import (
     clamp_indicator_xy,
     destination_display_name,
     drain_status_queue,
+    get_transcription_progress,
     mode_tag,
     normalize_indicator_position,
     snapshot_levels,
     state_label,
+    transcribing_label,
 )
 
 
@@ -497,7 +499,11 @@ class RecordingIndicator:
             return
 
         self._dismiss_btn.setHidden_(True)
-        self._label_field.setStringValue_(state_label(state))
+        if state == RecordingState.TRANSCRIBING:
+            label = transcribing_label(get_transcription_progress())
+        else:
+            label = state_label(state)
+        self._label_field.setStringValue_(label)
         color = STATE_COLORS.get(state, MUTED_COLOR)
         self._label_field.setTextColor_(self._ns_color(color))
 

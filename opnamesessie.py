@@ -30,6 +30,7 @@ import i18n
 from destinations import match_command, resolve_auto_paste
 from indicator import (
     RecordingState,
+    set_transcription_progress,
 )
 from indicator import (
     notify_state as default_notify_state,
@@ -40,6 +41,7 @@ from indicator import (
 from indicator import (
     reset_levels as default_reset_levels,
 )
+from indicator._contract import transcription_percent
 from mic_errors import (
     first_input_device_index,
     format_recording_start_error,
@@ -270,12 +272,17 @@ class Opnamesessie:
             )
         )
 
-    def _stop_incremental_worker(self) -> None:
+    def _stop_incremental_worker(self, *, wait: bool = True) -> None:
         stop = self._incremental_stop
         thread = self._incremental_thread
         if stop is not None:
             stop.set()
-        if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+        if (
+            wait
+            and thread is not None
+            and thread.is_alive()
+            and thread is not threading.current_thread()
+        ):
             thread.join(timeout=5.0)
         self._incremental_thread = None
         self._incremental_stop = None
@@ -284,7 +291,8 @@ class Opnamesessie:
         if not self.incremental_transcription:
             return
 
-        self._stop_incremental_worker()
+        # Oude worker alleen seinen, niet joinen — anders blokkeert start de UI.
+        self._stop_incremental_worker(wait=False)
         self._incremental_stop = threading.Event()
         self._incremental_thread = threading.Thread(
             target=self._incremental_loop,
@@ -508,11 +516,12 @@ class Opnamesessie:
             self._session_id = str(uuid.uuid4())
 
         self._event(CycleEventType.CYCLE_STARTED)
-        self._start_incremental_worker()
 
-        # UI meteen rood — vóór eventuele (her)open van de stream.
+        # UI meteen rood — vóór incremental-worker en eventuele (her)open van de stream.
         self._reset_levels()
         self._notify(RecordingState.RECORDING, self.mode)
+
+        self._start_incremental_worker()
 
         try:
             self._ensure_stream()
@@ -523,7 +532,7 @@ class Opnamesessie:
                 self._recording = False
                 self._recording_started_at = None
                 self._audio_chunks.clear()
-            self._stop_incremental_worker()
+            self._stop_incremental_worker(wait=False)
             message = format_recording_start_error(exc)
             print()
             print(i18n.t("rec.start_failed"))
@@ -574,8 +583,6 @@ class Opnamesessie:
             started_at = self._recording_started_at
             self._recording_started_at = None
 
-        self._stop_incremental_worker()
-
         duration = 0.0
         if started_at is not None:
             duration = time.monotonic() - started_at
@@ -586,6 +593,8 @@ class Opnamesessie:
         if duration < self.minimum_recording_seconds:
             with self._lock:
                 self._audio_chunks.clear()
+            # Seinen zonder join: UI blijft snappy.
+            self._stop_incremental_worker(wait=False)
             self._notify(RecordingState.IDLE)
             print(i18n.t("rec.too_short"))
             self._release_stream_if_cold()
@@ -602,6 +611,7 @@ class Opnamesessie:
                 self._audio_chunks.clear()
 
         if chunks_empty:
+            self._stop_incremental_worker(wait=False)
             self._notify(RecordingState.IDLE)
             print(i18n.t("rec.no_audio"))
             # Vaak een dode warme stream na Bluetooth reconnect — heropen bij
@@ -612,11 +622,12 @@ class Opnamesessie:
             self.on_ready()
             return
 
+        # UI meteen naar Transcriberen — join van partial-Whisper mag daarna.
         self._event(CycleEventType.CYCLE_TRANSCRIBING)
-
-        # Koude modus / macOS: stream mag dicht zodra de chunks veilig gekopieerd zijn.
         self._release_stream_if_cold()
         self._notify(RecordingState.TRANSCRIBING, self.mode)
+
+        self._stop_incremental_worker(wait=True)
 
         thread = threading.Thread(
             target=self._transcribe_audio,
@@ -636,10 +647,10 @@ class Opnamesessie:
             self._recording_started_at = None
             self._audio_chunks.clear()
 
-        self._stop_incremental_worker()
         self._event(CycleEventType.CYCLE_CANCELLED)
-
         self._notify(RecordingState.CANCELLED)
+
+        self._stop_incremental_worker(wait=False)
 
         print()
         print(i18n.t("rec.cancelled"))
@@ -680,6 +691,11 @@ class Opnamesessie:
 
         try:
             print(i18n.t("rec.transcribing"))
+            set_transcription_progress(0)
+
+            sample_count = sum(chunk.shape[0] for chunk in chunks)
+            duration_seconds = sample_count / float(self.sample_rate)
+            last_logged_bucket = -1
 
             temporary_path = self.create_temporary_wav(chunks)
             with self._whisper.locked_model() as model:
@@ -693,9 +709,18 @@ class Opnamesessie:
                 )
                 text_parts: list[str] = []
                 for segment in segments:
+                    end = float(getattr(segment, "end", 0.0) or 0.0)
+                    percent = transcription_percent(end, duration_seconds)
+                    set_transcription_progress(percent)
+                    bucket = percent // 25
+                    if bucket > last_logged_bucket and bucket >= 1:
+                        print(i18n.t("rec.transcribing_progress", percent=percent))
+                        last_logged_bucket = bucket
                     text = segment.text.strip()
                     if text:
                         text_parts.append(text)
+
+            set_transcription_progress(100)
 
             transcript = " ".join(text_parts).strip()
             if not transcript:
