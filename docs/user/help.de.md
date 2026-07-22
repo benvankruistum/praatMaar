@@ -60,9 +60,10 @@ Rechtsklick auf das praatMaar-Symbol im Infobereich:
 ## Module und externe Tools
 
 Unter **Module** im Infobereich schalten Sie Erweiterungen ein oder aus und
-aktivieren optional **inkrementelle Transkription**. Dabei läuft Whisper bereits
-während der Aufnahme im Hintergrund; Module und externe Tools können
-Zwischentext erhalten, bevor Sie stoppen.
+aktivieren optional **inkrementelle Transkription**. Whisper läuft dann bereits
+während der Aufnahme im Hintergrund (Zwischentext für Module/Tools). Beim Stoppen
+wird der letzte Zwischentext zum Endtranskript — schneller, aber die letzten
+Sekunden nach diesem Zwischenlauf können fehlen.
 
 **Event-Journal:** jeder Diktierzyklus wird als JSON-Zeilen nach
 `%APPDATA%\praatMaar\events\events.jsonl` geschrieben (macOS: Application Support).

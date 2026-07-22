@@ -119,7 +119,9 @@ cycle.idle
 ```
 
 **Regel:** behandel `transcript.saved` als autoritatief eindpunt voor “bestand
-staat klaar”. `transcript.partial` is indicatief.
+staat klaar”. Met incrementele transcriptie is dat vaak de laatste
+`transcript.partial` (zonder extra Whisper bij stop); tussentijdse partials
+vóór stop blijven indicatief.
 
 ## JSON-voorbeelden
 

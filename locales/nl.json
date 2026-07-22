@@ -193,7 +193,7 @@
 
   "modules.title": "praatMaar — Modules",
   "modules.intro": "Schakel uitbreidingen in of uit. Alle dicteercyclus-events worden ook weggeschreven naar het event-journal (events/events.jsonl) voor externe tools.",
-  "modules.incremental": "Incrementele transcriptie tijdens opname (tussentijdse partial-events)",
+  "modules.incremental": "Incrementele transcriptie (tijdens opname; laatste partial = eindtekst)",
   "modules.list_heading": "Ingebouwde modules",
   "modules.enabled": "Ingeschakeld",
   "modules.manage": "Modules beheren…",

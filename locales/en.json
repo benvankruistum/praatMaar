@@ -193,7 +193,7 @@
 
   "modules.title": "praatMaar — Modules",
   "modules.intro": "Enable or disable extensions. All dictation cycle events are also written to the event journal (events/events.jsonl) for external tools.",
-  "modules.incremental": "Incremental transcription during recording (interim partial events)",
+  "modules.incremental": "Incremental transcription (during recording; last partial = final text)",
   "modules.list_heading": "Built-in modules",
   "modules.enabled": "Enabled",
   "modules.manage": "Manage modules…",

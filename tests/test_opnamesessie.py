@@ -571,6 +571,8 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
     assert sd.last_callback is not None
     sd.last_callback(np.zeros((3200, 1), dtype=np.float32), 3200, None, None)
     assert entered.wait(timeout=2.0)
+    # Voorbij minimum_recording_seconds zodat stop niet als "te kort" eindigt.
+    time.sleep(0.08)
 
     stop_done = threading.Event()
 

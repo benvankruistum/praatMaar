@@ -193,7 +193,7 @@
 
   "modules.title": "praatMaar — Module",
   "modules.intro": "Erweiterungen ein- oder ausschalten. Alle Diktierzyklus-Ereignisse werden auch ins Event-Journal (events/events.jsonl) geschrieben — für externe Tools.",
-  "modules.incremental": "Inkrementelle Transkription während der Aufnahme (Zwischenstände als Partial-Events)",
+  "modules.incremental": "Inkrementelle Transkription (während Aufnahme; letzter Partial = Endtext)",
   "modules.list_heading": "Eingebaute Module",
   "modules.enabled": "Aktiviert",
   "modules.manage": "Module verwalten…",
