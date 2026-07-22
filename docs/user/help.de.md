@@ -26,9 +26,9 @@ mit Ihren gespeicherten Namen (exakte Übereinstimmung nach Normalisierung).
 - **Kein Treffer:** normaler Diktierablauf — Text einfügen und im aktuellen Ordner
   speichern.
 
-**Zurück auf Standard:** sagen Sie nur das Wort **standaard** (eine Aufnahme, exakt).
-Das aktive Ziel wird gelöscht. (Das Reset-Wort ist immer *standaard*, auch wenn die
-Oberfläche auf Englisch oder Deutsch steht.)
+**Zurück auf Standard:** sagen Sie nur **Standard**, **default** oder **standaard**
+(eine Aufnahme, exakt). Das aktive Ziel wird gelöscht. Alle drei Wörter funktionieren,
+unabhängig von Sprach- oder Oberflächensprache.
 
 ## Wo landen Ihre Dateien?
 

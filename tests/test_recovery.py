@@ -31,6 +31,20 @@ def test_prune_keeps_newest(tmp_path: Path, monkeypatch) -> None:
     assert remaining == ["2026-01-04_120000.txt", "2026-01-05_120000.txt"]
 
 
+def test_append_transcript_adds_timestamp(tmp_path: Path) -> None:
+    target = tmp_path / "notes.txt"
+    path = recovery.append_transcript("eerste regel", target)
+    assert path == target
+    content = target.read_text(encoding="utf-8")
+    assert content.endswith("eerste regel\n")
+    assert "\n\n" in content or content.count("\n") >= 2
+
+    recovery.append_transcript("tweede regel", target)
+    content = target.read_text(encoding="utf-8")
+    assert "tweede regel" in content
+    assert content.count("eerste regel") == 1
+
+
 def test_save_transcript_custom_dir_skips_prune(tmp_path: Path, monkeypatch) -> None:
     _patch_dirs(tmp_path, monkeypatch)
     monkeypatch.setattr(recovery, "MAX_TRANSCRIPTS", 2)

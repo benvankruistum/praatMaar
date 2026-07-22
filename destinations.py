@@ -5,7 +5,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-RESET_PHRASE = "standaard"
+# Stem-reset naar de defaultmap. Alle talen + "default" worden altijd geaccepteerd,
+# zodat reset werkt ongeacht spraak-/interfacetaal.
+RESET_PHRASES = frozenset({"standaard", "default", "standard"})
+RESET_PHRASE = "standaard"  # backwards-compat alias
+FILE_MODE_NEW = "new"
+FILE_MODE_APPEND = "append"
 
 
 def normalize_phrase(text: str) -> str:
@@ -19,7 +24,7 @@ def match_command(transcript: str, destinations: list[dict[str, Any]]) -> tuple[
     needle = normalize_phrase(transcript)
     if not needle:
         return ("none", None)
-    if needle == RESET_PHRASE:
+    if needle in RESET_PHRASES:
         return ("reset", None)
     for item in destinations:
         name = str(item.get("name", ""))
@@ -28,14 +33,42 @@ def match_command(transcript: str, destinations: list[dict[str, Any]]) -> tuple[
     return ("none", None)
 
 
+def find_destination(
+    active_name: str | None, destinations: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    if not active_name:
+        return None
+    for item in destinations:
+        if item.get("name") == active_name:
+            return item
+    return None
+
+
 def resolve_save_dir(
     active_name: str | None, destinations: list[dict[str, Any]], default_dir: Path
 ) -> Path:
-    if active_name:
-        for item in destinations:
-            if item.get("name") == active_name:
-                return Path(str(item["path"]))
+    item = find_destination(active_name, destinations)
+    if item is not None:
+        return Path(str(item["path"]))
     return default_dir
+
+
+def resolve_file_mode(destination: dict[str, Any] | None) -> str:
+    if destination is None:
+        return FILE_MODE_NEW
+    mode = str(destination.get("file_mode", FILE_MODE_NEW))
+    if mode == FILE_MODE_APPEND:
+        return FILE_MODE_APPEND
+    return FILE_MODE_NEW
+
+
+def resolve_append_file(destination: dict[str, Any] | None) -> Path | None:
+    if destination is None or resolve_file_mode(destination) != FILE_MODE_APPEND:
+        return None
+    raw = str(destination.get("append_file", "")).strip()
+    if not raw:
+        return None
+    return Path(raw)
 
 
 def resolve_auto_paste(
@@ -71,7 +104,7 @@ def open_in_explorer(path: Path) -> None:
 
 
 def is_reserved_name(name: str) -> bool:
-    return normalize_phrase(name) == RESET_PHRASE
+    return normalize_phrase(name) in RESET_PHRASES
 
 
 def find_normalized_collision(
@@ -110,11 +143,20 @@ def sanitize_destinations(raw: Any) -> list[dict[str, Any]]:
         if normalized in seen_normalized:
             continue
         seen_normalized.add(normalized)
+        file_mode = str(item.get("file_mode", FILE_MODE_NEW))
+        if file_mode not in (FILE_MODE_NEW, FILE_MODE_APPEND):
+            file_mode = FILE_MODE_NEW
+        append_file = str(item.get("append_file", "")).strip()
+        if file_mode == FILE_MODE_APPEND and not append_file:
+            file_mode = FILE_MODE_NEW
+            append_file = ""
         out.append(
             {
                 "name": name,
                 "path": path,
                 "auto_paste": bool(item.get("auto_paste", False)),
+                "file_mode": file_mode,
+                "append_file": append_file,
             }
         )
     return out

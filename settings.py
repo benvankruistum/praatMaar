@@ -36,6 +36,7 @@ def _positions() -> list[tuple[str, str]]:
     return [
         (i18n.t("settings.position.top"), "boven-midden"),
         (i18n.t("settings.position.bottom"), "onder-midden"),
+        (i18n.t("settings.position.last"), "laatst-geplaatst"),
     ]
 
 
@@ -102,54 +103,79 @@ def open_settings_dialog(
     win.configure(padx=18, pady=16)
     win.columnconfigure(0, weight=1)
 
+    notebook = ttk.Notebook(win)
+    notebook.grid(row=0, column=0, sticky="nsew")
+
+    general_tab = ttk.Frame(notebook, padding=(4, 12, 4, 4))
+    language_tab = ttk.Frame(notebook, padding=(4, 12, 4, 4))
+    advanced_tab = ttk.Frame(notebook, padding=(4, 12, 4, 4))
+    for tab in (general_tab, language_tab, advanced_tab):
+        tab.columnconfigure(0, weight=1)
+
+    notebook.add(general_tab, text=i18n.t("settings.tab.general"))
+    notebook.add(language_tab, text=i18n.t("settings.tab.language"))
+    notebook.add(advanced_tab, text=i18n.t("settings.tab.advanced"))
+
+    tab_rows = {general_tab: 0, language_tab: 0, advanced_tab: 0}
+
+    def _section_label(parent: Any, text: str) -> None:
+        row = tab_rows[parent]
+        ttk.Label(parent, text=text).grid(row=row, column=0, sticky="w", pady=(0, 2))
+        tab_rows[parent] = row + 1
+
+    def _next_row(parent: Any) -> int:
+        row = tab_rows[parent]
+        tab_rows[parent] = row + 1
+        return row
+
     devices = _input_devices()
     device_labels = [label for label, _ in devices]
     current_device = current.get("microphone_device")
     device_label_by_value = {value: label for label, value in devices}
     current_device_label = device_label_by_value.get(current_device, device_labels[0])
 
-    row = 0
-
-    def _section_label(text: str) -> None:
-        nonlocal row
-        ttk.Label(win, text=text).grid(row=row, column=0, sticky="w", pady=(0, 2))
-        row += 1
-
-    # Microfoon.
-    _section_label(i18n.t("settings.microphone"))
+    # --- Algemeen ---
+    _section_label(general_tab, i18n.t("settings.microphone"))
     mic_var = tk.StringVar(value=current_device_label)
-    ttk.Combobox(win, textvariable=mic_var, values=device_labels, state="readonly", width=42).grid(
-        row=row, column=0, sticky="ew", pady=(0, 12)
-    )
-    row += 1
+    ttk.Combobox(
+        general_tab,
+        textvariable=mic_var,
+        values=device_labels,
+        state="readonly",
+        width=42,
+    ).grid(row=_next_row(general_tab), column=0, sticky="ew", pady=(0, 12))
 
-    # Pill-positie.
     positions = _positions()
-    _section_label(i18n.t("settings.indicator_position"))
+    _section_label(general_tab, i18n.t("settings.indicator_position"))
     pos_labels = [label for label, _ in positions]
     pos_value_by_label = {label: value for label, value in positions}
     pos_label_by_value = {value: label for label, value in positions}
     pos_var = tk.StringVar(
         value=pos_label_by_value.get(current.get("indicator_position"), pos_labels[0])
     )
-    ttk.Combobox(win, textvariable=pos_var, values=pos_labels, state="readonly", width=42).grid(
-        row=row, column=0, sticky="ew", pady=(0, 12)
-    )
-    row += 1
+    ttk.Combobox(
+        general_tab,
+        textvariable=pos_var,
+        values=pos_labels,
+        state="readonly",
+        width=42,
+    ).grid(row=_next_row(general_tab), column=0, sticky="ew", pady=(0, 12))
 
-    # Bedieningsmodus.
     modes = _modes()
-    _section_label(i18n.t("settings.mode"))
+    _section_label(general_tab, i18n.t("settings.mode"))
     mode_labels = [label for label, _ in modes]
     mode_value_by_label = {label: value for label, value in modes}
     mode_label_by_value = {value: label for label, value in modes}
     mode_var = tk.StringVar(value=mode_label_by_value.get(current.get("mode"), mode_labels[0]))
-    ttk.Combobox(win, textvariable=mode_var, values=mode_labels, state="readonly", width=42).grid(
-        row=row, column=0, sticky="ew", pady=(0, 12)
-    )
-    row += 1
+    ttk.Combobox(
+        general_tab,
+        textvariable=mode_var,
+        values=mode_labels,
+        state="readonly",
+        width=42,
+    ).grid(row=_next_row(general_tab), column=0, sticky="ew", pady=(0, 12))
 
-    # Spraakherkenning.
+    # --- Taal ---
     lang_choices = _language_choices()
     lang_labels = [label for label, _ in lang_choices]
     lang_value_by_label = {label: value for label, value in lang_choices}
@@ -158,27 +184,32 @@ def open_settings_dialog(
         current.get("speech_language"),
         allowed=i18n.SUPPORTED_SPEECH_LANGUAGES,
     )
-    _section_label(i18n.t("settings.speech_language"))
+    _section_label(language_tab, i18n.t("settings.speech_language"))
     speech_var = tk.StringVar(value=lang_label_by_value.get(speech_code, lang_labels[0]))
-    ttk.Combobox(win, textvariable=speech_var, values=lang_labels, state="readonly", width=42).grid(
-        row=row, column=0, sticky="ew", pady=(0, 12)
-    )
-    row += 1
+    ttk.Combobox(
+        language_tab,
+        textvariable=speech_var,
+        values=lang_labels,
+        state="readonly",
+        width=42,
+    ).grid(row=_next_row(language_tab), column=0, sticky="ew", pady=(0, 12))
 
-    # Interfacetaal.
     ui_code = i18n.normalize_language(
         current.get("ui_language"),
         allowed=i18n.SUPPORTED_UI_LANGUAGES,
     )
-    _section_label(i18n.t("settings.ui_language"))
+    _section_label(language_tab, i18n.t("settings.ui_language"))
     ui_var = tk.StringVar(value=lang_label_by_value.get(ui_code, lang_labels[0]))
-    ttk.Combobox(win, textvariable=ui_var, values=lang_labels, state="readonly", width=42).grid(
-        row=row, column=0, sticky="ew", pady=(0, 12)
-    )
-    row += 1
+    ttk.Combobox(
+        language_tab,
+        textvariable=ui_var,
+        values=lang_labels,
+        state="readonly",
+        width=42,
+    ).grid(row=_next_row(language_tab), column=0, sticky="ew", pady=(0, 12))
 
-    # Sneltoets.
-    _section_label(i18n.t("settings.hotkey"))
+    # Sneltoets (algemeen).
+    _section_label(general_tab, i18n.t("settings.hotkey"))
     hotkey_tokens = list(current.get("hotkey") or hotkeys.DEFAULT_HOTKEY)
     capture: dict[str, Any] = {
         "active": False,
@@ -188,10 +219,9 @@ def open_settings_dialog(
         "poll_id": None,
     }
 
-    hk_frame = ttk.Frame(win)
-    hk_frame.grid(row=row, column=0, sticky="ew", pady=(0, 12))
+    hk_frame = ttk.Frame(general_tab)
+    hk_frame.grid(row=_next_row(general_tab), column=0, sticky="ew", pady=(0, 12))
     hk_frame.columnconfigure(0, weight=1)
-    row += 1
 
     hk_var = tk.StringVar(value=hotkeys.format_hotkey(hotkey_tokens))
     ttk.Label(hk_frame, textvariable=hk_var, relief="groove", padding=(8, 4), anchor="w").grid(
@@ -322,46 +352,46 @@ def open_settings_dialog(
 
     autostart_var = tk.BooleanVar(value=bool(current.get("autostart", False)))
     ttk.Checkbutton(
-        win,
+        general_tab,
         text=i18n.t("settings.autostart"),
         variable=autostart_var,
-    ).grid(row=row, column=0, sticky="w", pady=(0, 12))
-    row += 1
+    ).grid(row=_next_row(general_tab), column=0, sticky="w", pady=(0, 12))
 
     paste_var = tk.BooleanVar(value=bool(current.get("auto_paste", True)))
-    ttk.Checkbutton(win, text=i18n.t("settings.auto_paste"), variable=paste_var).grid(
-        row=row, column=0, sticky="w", pady=(0, 12)
+    ttk.Checkbutton(general_tab, text=i18n.t("settings.auto_paste"), variable=paste_var).grid(
+        row=_next_row(general_tab), column=0, sticky="w", pady=(0, 12)
     )
-    row += 1
 
     warm_var = tk.BooleanVar(value=bool(current.get("warm_microphone", False)))
-    ttk.Checkbutton(win, text=i18n.t("settings.warm_microphone"), variable=warm_var).grid(
-        row=row, column=0, sticky="w", pady=(0, 12)
-    )
-    row += 1
+    ttk.Checkbutton(
+        general_tab,
+        text=i18n.t("settings.warm_microphone"),
+        variable=warm_var,
+    ).grid(row=_next_row(general_tab), column=0, sticky="w", pady=(0, 12))
 
-    _section_label(i18n.t("settings.model"))
+    # --- Geavanceerd ---
+    _section_label(advanced_tab, i18n.t("settings.model"))
     model_var = tk.StringVar(value=str(current.get("model", "small")))
-    ttk.Combobox(win, textvariable=model_var, values=MODELS, state="readonly", width=42).grid(
-        row=row, column=0, sticky="ew", pady=(0, 2)
-    )
-    row += 1
+    ttk.Combobox(
+        advanced_tab,
+        textvariable=model_var,
+        values=MODELS,
+        state="readonly",
+        width=42,
+    ).grid(row=_next_row(advanced_tab), column=0, sticky="ew", pady=(0, 2))
     ttk.Label(
-        win,
+        advanced_tab,
         text=i18n.t("settings.model.restart"),
         foreground="#888888",
-    ).grid(row=row, column=0, sticky="w", pady=(0, 14))
-    row += 1
+    ).grid(row=_next_row(advanced_tab), column=0, sticky="w", pady=(0, 14))
 
-    # Herstel-audio.
-    _section_label(i18n.t("recovery.section"))
+    _section_label(advanced_tab, i18n.t("recovery.section"))
     recovery_paths: list[Path] = []
     recovery_busy = {"active": False}
 
-    list_frame = ttk.Frame(win)
-    list_frame.grid(row=row, column=0, sticky="ew", pady=(0, 4))
+    list_frame = ttk.Frame(advanced_tab)
+    list_frame.grid(row=_next_row(advanced_tab), column=0, sticky="ew", pady=(0, 4))
     list_frame.columnconfigure(0, weight=1)
-    row += 1
 
     recovery_list = tk.Listbox(list_frame, height=5, exportselection=False, width=48)
     recovery_list.grid(row=0, column=0, sticky="ew")
@@ -370,21 +400,18 @@ def open_settings_dialog(
     recovery_list.configure(yscrollcommand=recovery_scroll.set)
 
     empty_label = ttk.Label(
-        win,
+        advanced_tab,
         text=i18n.t("recovery.empty"),
         foreground="#888888",
     )
-    empty_label.grid(row=row, column=0, sticky="w", pady=(0, 4))
-    row += 1
+    empty_label.grid(row=_next_row(advanced_tab), column=0, sticky="w", pady=(0, 4))
 
     status_var = tk.StringVar(value="")
-    status_label = ttk.Label(win, textvariable=status_var, foreground="#555555")
-    status_label.grid(row=row, column=0, sticky="w", pady=(0, 4))
-    row += 1
+    status_label = ttk.Label(advanced_tab, textvariable=status_var, foreground="#555555")
+    status_label.grid(row=_next_row(advanced_tab), column=0, sticky="w", pady=(0, 4))
 
-    recovery_btns = ttk.Frame(win)
-    recovery_btns.grid(row=row, column=0, sticky="w", pady=(0, 14))
-    row += 1
+    recovery_btns = ttk.Frame(advanced_tab)
+    recovery_btns.grid(row=_next_row(advanced_tab), column=0, sticky="w", pady=(0, 14))
 
     def _refresh_recovery_list() -> None:
         recovery_paths.clear()
@@ -558,7 +585,7 @@ def open_settings_dialog(
     _refresh_recovery_list()
 
     buttons = ttk.Frame(win)
-    buttons.grid(row=row, column=0, sticky="e")
+    buttons.grid(row=1, column=0, sticky="e", pady=(12, 0))
 
     def close() -> None:
         global _open_dialog

@@ -25,9 +25,9 @@ woorden ervoor of erna. praatMaar vergelijkt de hele take met je opgeslagen name
   geplakt en de naam zelf wordt niet als transcript opgeslagen.
 - **Geen match:** normale dicteerflow — tekst plakken en opslaan in de huidige map.
 
-**Terug naar standaard:** zeg alleen het woord **standaard** (één take, exact). De
-actieve bestemming wordt gewist. (Het resetwoord is altijd *standaard*, ongeacht de
-taal van de interface.)
+**Terug naar standaard:** zeg alleen **standaard**, **default** of **standard**
+(één take, exact). De actieve bestemming wordt gewist. Alle drie de woorden werken,
+ongeacht de spraak- of interfacetaal.
 
 ## Waar landen je bestanden?
 

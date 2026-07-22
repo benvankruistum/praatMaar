@@ -19,24 +19,28 @@ from typing import Any
 
 from ._contract import (
     CANCELLED_DURATION_MS,
+    COLOR_RECORDING,
     COLOR_TRANSCRIBING,
     ERROR_DURATION_MS,
     INDICATOR_HEIGHT,
     INDICATOR_WIDTH,
-    MARGIN_FRACTION,
     MUTED_COLOR,
     NUM_BARS,
     PILL_BG,
     POLL_INTERVAL_MS,
+    POSITION_BOTTOM,
+    POSITION_LAST,
     STATE_COLORS,
     TEXT_COLOR,
     WAVEFORM_GAIN,
     WINDOW_ALPHA,
     DestinationPillModel,
     RecordingState,
+    clamp_indicator_xy,
     destination_display_name,
     drain_status_queue,
     mode_tag,
+    normalize_indicator_position,
     snapshot_levels,
     state_label,
 )
@@ -60,7 +64,16 @@ class RecordingIndicator:
     te vermijden.
     """
 
-    def __init__(self, position: str = "boven-midden") -> None:
+    def __init__(
+        self,
+        position: str = "boven-midden",
+        *,
+        xy: tuple[int, int] | None = None,
+        on_moved: Any | None = None,
+        on_control_press: Any | None = None,
+        on_control_release: Any | None = None,
+        on_context_menu: Any | None = None,
+    ) -> None:
         if sys.platform != "darwin":
             raise SystemExit(
                 "De macOS-indicator werkt alleen op darwin (vereist NSPanel / PyObjC)."
@@ -109,7 +122,15 @@ class RecordingIndicator:
         self._hide_deadline_ms: float | None = None
         self._hide_elapsed_ms = 0.0
         self._stop_requested = False
-        self._position = position
+        self._position = normalize_indicator_position(position)
+        self._xy = xy
+        self._on_moved = on_moved
+        self._control_press_cb = on_control_press
+        self._control_release_cb = on_control_release
+        self.on_context_menu = on_context_menu
+        self._drag: dict[str, Any] | None = None
+        self._control_held = False
+        self._control_kind: str | None = None
         self._dest_pill = DestinationPillModel()
         self.state_listener: Any | None = None
         self._main_calls: queue.Queue[Any] = queue.Queue()
@@ -118,7 +139,7 @@ class RecordingIndicator:
 
         try:
             self._build_panel()
-            self.set_position(position)
+            self.set_position(self._position)
         except Exception as exc:
             raise SystemExit(f"De opname-indicator kon niet worden geïnitialiseerd: {exc}") from exc
 
@@ -156,7 +177,7 @@ class RecordingIndicator:
 
         # Labels als NSTextField bovenop de custom view (eenvoudiger dan Core Text).
         self._label_field = self._make_label(44, 18, 110, 24, bold=True)
-        self._tag_field = self._make_label(INDICATOR_WIDTH - 120, 18, 100, 24, align_right=True)
+        self._tag_field = self._make_label(INDICATOR_WIDTH - 150, 18, 80, 24, align_right=True)
         content.addSubview_(self._label_field)
         content.addSubview_(self._tag_field)
 
@@ -199,23 +220,107 @@ class RecordingIndicator:
             field.setAlignment_(2)  # right
         return field
 
+    def _screen_metrics(self) -> tuple[Any, float, float] | None:
+        screen = self._NSScreen.mainScreen()
+        if screen is None:
+            return None
+        frame = screen.frame()
+        return frame, float(frame.size.width), float(frame.size.height)
+
+    def _top_left_from_cocoa(self, cocoa_x: float, cocoa_y: float) -> tuple[int, int]:
+        metrics = self._screen_metrics()
+        if metrics is None:
+            return 0, 0
+        frame, _w, height = metrics
+        x = int(round(cocoa_x - frame.origin.x))
+        y = int(round(frame.origin.y + height - cocoa_y - INDICATOR_HEIGHT))
+        return x, y
+
+    def _cocoa_from_top_left(self, x: int, y: int) -> tuple[float, float]:
+        metrics = self._screen_metrics()
+        if metrics is None:
+            return float(x), float(y)
+        frame, _w, height = metrics
+        cocoa_x = frame.origin.x + x
+        cocoa_y = frame.origin.y + height - y - INDICATOR_HEIGHT
+        return float(cocoa_x), float(cocoa_y)
+
+    def _apply_xy(self, x: int, y: int) -> None:
+        metrics = self._screen_metrics()
+        if metrics is None:
+            return
+        _frame, screen_w, screen_h = metrics
+        x, y = clamp_indicator_xy(x, y, int(screen_w), int(screen_h))
+        self._xy = (x, y)
+        cocoa_x, cocoa_y = self._cocoa_from_top_left(x, y)
+        self._panel.setFrame_display_(
+            self._NSMakeRect(cocoa_x, cocoa_y, INDICATOR_WIDTH, INDICATOR_HEIGHT),
+            True,
+        )
+
     def _place_window(self, position: str) -> None:
+        position = normalize_indicator_position(position)
+        self._position = position
         screen = self._NSScreen.mainScreen()
         if screen is None:
             return
+
+        if position == POSITION_LAST and self._xy is not None:
+            self._apply_xy(self._xy[0], self._xy[1])
+            return
+
         visible = screen.visibleFrame()
-        margin = visible.size.height * MARGIN_FRACTION
-        x = visible.origin.x + (visible.size.width - INDICATOR_WIDTH) / 2
-
-        if position == "onder-midden":
-            y = visible.origin.y + margin
+        margin = visible.size.height * 0.10
+        cocoa_x = visible.origin.x + (visible.size.width - INDICATOR_WIDTH) / 2
+        if position == POSITION_BOTTOM:
+            cocoa_y = visible.origin.y + margin
         else:
-            y = visible.origin.y + visible.size.height - INDICATOR_HEIGHT - margin
+            cocoa_y = visible.origin.y + visible.size.height - INDICATOR_HEIGHT - margin
+        top_left = self._top_left_from_cocoa(cocoa_x, cocoa_y)
+        self._apply_xy(top_left[0], top_left[1])
 
-        self._panel.setFrame_display_(
-            self._NSMakeRect(x, y, INDICATOR_WIDTH, INDICATOR_HEIGHT),
-            True,
-        )
+    def _begin_drag(self, _event: Any) -> None:
+        from AppKit import NSEvent  # type: ignore[import-not-found]
+
+        mouse = NSEvent.mouseLocation()
+        frame = self._panel.frame()
+        self._drag = {
+            "dx": float(mouse.x) - float(frame.origin.x),
+            "dy": float(mouse.y) - float(frame.origin.y),
+            "start_x": float(mouse.x),
+            "start_y": float(mouse.y),
+            "moved": False,
+        }
+
+    def _update_drag(self, _event: Any) -> None:
+        if self._drag is None:
+            return
+        from AppKit import NSEvent  # type: ignore[import-not-found]
+
+        mouse = NSEvent.mouseLocation()
+        if abs(float(mouse.x) - self._drag["start_x"]) > 1 or abs(
+            float(mouse.y) - self._drag["start_y"]
+        ) > 1:
+            self._drag["moved"] = True
+        cocoa_x = float(mouse.x) - self._drag["dx"]
+        cocoa_y = float(mouse.y) - self._drag["dy"]
+        x, y = self._top_left_from_cocoa(cocoa_x, cocoa_y)
+        self._apply_xy(x, y)
+
+    def _end_drag(self) -> None:
+        drag = self._drag
+        self._drag = None
+        if drag is None or not drag.get("moved"):
+            return
+        frame = self._panel.frame()
+        x, y = self._top_left_from_cocoa(float(frame.origin.x), float(frame.origin.y))
+        self._position = POSITION_LAST
+        self._xy = (x, y)
+        if self._on_moved is not None:
+            try:
+                self._on_moved(POSITION_LAST, x, y)
+            except Exception:
+                pass
 
     def _show_window(self) -> None:
         if self._visible:
@@ -223,12 +328,14 @@ class RecordingIndicator:
         # orderFrontRegardless toont zonder key-window te worden (nonactivating).
         self._panel.orderFrontRegardless()
         self._visible = True
+        self._sync_mouse_events()
 
     def _hide_window(self) -> None:
         if not self._visible:
             return
         self._panel.orderOut_(None)
         self._visible = False
+        self._sync_mouse_events()
 
     def _apply_idle_visibility(self) -> None:
         """In idle: pill zichtbaar als sticky bestemming actief én niet weggeklikt."""
@@ -240,10 +347,9 @@ class RecordingIndicator:
         self._sync_mouse_events()
 
     def _sync_mouse_events(self) -> None:
-        """Klikken alleen doorlaten als de × zichtbaar is (anders pass-through)."""
+        """Muis doorlaten wanneer de pill zichtbaar is (slepen + ×)."""
 
-        allow = self._state == RecordingState.IDLE and self._dest_pill.idle_visible
-        self._panel.setIgnoresMouseEvents_(not allow)
+        self._panel.setIgnoresMouseEvents_(not self._visible)
 
     def _apply_state(self, state: RecordingState, mode: str) -> None:
         self._mode = mode
@@ -287,8 +393,14 @@ class RecordingIndicator:
     def call_on_main(self, fn: Any) -> None:
         self._main_calls.put(fn)
 
-    def set_position(self, position: str) -> None:
-        self._position = position
+    def set_position(
+        self,
+        position: str,
+        *,
+        xy: tuple[int, int] | None = None,
+    ) -> None:
+        if xy is not None:
+            self._xy = xy
         self._place_window(position)
 
     def set_destination(self, name: str | None) -> None:
@@ -339,6 +451,38 @@ class RecordingIndicator:
             self._render_labels()
             self._content.setNeedsDisplay_(True)
 
+    def _control_rect(self) -> Any:
+        if self._control_kind == "stop":
+            return self._NSMakeRect(INDICATOR_WIDTH - 36, 16, 28, 28)
+        return self._NSMakeRect(INDICATOR_WIDTH - 72, 16, 28, 28)
+
+    def _hit_control(self, point: Any) -> bool:
+        if self._control_kind is None:
+            return False
+        return self._control_rect().containsPoint_(point)
+
+    def _set_control_visible(self, kind: str | None) -> None:
+        self._control_kind = kind
+
+    def _fire_control_press(self) -> None:
+        self._drag = None
+        self._control_held = True
+        if self._control_press_cb is not None:
+            try:
+                self._control_press_cb()
+            except Exception:
+                pass
+
+    def _fire_control_release(self) -> None:
+        if not self._control_held:
+            return
+        self._control_held = False
+        if self._control_release_cb is not None:
+            try:
+                self._control_release_cb()
+            except Exception:
+                pass
+
     def _render_labels(self) -> None:
         state = self._state
 
@@ -348,12 +492,18 @@ class RecordingIndicator:
             self._tag_field.setStringValue_("")
             self._tag_field.setHidden_(True)
             self._dismiss_btn.setHidden_(False)
+            self._set_control_visible("record")
             return
 
         self._dismiss_btn.setHidden_(True)
         self._label_field.setStringValue_(state_label(state))
         color = STATE_COLORS.get(state, MUTED_COLOR)
         self._label_field.setTextColor_(self._ns_color(color))
+
+        if state == RecordingState.RECORDING:
+            self._set_control_visible("stop")
+        else:
+            self._set_control_visible(None)
 
         if state in (RecordingState.RECORDING, RecordingState.TRANSCRIBING):
             self._tag_field.setStringValue_(mode_tag(self._mode))
@@ -451,7 +601,55 @@ def _make_pill_view_class() -> Any:
         def dismissClicked_(self, _sender: Any) -> None:  # noqa: N802
             owner = self._owner
             if owner is not None:
+                owner._drag = None
+                owner._control_held = False
                 owner._on_dismiss_click()
+
+        def mouseDown_(self, event: Any) -> None:  # noqa: N802
+            owner = self._owner
+            if owner is None:
+                return
+            point = self.convertPoint_fromView_(event.locationInWindow(), None)
+            if owner._hit_control(point):
+                owner._fire_control_press()
+                return
+            owner._begin_drag(event)
+
+        def mouseDragged_(self, event: Any) -> None:  # noqa: N802
+            owner = self._owner
+            if owner is not None and not owner._control_held:
+                owner._update_drag(event)
+
+        def mouseUp_(self, _event: Any) -> None:  # noqa: N802
+            owner = self._owner
+            if owner is None:
+                return
+            if owner._control_held:
+                owner._fire_control_release()
+                return
+            owner._end_drag()
+
+        def rightMouseDown_(self, event: Any) -> None:  # noqa: N802
+            owner = self._owner
+            if owner is None or owner.on_context_menu is None:
+                return
+            owner._drag = None
+            owner._control_held = False
+            try:
+                from AppKit import NSEvent  # type: ignore[import-not-found]
+
+                point = NSEvent.mouseLocation()
+                # Cocoa bottom-left → top-left voor eventuele callers.
+                screen = owner._NSScreen.mainScreen()
+                if screen is not None:
+                    frame = screen.frame()
+                    x = int(round(point.x))
+                    y = int(round(frame.size.height - point.y))
+                else:
+                    x, y = int(point.x), int(point.y)
+                owner.on_context_menu(x, y)
+            except Exception:
+                pass
 
         def drawRect_(self, _rect: Any) -> None:  # noqa: N802
             owner = self._owner
@@ -473,6 +671,7 @@ def _make_pill_view_class() -> Any:
             # Idle + bestemming: map-icoon i.p.v. statuspuntje.
             if state == RecordingState.IDLE and owner._dest_pill.idle_visible:
                 self._draw_folder_icon(owner, cy)
+                self._draw_control(owner)
                 return
 
             color_hex = STATE_COLORS.get(state, MUTED_COLOR)
@@ -493,8 +692,34 @@ def _make_pill_view_class() -> Any:
 
             if state == RecordingState.RECORDING:
                 self._draw_waveform(owner, color, cy)
+                self._draw_control(owner)
             elif state == RecordingState.TRANSCRIBING:
                 self._draw_marching_dots(owner, cy)
+
+        def _draw_control(self, owner: Any) -> None:
+            if owner._control_kind is None:
+                return
+            from AppKit import NSBezierPath, NSColor  # type: ignore[import-not-found]
+
+            rect = owner._control_rect()
+            cx = rect.origin.x + rect.size.width / 2.0
+            cy = rect.origin.y + rect.size.height / 2.0
+            if owner._control_kind == "stop":
+                rr, gg, bb = _hex_to_rgb(TEXT_COLOR)
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(rr, gg, bb, 1.0).setFill()
+                stop = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+                    owner._NSMakeRect(cx - 5, cy - 5, 10, 10),
+                    1.5,
+                    1.5,
+                )
+                stop.fill()
+            else:
+                rr, gg, bb = _hex_to_rgb(COLOR_RECORDING)
+                NSColor.colorWithCalibratedRed_green_blue_alpha_(rr, gg, bb, 1.0).setFill()
+                dot = NSBezierPath.bezierPathWithOvalInRect_(
+                    owner._NSMakeRect(cx - 6, cy - 6, 12, 12)
+                )
+                dot.fill()
 
         def _draw_folder_icon(self, owner: Any, cy: float) -> None:
             from AppKit import NSBezierPath, NSColor  # type: ignore[import-not-found]

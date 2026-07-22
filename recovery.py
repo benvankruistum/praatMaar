@@ -85,6 +85,19 @@ def save_transcript(text: str, directory: Path | None = None) -> Path:
     return target
 
 
+def append_transcript(text: str, path: Path) -> Path:
+    """Voegt transcript toe aan een bestaand bestand, voorafgegaan door datum/tijd."""
+
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    block = f"{stamp}\n\n{text.strip()}\n"
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    prefix = "\n\n" if path.exists() and path.stat().st_size > 0 else ""
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{prefix}{block}")
+    return path
+
+
 def prune_transcripts(max_files: int | None = None) -> None:
     """Houdt alleen de nieuwste `max_files` transcripts; verwijdert de rest."""
 
