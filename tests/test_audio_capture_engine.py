@@ -6,6 +6,7 @@ from threading import Event
 from typing import Any
 
 import numpy as np
+import pytest
 
 from modules._builtin.audio_capture import (
     CHUNK_DURATION_MS,
@@ -129,12 +130,125 @@ def test_loopback_failure_falls_back_to_microphone_only() -> None:
         sounddevice_module=sounddevice,
         platform_name="win32",
     )
+    events: list[object] = []
     session = engine.start_session({"enable_loopback": True})
+    engine.subscribe(session.session_id, events.append)
     state = engine._require_session(session.session_id)
 
     assert engine.get_status(session.session_id) == CaptureStatus.ACTIVE
     assert state.loopback_enabled is False
     assert len(sounddevice.streams) == 1
+    active_events = [
+        event
+        for event in events
+        if isinstance(event, CaptureStatusChanged) and event.status == CaptureStatus.ACTIVE
+    ]
+    assert active_events
+    assert active_events[-1].loopback_active is False
+
+    engine.stop_session(session.session_id)
+
+
+def test_loopback_active_reported_when_mixed() -> None:
+    sounddevice = FakeSoundDevice()
+    sounddevice.WasapiSettings = lambda *, loopback: {"loopback": loopback}
+    sounddevice.default = type("Default", (), {"device": (None, 7)})()
+    sounddevice.query_devices = staticmethod(
+        lambda _device: {
+            "max_input_channels": 2,
+            "default_samplerate": 16000,
+        }
+    )
+
+    engine = AudioCaptureEngine(
+        sounddevice_module=sounddevice,
+        platform_name="win32",
+    )
+    session = engine.start_session({"enable_loopback": True})
+    events: list[object] = []
+    engine.subscribe(session.session_id, events.append)
+
+    active_events = [
+        event
+        for event in events
+        if isinstance(event, CaptureStatusChanged) and event.status == CaptureStatus.ACTIVE
+    ]
+    assert active_events
+    assert active_events[-1].loopback_active is True
+
+    engine.stop_session(session.session_id)
+
+
+def test_disable_loopback_republishes_active_status() -> None:
+    sounddevice = FakeSoundDevice()
+    sounddevice.WasapiSettings = lambda *, loopback: {"loopback": loopback}
+    sounddevice.default = type("Default", (), {"device": (None, 7)})()
+    sounddevice.query_devices = staticmethod(
+        lambda _device: {
+            "max_input_channels": 2,
+            "default_samplerate": 16000,
+        }
+    )
+
+    engine = AudioCaptureEngine(
+        sounddevice_module=sounddevice,
+        platform_name="win32",
+    )
+    session = engine.start_session({"enable_loopback": True})
+    events: list[object] = []
+    engine.subscribe(session.session_id, events.append)
+    state = engine._require_session(session.session_id)
+
+    engine._disable_loopback(state, reason="test", try_reconnect=False)
+
+    active_events = [
+        event
+        for event in events
+        if isinstance(event, CaptureStatusChanged) and event.status == CaptureStatus.ACTIVE
+    ]
+    assert len(active_events) >= 2
+    assert active_events[-1].loopback_active is False
+
+    engine.stop_session(session.session_id)
+
+
+def test_loopback_disconnect_schedules_reconnect_and_recovers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import modules._builtin.audio_capture as audio_capture_module
+
+    monkeypatch.setattr(audio_capture_module, "LOOPBACK_RECONNECT_BACKOFF_S", (0.0, 0.0))
+    monkeypatch.setattr(audio_capture_module, "MAX_LOOPBACK_RECONNECT_ATTEMPTS", 2)
+
+    sounddevice = FakeSoundDevice()
+    sounddevice.WasapiSettings = lambda *, loopback: {"loopback": loopback}
+    sounddevice.default = type("Default", (), {"device": (None, 7)})()
+    sounddevice.query_devices = staticmethod(
+        lambda _device: {
+            "max_input_channels": 2,
+            "default_samplerate": 16000,
+        }
+    )
+
+    engine = AudioCaptureEngine(
+        sounddevice_module=sounddevice,
+        platform_name="win32",
+    )
+    session = engine.start_session({"enable_loopback": True})
+    events: list[object] = []
+    engine.subscribe(session.session_id, events.append)
+    state = engine._require_session(session.session_id)
+    finished = sounddevice.streams[1].kwargs["finished_callback"]
+
+    finished()
+    reconnect = state.loopback_reconnect_thread
+    assert reconnect is not None
+    reconnect.join(timeout=2)
+
+    statuses = [event.status for event in events if isinstance(event, CaptureStatusChanged)]
+    assert CaptureStatus.RECONNECTING in statuses
+    assert statuses[-1] == CaptureStatus.ACTIVE
+    assert state.loopback_enabled is True
 
     engine.stop_session(session.session_id)
 

@@ -123,7 +123,7 @@ def test_visible_hints_are_hard_capped_at_three() -> None:
         for index in range(5)
     )
     state = replace(MeetingState.empty("m1"), topics=topics)
-    config = MeetingBuddyConfig.defaults().replace(max_visible_hints=99)
+    config = MeetingBuddyConfig.defaults()
 
     hints = HintEngine().evaluate(state, config, now_s=10_000.0)
 

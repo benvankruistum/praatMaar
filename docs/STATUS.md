@@ -1,6 +1,6 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-07-19.
+Laatst bijgewerkt: 2026-07-22.
 
 ## Ondersteund
 
@@ -28,15 +28,19 @@ Laatst bijgewerkt: 2026-07-19.
 
 ## Experimentele modules
 
-- `audio-capture`: continue microfooncapture op Windows (mic-only)
+- `audio-capture`: continue microfooncapture op Windows; Meeting Buddy kan
+  optioneel meetinggeluid via WASAPI-loopback mixen (experimenteel)
 - `speech-to-text`: incrementele lokale transcriptie via het gedeelde
   Faster-Whisper-model
 - `meeting-buddy`: meetingstate, heuristische hints en compacte overlay; staat
   standaard uit en kan via tray **Modules** worden ingeschakeld
 
-Deze Meeting Buddy-MVP is experimenteel en bevat nog geen loopback/system audio,
-AI-provider of review/export. Zie het
-[MVP-design](superpowers/specs/2026-07-19-meeting-buddy-mvp-design.md).
+Deze Meeting Buddy-MVP is experimenteel. Op Windows neemt Meeting Buddy naast
+de microfoon optioneel meetinggeluid op via WASAPI-loopback (standaard aan).
+De overlay toont of loopback actief is. Device-keuze voor loopback staat in de
+prep-dialoog bij meeting start. AI-provider en review/export ontbreken nog. Zie het
+[MVP-design](superpowers/specs/2026-07-19-meeting-buddy-mvp-design.md) en
+[handoff loopback/Teams](HANDOFF-meeting-buddy-teams-loopback.md).
 
 ## macOS
 
@@ -73,5 +77,6 @@ Gatekeeper (zie roadmap).
 
 ## Historische handoffs
 
+- [HANDOFF-meeting-buddy-teams-loopback.md](HANDOFF-meeting-buddy-teams-loopback.md)
 - [archive/HANDOFF-opname-indicator.md](archive/HANDOFF-opname-indicator.md)
 - [archive/HANDOFF-mac-port.md](archive/HANDOFF-mac-port.md)

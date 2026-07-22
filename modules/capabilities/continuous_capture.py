@@ -53,6 +53,7 @@ class CaptureStatusChanged:
     session_id: str
     status: CaptureStatus
     message: str | None = None
+    loopback_active: bool | None = None
 
 
 @dataclass(frozen=True)

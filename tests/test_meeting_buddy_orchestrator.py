@@ -49,6 +49,46 @@ def _capabilities() -> tuple[CapabilityRegistry, FakeContinuousCapture, FakeSpee
     return capabilities, capture, stt
 
 
+def test_loopback_unavailable_emits_observability_event(tmp_path: Path) -> None:
+    capabilities, _capture, _stt = _capabilities()
+    observer = RecordingObserver()
+    orchestrator = MeetingOrchestrator(
+        capabilities=capabilities,
+        app_dir=tmp_path,
+        observer=observer,
+    )
+    orchestrator.start()
+    assert orchestrator.binding is not None
+    binding = orchestrator.binding
+
+    orchestrator.on_capture_status(
+        CaptureStatusChanged(
+            binding.capture_session_id,
+            CaptureStatus.ACTIVE,
+            loopback_active=False,
+        )
+    )
+
+    assert "loopback_unavailable" in observer.names
+    assert orchestrator.loopback_active is False
+
+
+def test_capture_sources_logged_at_meeting_start(tmp_path: Path) -> None:
+    capabilities, _capture, _stt = _capabilities()
+    observer = RecordingObserver()
+    orchestrator = MeetingOrchestrator(
+        capabilities=capabilities,
+        app_dir=tmp_path,
+        observer=observer,
+    )
+
+    orchestrator.start()
+
+    assert "capture_sources" in observer.names
+    sources = next(event for event in observer.events if event["name"] == "capture_sources")
+    assert sources["loopback_requested"] is True
+
+
 def test_start_wires_capture_and_stt_and_updates_state(tmp_path: Path) -> None:
     capabilities, capture, _stt = _capabilities()
     observer = RecordingObserver()
@@ -167,7 +207,7 @@ def test_stop_attempts_every_cleanup_step_and_always_clears_state(
         "record",
         lambda _event: (calls.append("log"), (_ for _ in ()).throw(RuntimeError())),
     )
-    orchestrator._on_ui_update = lambda _state: (
+    orchestrator._ui._on_ui_update = lambda _state: (
         calls.append("ui"),
         (_ for _ in ()).throw(RuntimeError()),
     )
@@ -340,7 +380,17 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
             pass
 
     monkeypatch.setattr(meeting_buddy_module, "MeetingBuddyOverlay", FakeOverlay)
-    monkeypatch.setattr("tkinter.simpledialog.askstring", lambda *_args, **_kwargs: "")
+    from modules._builtin.meeting_buddy.prep_dialog import MeetingPrepResult
+
+    monkeypatch.setattr(
+        meeting_buddy_module,
+        "show_meeting_prep_dialog",
+        lambda **_kwargs: MeetingPrepResult(
+            agenda_text="",
+            enable_loopback=True,
+            loopback_device=None,
+        ),
+    )
     monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("tkinter.messagebox.showerror", lambda *_args, **_kwargs: None)
     module = MeetingBuddyModule()
@@ -361,6 +411,8 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
     assert overlays[0].updates[0][1] == {
         "capture_status": CaptureStatus.ACTIVE,
         "transcription_status": TranscriptionStatus.ACTIVE,
+        "loopback_active": None,
+        "loopback_requested": True,
     }
     assert overlays[0].callbacks["on_reconnect"] == module.orchestrator.reconnect_capture
 
@@ -379,3 +431,71 @@ def test_capture_config_uses_app_microphone_and_loopback_settings(
     assert config["enable_loopback"] is True
     assert config["loopback_device"] is None
     assert config["max_audio_buffer_duration_s"] == 30
+
+
+def test_concurrent_callbacks_do_not_raise(tmp_path: Path) -> None:
+    import threading
+
+    from modules.capabilities.speech_to_text import TranscriptDelta, TranscriptDeltaReceived
+
+    capabilities, capture, _stt = _capabilities()
+    orchestrator = MeetingOrchestrator(capabilities=capabilities, app_dir=tmp_path)
+    orchestrator.set_agenda("Budget\nPlanning")
+    orchestrator.start()
+    assert orchestrator.binding is not None
+    binding = orchestrator.binding
+    errors: list[BaseException] = []
+    barrier = threading.Barrier(3)
+
+    def emit_delta() -> None:
+        try:
+            barrier.wait(timeout=2)
+            capture.emit_seconds(1)
+        except BaseException as exc:
+            errors.append(exc)
+
+    def dismiss_hint() -> None:
+        try:
+            barrier.wait(timeout=2)
+            hints = orchestrator.state.emitted_hints
+            if hints:
+                orchestrator.dismiss_hint(hints[0].id)
+        except BaseException as exc:
+            errors.append(exc)
+
+    def emit_capture_status() -> None:
+        try:
+            barrier.wait(timeout=2)
+            orchestrator.on_capture_status(
+                CaptureStatusChanged(binding.capture_session_id, CaptureStatus.ACTIVE)
+            )
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=emit_delta),
+        threading.Thread(target=dismiss_hint),
+        threading.Thread(target=emit_capture_status),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+
+    assert not errors
+    assert orchestrator.state.version >= 1
+
+    orchestrator.on_stt_event(
+        TranscriptDeltaReceived(
+            TranscriptDelta(
+                session_id=binding.transcription_session_id,
+                sequence=99,
+                start_ms=0,
+                end_ms=1000,
+                text="Budget is besproken",
+                is_final=True,
+                confidence=1.0,
+            )
+        )
+    )
+    assert orchestrator.state.version >= 1
