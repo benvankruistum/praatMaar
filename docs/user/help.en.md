@@ -58,9 +58,10 @@ Right-click the praatMaar icon in the system tray:
 ## Modules and external tools
 
 From **Modules** in the system tray you can turn extensions on or off and enable
-**incremental transcription**. With incremental transcription, Whisper runs in the
-background while you record; modules and external tools can receive interim text
-before you stop.
+**incremental transcription**. Whisper then runs in the background while you
+record (interim text for modules/tools). On stop, the last interim text becomes
+the final transcript — faster, but the last seconds after that interim run may
+be missing.
 
 **Event journal:** every dictation cycle is appended as JSON lines to
 `%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). External

@@ -8,7 +8,9 @@ toestanden aandrijft. Toetsenbordrouting blijft in `dictation.py`.
 Elke cyclus krijgt een `session_id` (UUID). Optioneel `emit_event` stuurt
 `CycleEvent`-payloads naar de module-bus (zie `modules/`). Met
 `incremental_transcription` draait tussentijdse Whisper op de achtergrond
-tijdens opname (`transcript.partial`).
+tijdens opname (`transcript.partial`); bij stop wordt de laatste partial
+als finaal gebruikt (geen tweede volle Whisper-run; audio ná die partial
+kan ontbreken).
 
 OS-plakken gaat via een geïnjecteerde `Host` (zie `docs/adr/0001-platform-seam.md`),
 zodat tests een `FakeHost` kunnen steken.
@@ -140,6 +142,7 @@ class Opnamesessie:
         self._stream_stale_after_seconds = 1.5
         self._audio_chunks: list[Any] = []
         self._session_id: str | None = None
+        self._last_partial_transcript: str | None = None
         self._incremental_thread: threading.Thread | None = None
         self._incremental_stop: threading.Event | None = None
         self._whisper = shared_whisper if shared_whisper is not None else SharedWhisper()
@@ -318,6 +321,8 @@ class Opnamesessie:
                 continue
 
             if transcript:
+                with self._lock:
+                    self._last_partial_transcript = transcript
                 if self._emit_event is not None:
                     self._emit_event(
                         CycleEvent(
@@ -506,6 +511,7 @@ class Opnamesessie:
             self._recording = True
             self._recording_started_at = time.monotonic()
             self._session_id = str(uuid.uuid4())
+            self._last_partial_transcript = None
 
         self._event(CycleEventType.CYCLE_STARTED)
         self._start_incremental_worker()
@@ -596,6 +602,8 @@ class Opnamesessie:
 
         with self._lock:
             chunks_empty = not self._audio_chunks
+            partial = self._last_partial_transcript
+            self._last_partial_transcript = None
             if not chunks_empty:
                 self._processing = True
                 chunks_to_process = [chunk.copy() for chunk in self._audio_chunks]
@@ -618,11 +626,18 @@ class Opnamesessie:
         self._release_stream_if_cold()
         self._notify(RecordingState.TRANSCRIBING, self.mode)
 
-        thread = threading.Thread(
-            target=self._transcribe_audio,
-            args=(chunks_to_process,),
-            daemon=True,
-        )
+        if self.incremental_transcription and partial:
+            thread = threading.Thread(
+                target=self._finalize_from_partial,
+                args=(partial,),
+                daemon=True,
+            )
+        else:
+            thread = threading.Thread(
+                target=self._transcribe_audio,
+                args=(chunks_to_process,),
+                daemon=True,
+            )
         thread.start()
 
     def cancel(self) -> None:
@@ -635,6 +650,7 @@ class Opnamesessie:
             self._recording = False
             self._recording_started_at = None
             self._audio_chunks.clear()
+            self._last_partial_transcript = None
 
         self._stop_incremental_worker()
         self._event(CycleEventType.CYCLE_CANCELLED)
@@ -670,6 +686,112 @@ class Opnamesessie:
         write_wav(temporary_path, self.sample_rate, audio_int16)
         return temporary_path
 
+    def _finalize_from_partial(self, transcript: str) -> None:
+        """Rondt de cyclus af met de laatste partial (geen Whisper bij stop)."""
+
+        final_state = RecordingState.IDLE
+        error_message: str | None = None
+
+        try:
+            print(i18n.t("rec.transcribing"))
+            self._apply_transcript(transcript)
+        except Exception as exc:
+            final_state = RecordingState.ERROR
+            error_message = str(exc)
+            print()
+            print(i18n.t("rec.transcribe_error"))
+            print(i18n.t("rec.error", error=exc))
+        finally:
+            with self._lock:
+                self._processing = False
+
+            self._notify(final_state)
+            if error_message is not None:
+                self._event(CycleEventType.CYCLE_ERROR, error=error_message)
+            self._event(CycleEventType.CYCLE_IDLE)
+            self._session_id = None
+            self.on_ready()
+
+    def _apply_transcript(self, transcript: str) -> None:
+        """Bestemmingscommando, save, plakken en completion-events voor klaar tekst."""
+
+        if not transcript:
+            print()
+            print(i18n.t("rec.no_speech"))
+            return
+
+        dests = self._get_destinations() if self._get_destinations else []
+        kind, name = match_command(transcript, dests)
+        if kind in ("set", "reset"):
+            if self._on_destination_command:
+                self._on_destination_command(kind, name)
+            self._event(
+                CycleEventType.DESTINATION_COMMAND,
+                transcript=transcript,
+                destination_command=kind,
+                destination_name=name,
+            )
+            if kind == "set":
+                print(i18n.t("destination.switched", name=name))
+            else:
+                print(i18n.t("destination.reset"))
+            return
+
+        print()
+        print("-" * 60)
+        print(i18n.t("rec.transcript_header"))
+        print("-" * 60)
+        print(transcript)
+        print("-" * 60)
+
+        active = self._get_active_destination() if self._get_active_destination else None
+        self._event(
+            CycleEventType.CYCLE_COMPLETED,
+            transcript=transcript,
+            destination=active,
+        )
+
+        saved_path: Path | None = None
+        if self._save_transcript is not None:
+            try:
+                saved_path = self._save_transcript(transcript)
+                print(i18n.t("rec.saved", path=saved_path))
+                self._event(
+                    CycleEventType.TRANSCRIPT_SAVED,
+                    transcript=transcript,
+                    path=str(saved_path),
+                    destination=active,
+                )
+            except OSError as exc:
+                print(i18n.t("rec.save_warn", error=exc))
+
+        deliver = resolve_auto_paste(active, dests, self.auto_paste)
+
+        if not deliver:
+            if saved_path is not None:
+                print(i18n.t("rec.saved_only"))
+        else:
+            if self._copy_text is not None:
+                try:
+                    self._copy_text(transcript)
+                    print(i18n.t("rec.clipboard"))
+                except Exception as exc:
+                    print(i18n.t("rec.clipboard_warn", error=exc))
+                    if saved_path is not None:
+                        print(i18n.t("rec.saved_anyway", path=saved_path))
+
+            self.wait_until_modifiers_clear()
+            time.sleep(self.paste_delay_seconds)
+            try:
+                self.host.paste()
+                print(i18n.t("rec.pasted"))
+            except Exception as exc:
+                print(i18n.t("rec.paste_failed"))
+                print(i18n.t("rec.error", error=exc))
+                print(i18n.t("rec.still_clipboard"))
+                if saved_path is not None:
+                    print(i18n.t("rec.and_saved", path=saved_path))
+
     def _transcribe_audio(self, chunks: list[Any]) -> None:
         """Transcribeert de opgenomen audio lokaal met Faster-Whisper."""
 
@@ -697,83 +819,7 @@ class Opnamesessie:
                     if text:
                         text_parts.append(text)
 
-            transcript = " ".join(text_parts).strip()
-            if not transcript:
-                print()
-                print(i18n.t("rec.no_speech"))
-                return
-
-            dests = self._get_destinations() if self._get_destinations else []
-            kind, name = match_command(transcript, dests)
-            if kind in ("set", "reset"):
-                if self._on_destination_command:
-                    self._on_destination_command(kind, name)
-                self._event(
-                    CycleEventType.DESTINATION_COMMAND,
-                    transcript=transcript,
-                    destination_command=kind,
-                    destination_name=name,
-                )
-                if kind == "set":
-                    print(i18n.t("destination.switched", name=name))
-                else:
-                    print(i18n.t("destination.reset"))
-                return
-
-            print()
-            print("-" * 60)
-            print(i18n.t("rec.transcript_header"))
-            print("-" * 60)
-            print(transcript)
-            print("-" * 60)
-
-            active = self._get_active_destination() if self._get_active_destination else None
-            self._event(
-                CycleEventType.CYCLE_COMPLETED,
-                transcript=transcript,
-                destination=active,
-            )
-
-            saved_path: Path | None = None
-            if self._save_transcript is not None:
-                try:
-                    saved_path = self._save_transcript(transcript)
-                    print(i18n.t("rec.saved", path=saved_path))
-                    self._event(
-                        CycleEventType.TRANSCRIPT_SAVED,
-                        transcript=transcript,
-                        path=str(saved_path),
-                        destination=active,
-                    )
-                except OSError as exc:
-                    print(i18n.t("rec.save_warn", error=exc))
-
-            deliver = resolve_auto_paste(active, dests, self.auto_paste)
-
-            if not deliver:
-                if saved_path is not None:
-                    print(i18n.t("rec.saved_only"))
-            else:
-                if self._copy_text is not None:
-                    try:
-                        self._copy_text(transcript)
-                        print(i18n.t("rec.clipboard"))
-                    except Exception as exc:
-                        print(i18n.t("rec.clipboard_warn", error=exc))
-                        if saved_path is not None:
-                            print(i18n.t("rec.saved_anyway", path=saved_path))
-
-                self.wait_until_modifiers_clear()
-                time.sleep(self.paste_delay_seconds)
-                try:
-                    self.host.paste()
-                    print(i18n.t("rec.pasted"))
-                except Exception as exc:
-                    print(i18n.t("rec.paste_failed"))
-                    print(i18n.t("rec.error", error=exc))
-                    print(i18n.t("rec.still_clipboard"))
-                    if saved_path is not None:
-                        print(i18n.t("rec.and_saved", path=saved_path))
+            self._apply_transcript(" ".join(text_parts).strip())
 
         except Exception as exc:
             final_state = RecordingState.ERROR

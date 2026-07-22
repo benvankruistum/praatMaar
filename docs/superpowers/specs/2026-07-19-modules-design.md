@@ -119,11 +119,13 @@ Optie `incremental_transcription` (default uit).
 - Tijdens opname: achtergrondthread transcribeert periodiek (~3 s) een kopie van
   geaccumuleerde audio (min. ~1,5 s).
 - Emits `transcript.partial` met groeiende tekst.
-- Bij stop: **finaal** transcript blijft autoritatief (`cycle.completed` + save).
-- Model-toegang via lock (incrementeel + finaal delen één Whisper-model).
+- Bij stop: de **laatste partial** wordt het finaal transcript (geen tweede volle
+  Whisper-run). Audio ná die partial (vaak ≤ ~interval) kan ontbreken. Zonder
+  partial: fallback naar volledige Whisper.
+- Model-toegang via lock (incrementeel + optionele fallback delen één Whisper-model).
 
-Zware feature — bedoeld voor modules/externe tools die tussentijdse tekst nodig
-hebben; niet vereist voor basis journal-gebruik.
+Zware feature — bedoeld om eindtijd te verkorten én modules/externe tools
+tussentijdse tekst te geven.
 
 ## Config
 
@@ -187,9 +189,10 @@ Ingebouwde modules: [docs/modules-authoring.md](../../modules-authoring.md).
 
 ## Risico's
 
-- **Incrementele modus:** extra CPU/GPU-last tijdens opname; lock kan finaal
-  transcriptie kort vertragen.
+- **Incrementele modus:** extra CPU/GPU-last tijdens opname; bij stop zonder
+  partial kan de lock fallback-transcriptie kort vertragen.
 - **Journal-grootte:** append-only zonder prune — externe tools of latere versie
   moeten rotatie overwegen.
-- **Partial vs finaal:** consumers moeten finaal (`transcript.saved`) als waarheid
-  zien; partial is indicatief.
+- **Partial als finaal:** de laatste partial wordt het opgeslagen transcript;
+  spraak ná die partial kan ontbreken. Consumers blijven `transcript.saved`
+  als eindpunt gebruiken.
