@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import i18n
+from indicator import RecordingState, notify_state, reset_levels
 from modules._contract import CycleEvent, ModuleAction, ModuleContext
+from modules.capabilities.continuous_capture import CaptureStatus
 
 from .orchestrator import MeetingOrchestrator
 from .overlay import MeetingBuddyOverlay
@@ -16,6 +19,7 @@ class MeetingBuddyModule:
         self._orchestrator: MeetingOrchestrator | None = None
         self._ui_dispatch = None
         self._overlay: MeetingBuddyOverlay | None = None
+        self._pill_capture_status: CaptureStatus | None = None
 
     @property
     def orchestrator(self) -> MeetingOrchestrator | None:
@@ -47,19 +51,18 @@ class MeetingBuddyModule:
                 id="start_meeting",
                 label_key="modules.meeting_buddy.actions.start",
                 handler=self.start_meeting,
-                in_tray=True,
+                in_tray_root=True,
             ),
             ModuleAction(
                 id="stop_meeting",
                 label_key="modules.meeting_buddy.actions.stop",
                 handler=self.stop_meeting,
-                in_tray=True,
+                in_tray_root=True,
             ),
             ModuleAction(
                 id="prepare_agenda",
                 label_key="modules.meeting_buddy.actions.prepare_agenda",
                 handler=self.prepare_agenda,
-                in_tray=True,
             ),
         ]
 
@@ -67,10 +70,13 @@ class MeetingBuddyModule:
         self._require_orchestrator().set_agenda(text)
 
     def start_meeting(self) -> None:
-        self._require_orchestrator().start()
+        if self._ui_dispatch is None:
+            raise RuntimeError("Meeting Buddy module is niet gestart")
+        self._ui_dispatch(self._start_meeting_flow)
 
     def stop_meeting(self) -> None:
         self._require_orchestrator().stop()
+        self._release_recording_pill()
         if self._ui_dispatch is not None:
             self._ui_dispatch(self._close_overlay)
 
@@ -82,17 +88,43 @@ class MeetingBuddyModule:
     def on_app_shutdown(self) -> None:
         if self._orchestrator is not None:
             self._orchestrator.stop()
+        self._release_recording_pill()
         self._close_overlay()
         self._orchestrator = None
         self._ui_dispatch = None
+
+    def _start_meeting_flow(self) -> None:
+        from tkinter import messagebox, simpledialog
+
+        orchestrator = self._require_orchestrator()
+        if orchestrator.binding is not None:
+            messagebox.showinfo(
+                i18n.t("modules.meeting_buddy.dialog.title"),
+                i18n.t("modules.meeting_buddy.dialog.already_running"),
+            )
+            return
+
+        draft = simpledialog.askstring(
+            i18n.t("modules.meeting_buddy.dialog.title"),
+            i18n.t("modules.meeting_buddy.dialog.start_prompt"),
+            initialvalue=orchestrator.agenda_text,
+        )
+        if draft is None:
+            return
+
+        orchestrator.set_agenda(draft)
+        try:
+            orchestrator.start()
+        except RuntimeError as exc:
+            messagebox.showerror(i18n.t("modules.meeting_buddy.dialog.title"), str(exc))
 
     def _show_agenda_dialog(self) -> None:
         from tkinter import simpledialog
 
         orchestrator = self._require_orchestrator()
         draft = simpledialog.askstring(
-            "Meeting Buddy",
-            "Agenda (één onderwerp per regel):",
+            i18n.t("modules.meeting_buddy.dialog.title"),
+            i18n.t("modules.meeting_buddy.dialog.agenda_prompt"),
             initialvalue=orchestrator.agenda_text,
         )
         if draft is not None:
@@ -104,6 +136,7 @@ class MeetingBuddyModule:
         orchestrator = self._require_orchestrator()
         capture_status = orchestrator.capture_status
         transcription_status = orchestrator.transcription_status
+        self._sync_recording_pill(capture_status)
         self._ui_dispatch(
             lambda: self._show_overlay_update(
                 state,
@@ -137,6 +170,36 @@ class MeetingBuddyModule:
         if self._overlay is not None:
             self._overlay.close()
             self._overlay = None
+
+    def _sync_recording_pill(self, capture_status: CaptureStatus) -> None:
+        """Toon de opname-pill zolang Meeting Buddy microfooncapture actief is."""
+
+        if capture_status == self._pill_capture_status:
+            return
+
+        previous = self._pill_capture_status
+        self._pill_capture_status = capture_status
+        recording_states = {
+            CaptureStatus.ACTIVE,
+            CaptureStatus.STARTING,
+            CaptureStatus.RECONNECTING,
+        }
+        if capture_status in recording_states:
+            if previous not in recording_states:
+                reset_levels()
+            notify_state(RecordingState.RECORDING, "meeting")
+            return
+        if capture_status == CaptureStatus.ERROR:
+            notify_state(RecordingState.ERROR, "meeting")
+            return
+        if capture_status in {CaptureStatus.IDLE, CaptureStatus.STOPPED}:
+            self._release_recording_pill()
+
+    def _release_recording_pill(self) -> None:
+        if self._pill_capture_status is None:
+            return
+        self._pill_capture_status = None
+        notify_state(RecordingState.IDLE, "meeting")
 
     def _require_orchestrator(self) -> MeetingOrchestrator:
         if self._orchestrator is None:

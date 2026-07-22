@@ -12,6 +12,7 @@ from modules._contract import (
     UiDispatch,
     module_actions,
     module_tray_actions,
+    module_tray_root_actions,
     noop_ui_dispatch,
 )
 from modules.bus import ModuleBus
@@ -30,6 +31,7 @@ from modules.registry import (
     sanitize_modules_config,
     shutdown_modules,
     tray_action_entries,
+    tray_root_action_entries,
 )
 from modules.settings_store import config_path, load_config, module_dir, save_config
 from modules.whisper import SharedWhisper
@@ -60,6 +62,7 @@ __all__ = [
     "module_dir",
     "module_enabled",
     "module_tray_actions",
+    "module_tray_root_actions",
     "modules_config_for_settings",
     "noop_ui_dispatch",
     "run_module_action",
@@ -67,4 +70,5 @@ __all__ = [
     "save_config",
     "shutdown_modules",
     "tray_action_entries",
+    "tray_root_action_entries",
 ]

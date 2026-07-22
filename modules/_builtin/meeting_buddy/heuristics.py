@@ -10,6 +10,7 @@ from uuid import uuid4
 from modules.capabilities.speech_to_text import TranscriptDelta
 
 from .config import MeetingBuddyConfig
+from .hint_text import clean_question_text, question_is_substantial
 from .state import ActionItemStatus, MeetingState, Question, QuestionStatus, TopicStatus
 from .state_service import StateProposal
 
@@ -73,15 +74,17 @@ class HeuristicsEngine:
             )
         )
         if looks_like_question and not self._has_similar_open_question(state, normalized):
-            proposals.append(
-                self._proposal(
-                    "add_question",
-                    delta,
-                    state,
-                    now_s,
-                    {"text": delta.text.strip(), "created_at": now_s},
+            cleaned = clean_question_text(delta.text.strip())
+            if question_is_substantial(cleaned):
+                proposals.append(
+                    self._proposal(
+                        "add_question",
+                        delta,
+                        state,
+                        now_s,
+                        {"text": cleaned, "created_at": now_s},
+                    )
                 )
-            )
         self._source_windows[f"{delta.session_id}:{delta.sequence}"] = (
             delta.start_ms,
             delta.end_ms,

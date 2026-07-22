@@ -21,3 +21,7 @@ min_hint_confidence: 0.5
 
 max_whisper_queue_duration_s: 10
 max_audio_buffer_duration_s: 30
+
+# Meeting-geluid via WASAPI loopback (standaard speakers). null = Windows-default output.
+enable_loopback: true
+loopback_device: null

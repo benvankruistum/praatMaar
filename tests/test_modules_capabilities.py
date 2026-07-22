@@ -11,6 +11,7 @@ from modules._contract import (
     ModuleWithShutdown,
     module_actions,
     module_tray_actions,
+    module_tray_root_actions,
     noop_ui_dispatch,
 )
 from modules.bus import ModuleBus
@@ -19,6 +20,7 @@ from modules.registry import (
     run_module_action,
     shutdown_modules,
     tray_action_entries,
+    tray_root_action_entries,
 )
 from modules.settings_store import load_config, save_config
 from modules.whisper import SharedWhisper
@@ -104,6 +106,29 @@ def test_tray_action_entries() -> None:
     entries = tray_action_entries([module])
     assert len(entries) == 1
     assert entries[0][1].id == "tray-only"
+
+
+def test_tray_root_action_entries() -> None:
+    module = ActionModule()
+    assert tray_root_action_entries([module]) == []
+
+    root_module = ActionModule()
+    root_module.actions = lambda: [
+        ModuleAction(
+            id="root",
+            label_key="modules.demo.root",
+            handler=lambda: root_module.ran.append("root"),
+            in_tray_root=True,
+        ),
+    ]
+    entries = tray_root_action_entries([root_module])
+    assert len(entries) == 1
+    assert entries[0][1].id == "root"
+
+
+def test_module_tray_root_actions_filter() -> None:
+    module = ActionModule()
+    assert module_tray_root_actions(module) == []
 
 
 def test_module_bus_shutdown_and_run_action() -> None:

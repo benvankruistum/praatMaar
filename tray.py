@@ -108,6 +108,8 @@ class TrayIcon:
         on_module_action: Callable[[str, str], None] | None = None,
         get_module_tray_actions: Callable[[], list[tuple[PraatMaarModule, ModuleAction]]]
         | None = None,
+        get_module_tray_root_actions: Callable[[], list[tuple[PraatMaarModule, ModuleAction]]]
+        | None = None,
     ) -> None:
         self._on_quit = on_quit
         self._on_settings = on_settings
@@ -116,6 +118,7 @@ class TrayIcon:
         self._on_help = on_help
         self._on_module_action = on_module_action
         self._get_module_tray_actions = get_module_tray_actions
+        self._get_module_tray_root_actions = get_module_tray_root_actions
         self._state = RecordingState.IDLE
         self._attention = False
         self._attention_tooltip_key = "tray.tooltip.attention_mic"
@@ -129,6 +132,12 @@ class TrayIcon:
             title=_tooltip(RecordingState.IDLE),
             menu=self._build_menu(),
         )
+
+    def _module_action_handler(self, module_id: str, action_id: str):
+        def handler(_icon: pystray.Icon, _item: MenuItem) -> None:
+            self._handle_module_action(module_id, action_id)
+
+        return handler
 
     def _build_modules_menu(self) -> MenuItem:
         entries = self._get_module_tray_actions() if self._get_module_tray_actions else []
@@ -155,10 +164,7 @@ class TrayIcon:
                     items.append(
                         MenuItem(
                             i18n.t(action.label_key),
-                            lambda _i,
-                            _it,
-                            mid=module.id,
-                            aid=action.id: self._handle_module_action(mid, aid),
+                            self._module_action_handler(module.id, action.id),
                         )
                     )
                     continue
@@ -166,9 +172,7 @@ class TrayIcon:
                 action_items = [
                     MenuItem(
                         i18n.t(action.label_key),
-                        lambda _i, _it, mid=module.id, aid=action.id: self._handle_module_action(
-                            mid, aid
-                        ),
+                        self._module_action_handler(module.id, action.id),
                     )
                     for action in actions
                 ]
@@ -176,15 +180,39 @@ class TrayIcon:
 
         return MenuItem(i18n.t("tray.modules"), Menu(*items))
 
+    def _build_root_module_items(
+        self, entries: list[tuple[PraatMaarModule, ModuleAction]]
+    ) -> list[MenuItem]:
+        return [
+            MenuItem(
+                i18n.t(action.label_key),
+                self._module_action_handler(module.id, action.id),
+            )
+            for module, action in entries
+        ]
+
     def _build_menu(self) -> Menu:
-        return Menu(
+        items: list[MenuItem | pystray.Menu] = [
             MenuItem(i18n.t("tray.settings"), self._handle_settings, default=True),
             MenuItem(i18n.t("tray.destinations"), self._handle_destinations),
-            self._build_modules_menu(),
-            MenuItem(i18n.t("tray.help"), self._handle_help),
-            Menu.SEPARATOR,
-            MenuItem(i18n.t("tray.quit"), self._handle_quit),
+        ]
+
+        root_entries = (
+            self._get_module_tray_root_actions() if self._get_module_tray_root_actions else []
         )
+        if root_entries:
+            items.extend(self._build_root_module_items(root_entries))
+            items.append(Menu.SEPARATOR)
+
+        items.extend(
+            [
+                self._build_modules_menu(),
+                MenuItem(i18n.t("tray.help"), self._handle_help),
+                Menu.SEPARATOR,
+                MenuItem(i18n.t("tray.quit"), self._handle_quit),
+            ]
+        )
+        return Menu(*items)
 
     def refresh_language(self) -> None:
         """Vernieuwt menu + tooltip na een UI-taalwissel."""

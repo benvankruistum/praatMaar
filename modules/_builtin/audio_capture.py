@@ -7,11 +7,13 @@ import sys
 import threading
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import Event, RLock, Thread
 from typing import Any
 
 import numpy as np
+
+from modules._builtin.audio_capture_mix import mix_mono_chunks, resample_mono, stereo_to_mono
 
 from modules._contract import CycleEvent, ModuleContext
 from modules.capabilities.continuous_capture import (
@@ -126,13 +128,19 @@ class _CaptureState:
     handlers: list[CaptureEventHandler]
     status: CaptureStatus = CaptureStatus.IDLE
     status_message: str | None = None
-    stream: Any | None = None
+    mic_stream: Any | None = None
+    loopback_stream: Any | None = None
     worker: Thread | None = None
     captured_samples: int = 0
+    loopback_enabled: bool = False
+    loopback_sample_rate: int = SAMPLE_RATE
+    mix_lock: RLock = field(default_factory=RLock)
+    mic_pending: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
+    loopback_pending: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.float32))
 
 
 class AudioCaptureEngine:
-    """Continue 16-kHz mono microfooncapture met overlappende PCM-vensters."""
+    """Continue 16-kHz mono capture (microfoon + optioneel WASAPI loopback)."""
 
     def __init__(
         self,
@@ -173,17 +181,9 @@ class AudioCaptureEngine:
 
         try:
             sounddevice = self._get_sounddevice()
-            state.stream = sounddevice.InputStream(
-                samplerate=SAMPLE_RATE,
-                channels=CHANNELS,
-                dtype="float32",
-                callback=lambda data, frames, time_info, status: self._stream_callback(
-                    state, data, frames, time_info, status
-                ),
-                finished_callback=lambda: self._stream_finished(state),
-                device=options.get("device"),
-                latency="low",
-            )
+            self._start_mic_stream(state, sounddevice, options)
+            if options.get("enable_loopback"):
+                self._try_start_loopback_stream(state, sounddevice, options)
             state.worker = Thread(
                 target=self._worker,
                 args=(state,),
@@ -191,15 +191,72 @@ class AudioCaptureEngine:
                 daemon=True,
             )
             state.worker.start()
-            state.stream.start()
+            state.mic_stream.start()
+            if state.loopback_stream is not None:
+                state.loopback_stream.start()
         except Exception as exc:
             state.stop_event.set()
-            self._close_stream(state)
+            self._close_streams(state)
             self._set_status(state, CaptureStatus.ERROR, f"Microphone capture failed: {exc}")
             return CaptureSession(session_id=session_id)
 
         self._set_status(state, CaptureStatus.ACTIVE)
         return CaptureSession(session_id=session_id)
+
+    def _start_mic_stream(
+        self, state: _CaptureState, sounddevice: Any, options: dict[str, Any]
+    ) -> None:
+        state.mic_stream = sounddevice.InputStream(
+            samplerate=SAMPLE_RATE,
+            channels=CHANNELS,
+            dtype="float32",
+            callback=lambda data, frames, time_info, status: self._mic_stream_callback(
+                state, data, frames, time_info, status
+            ),
+            finished_callback=lambda: self._mic_stream_finished(state),
+            device=options.get("device"),
+            latency="low",
+        )
+
+    def _try_start_loopback_stream(
+        self, state: _CaptureState, sounddevice: Any, options: dict[str, Any]
+    ) -> None:
+        try:
+            device, sample_rate, channels, extra_settings = self._resolve_loopback(
+                sounddevice,
+                options.get("loopback_device"),
+            )
+        except Exception as exc:
+            log.warning(
+                "Loopback niet beschikbaar voor sessie %s, alleen microfoon: %s",
+                state.session_id,
+                exc,
+            )
+            return
+
+        try:
+            state.loopback_stream = sounddevice.InputStream(
+                samplerate=sample_rate,
+                channels=channels,
+                dtype="float32",
+                callback=lambda data, frames, time_info, status: self._loopback_stream_callback(
+                    state, data, frames, time_info, status
+                ),
+                finished_callback=lambda: self._loopback_stream_finished(state),
+                device=device,
+                extra_settings=extra_settings,
+                latency="low",
+            )
+            state.loopback_enabled = True
+            state.loopback_sample_rate = sample_rate
+        except Exception as exc:
+            log.warning(
+                "Loopback starten mislukt voor sessie %s, alleen microfoon: %s",
+                state.session_id,
+                exc,
+            )
+            state.loopback_stream = None
+            state.loopback_enabled = False
 
     def subscribe(self, session_id: str, handler: CaptureEventHandler) -> None:
         state = self._require_session(session_id)
@@ -222,7 +279,7 @@ class AudioCaptureEngine:
     def stop_session(self, session_id: str) -> None:
         state = self._require_session(session_id)
         state.stop_event.set()
-        self._close_stream(state)
+        self._close_streams(state)
         worker = state.worker
         if worker is not None and worker is not threading.current_thread():
             worker.join(timeout=2)
@@ -254,7 +311,35 @@ class AudioCaptureEngine:
             raise ValueError(f"Onbekende capture-sessie: {session_id}")
         return state
 
-    def _audio_callback(
+    def _mic_stream_callback(
+        self,
+        state: _CaptureState,
+        data: Any,
+        frames: int,
+        time_info: Any,
+        status: Any,
+    ) -> None:
+        try:
+            self._mic_audio_callback(state, data, frames, time_info, status)
+        except Exception as exc:
+            log.exception("Microfooncapture faalde voor sessie %s", state.session_id)
+            self._fail_capture(state, f"Microphone capture failed: {exc}")
+
+    def _loopback_stream_callback(
+        self,
+        state: _CaptureState,
+        data: Any,
+        frames: int,
+        time_info: Any,
+        status: Any,
+    ) -> None:
+        try:
+            self._loopback_audio_callback(state, data, frames, time_info, status)
+        except Exception as exc:
+            log.warning("Loopbackcapture faalde voor sessie %s: %s", state.session_id, exc)
+            self._disable_loopback(state)
+
+    def _mic_audio_callback(
         self,
         state: _CaptureState,
         data: Any,
@@ -279,14 +364,12 @@ class AudioCaptureEngine:
                     reason="input_overflow",
                 ),
             )
-        samples = np.asarray(data, dtype=np.float32).reshape(-1)
+        samples = stereo_to_mono(np.asarray(data, dtype=np.float32))
         if frames < samples.size:
             samples = samples[:frames]
-        start_ms = round(state.captured_samples * 1000 / SAMPLE_RATE)
-        state.captured_samples += int(samples.size)
-        state.buffer.write(samples, start_ms=start_ms)
+        self._append_mic_samples(state, samples)
 
-    def _stream_callback(
+    def _loopback_audio_callback(
         self,
         state: _CaptureState,
         data: Any,
@@ -294,15 +377,75 @@ class AudioCaptureEngine:
         time_info: Any,
         status: Any,
     ) -> None:
-        try:
-            self._audio_callback(state, data, frames, time_info, status)
-        except Exception as exc:
-            log.exception("Microfooncapture faalde voor sessie %s", state.session_id)
-            self._fail_capture(state, f"Microphone capture failed: {exc}")
+        del time_info
+        if state.stop_event.is_set() or not state.loopback_enabled:
+            return
+        if status:
+            log.warning("Loopbackstatus voor sessie %s: %s", state.session_id, status)
+        samples = stereo_to_mono(np.asarray(data, dtype=np.float32))
+        if frames < samples.size:
+            samples = samples[:frames]
+        samples = resample_mono(samples, from_rate=state.loopback_sample_rate)
+        self._append_loopback_samples(state, samples)
 
-    def _stream_finished(self, state: _CaptureState) -> None:
+    def _append_mic_samples(self, state: _CaptureState, samples: np.ndarray) -> None:
+        with state.mix_lock:
+            state.mic_pending = np.concatenate((state.mic_pending, samples))
+            self._flush_mixed_samples(state)
+
+    def _append_loopback_samples(self, state: _CaptureState, samples: np.ndarray) -> None:
+        with state.mix_lock:
+            state.loopback_pending = np.concatenate((state.loopback_pending, samples))
+            self._flush_mixed_samples(state)
+
+    def _flush_mixed_samples(self, state: _CaptureState) -> None:
+        while True:
+            if state.loopback_enabled:
+                count = min(state.mic_pending.size, state.loopback_pending.size)
+                if count <= 0:
+                    break
+                mic_chunk = state.mic_pending[:count]
+                loop_chunk = state.loopback_pending[:count]
+                state.mic_pending = state.mic_pending[count:]
+                state.loopback_pending = state.loopback_pending[count:]
+                mixed = mix_mono_chunks(mic_chunk, loop_chunk)
+            else:
+                count = state.mic_pending.size
+                if count <= 0:
+                    break
+                mixed = state.mic_pending[:count]
+                state.mic_pending = state.mic_pending[count:]
+
+            start_ms = round(state.captured_samples * 1000 / SAMPLE_RATE)
+            state.captured_samples += int(mixed.size)
+            state.buffer.write(mixed, start_ms=start_ms)
+            if state.status == CaptureStatus.ACTIVE and mixed.size > 0:
+                from indicator import push_level
+
+                push_level(float(np.sqrt(np.mean(np.square(mixed)))))
+
+    def _mic_stream_finished(self, state: _CaptureState) -> None:
         if not state.stop_event.is_set():
             self._fail_capture(state, "Microphone device disconnected.")
+
+    def _loopback_stream_finished(self, state: _CaptureState) -> None:
+        if state.stop_event.is_set():
+            return
+        log.warning("Loopback device disconnected voor sessie %s", state.session_id)
+        self._disable_loopback(state)
+
+    def _disable_loopback(self, state: _CaptureState) -> None:
+        if not state.loopback_enabled:
+            return
+        state.loopback_enabled = False
+        state.loopback_pending = np.empty(0, dtype=np.float32)
+        stream = state.loopback_stream
+        state.loopback_stream = None
+        if stream is not None:
+            try:
+                stream.stop()
+            finally:
+                stream.close()
 
     def _fail_capture(self, state: _CaptureState, message: str) -> None:
         with self._lock:
@@ -366,15 +509,41 @@ class AudioCaptureEngine:
             log.exception("Capture-eventhandler faalde voor sessie %s", state.session_id)
 
     @staticmethod
-    def _close_stream(state: _CaptureState) -> None:
-        stream = state.stream
-        state.stream = None
-        if stream is None:
-            return
-        try:
-            stream.stop()
-        finally:
-            stream.close()
+    def _resolve_loopback(
+        sounddevice: Any,
+        loopback_device: int | None,
+    ) -> tuple[int, int, int, Any]:
+        wasapi_settings = getattr(sounddevice, "WasapiSettings", None)
+        if wasapi_settings is None:
+            raise RuntimeError("WASAPI loopback is not available in this sounddevice build.")
+
+        device = loopback_device
+        if device is None:
+            default = sounddevice.default.device
+            if isinstance(default, (tuple, list)) and len(default) >= 2:
+                device = default[1]
+            else:
+                device = sounddevice.default.device[1]
+        if device is None:
+            raise RuntimeError("No default output device for loopback capture.")
+
+        info = sounddevice.query_devices(device)
+        channels = int(info.get("max_input_channels") or info.get("max_output_channels") or 2)
+        channels = max(1, min(2, channels))
+        sample_rate = int(info.get("default_samplerate") or SAMPLE_RATE)
+        return device, sample_rate, channels, wasapi_settings(loopback=True)
+
+    @staticmethod
+    def _close_streams(state: _CaptureState) -> None:
+        for attr in ("mic_stream", "loopback_stream"):
+            stream = getattr(state, attr)
+            setattr(state, attr, None)
+            if stream is None:
+                continue
+            try:
+                stream.stop()
+            finally:
+                stream.close()
 
 
 class AudioCaptureModule:

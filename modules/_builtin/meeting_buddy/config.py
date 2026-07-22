@@ -28,6 +28,8 @@ class MeetingBuddyConfig:
     min_hint_confidence: float
     max_whisper_queue_duration_s: float
     max_audio_buffer_duration_s: float
+    enable_loopback: bool = True
+    loopback_device: int | None = None
 
     @classmethod
     def defaults(cls) -> MeetingBuddyConfig:
