@@ -303,6 +303,8 @@ class CapabilitySessionController:
             "device": device,
             "enable_loopback": self._config.enable_loopback,
             "loopback_device": self._config.loopback_device,
+            "mic_mix_gain": self._config.mic_mix_gain,
+            "loopback_mix_gain": self._config.loopback_mix_gain,
         }
 
     def _cleanup_sessions(self, binding: MeetingSessionBinding) -> None:

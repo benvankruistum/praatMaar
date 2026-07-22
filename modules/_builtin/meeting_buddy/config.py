@@ -34,6 +34,8 @@ class MeetingBuddyConfig:
     max_audio_buffer_duration_s: float
     enable_loopback: bool = True
     loopback_device: int | None = None
+    mic_mix_gain: float = 0.5
+    loopback_mix_gain: float = 0.5
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.topic_match_score <= 1.0:
@@ -54,6 +56,12 @@ class MeetingBuddyConfig:
         for key, value in self.hint_min_wait_s.items():
             if value < 0:
                 raise ValueError(f"hint_min_wait_s.{key} must be non-negative")
+        for name, value in (
+            ("mic_mix_gain", self.mic_mix_gain),
+            ("loopback_mix_gain", self.loopback_mix_gain),
+        ):
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be between 0 and 1")
 
     @classmethod
     def defaults(cls) -> MeetingBuddyConfig:

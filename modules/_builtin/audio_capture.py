@@ -414,7 +414,12 @@ class AudioCaptureEngine:
                 loop_chunk = state.loopback_pending[:count]
                 state.mic_pending = state.mic_pending[count:]
                 state.loopback_pending = state.loopback_pending[count:]
-                mixed = mix_mono_chunks(mic_chunk, loop_chunk)
+                mixed = mix_mono_chunks(
+                    mic_chunk,
+                    loop_chunk,
+                    mic_gain=float(state.capture_options.get("mic_mix_gain", 0.5)),
+                    loopback_gain=float(state.capture_options.get("loopback_mix_gain", 0.5)),
+                )
             else:
                 count = state.mic_pending.size
                 if count <= 0:

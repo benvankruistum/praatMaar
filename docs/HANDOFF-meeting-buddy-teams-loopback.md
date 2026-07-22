@@ -7,17 +7,12 @@ Werktaal: **Nederlands**.
 
 | Item | Status |
 |------|--------|
-| Branch | `main` @ `2836271` (Meeting Buddy MVP + post-MVP UX gemerged) |
-| Feature-branch `feat/meeting-buddy-mvp` | Verwijderd (inhoud op `main`) |
-| **WASAPI-loopback** | **Al geïmplementeerd** in `audio_capture.py` — niet opnieuw vanaf nul bouwen |
-| `docs/STATUS.md` | **Verouderd** — zegt nog “geen loopback”; bijwerken in Spoor B |
-
-**Aanbevolen start in de nieuwe sessie:**
-
-1. `git switch main && git pull`
-2. Nieuwe branch, bijv. `feat/meeting-buddy-loopback-ux` (Spoor B) of `feat/meeting-buddy-teams-audio` (B+C)
-3. Lees dit document + `docs/RFC-AudioCapture-01.md` + `modules/_builtin/audio_capture.py`
-4. **Niet** opnieuw brainstormen over “of we loopback nodig hebben” — focus op zichtbaarheid, configuratie en Teams-acceptatie
+| Branch | `main` — PR #21 gemerged (Spoor B + C1/C2) |
+| Spoor B (zichtbaarheid) | **Af** |
+| Spoor C1 (device UI prep-dialoog) | **Af** |
+| Spoor C2 (loopback reconnect) | **Af** |
+| Spoor C3 (mix tunen) | **Deels** — `mic_mix_gain` / `loopback_mix_gain` in yaml |
+| Spoor C4 (Teams-acceptatie) | **Open** — zie [teams-loopback-acceptance.md](teams-loopback-acceptance.md) |
 
 ---
 

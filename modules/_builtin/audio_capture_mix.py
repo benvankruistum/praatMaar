@@ -38,11 +38,17 @@ def resample_mono(
     return np.interp(target_x, source_x, mono).astype(np.float32)
 
 
-def mix_mono_chunks(mic: np.ndarray, loopback: np.ndarray) -> np.ndarray:
-    """Mix two mono chunks of equal length with headroom."""
+def mix_mono_chunks(
+    mic: np.ndarray,
+    loopback: np.ndarray,
+    *,
+    mic_gain: float = 0.5,
+    loopback_gain: float = 0.5,
+) -> np.ndarray:
+    """Mix two mono chunks of equal length with configurable gain and headroom."""
 
     length = min(mic.size, loopback.size)
     if length <= 0:
         return np.empty(0, dtype=np.float32)
-    mixed = 0.5 * mic[:length] + 0.5 * loopback[:length]
+    mixed = mic_gain * mic[:length] + loopback_gain * loopback[:length]
     return np.clip(mixed, -1.0, 1.0).astype(np.float32)

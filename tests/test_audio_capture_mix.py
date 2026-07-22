@@ -24,3 +24,12 @@ def test_mix_mono_chunks_clips() -> None:
     mixed = mix_mono_chunks(mic, loopback)
     assert mixed.max() <= 1.0
     assert mixed.min() >= -1.0
+
+
+def test_mix_mono_chunks_respects_gains() -> None:
+    mic = np.array([1.0, 0.0], dtype=np.float32)
+    loopback = np.array([0.0, 1.0], dtype=np.float32)
+    mixed = mix_mono_chunks(mic, loopback, mic_gain=1.0, loopback_gain=0.0)
+    assert np.allclose(mixed, [1.0, 0.0])
+    mixed = mix_mono_chunks(mic, loopback, mic_gain=0.0, loopback_gain=1.0)
+    assert np.allclose(mixed, [0.0, 1.0])
