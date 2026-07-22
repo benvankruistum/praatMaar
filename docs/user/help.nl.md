@@ -59,9 +59,10 @@ Rechtsklik op het praatMaar-icoon in het systeemvak:
 ## Modules en externe tools
 
 Via **Modules** in het systeemvak kun je uitbreidingen aan- of uitzetten en
-**incrementele transcriptie** inschakelen. Met incrementele transcriptie draait
-Whisper al tijdens je opname op de achtergrond; modules en externe tools kunnen
-tussentijdse tekst ontvangen vóór je stopt.
+**incrementele transcriptie** inschakelen. Whisper draait dan al tijdens je
+opname op de achtergrond (tussentijdse tekst voor modules/tools). Bij stop wordt
+de laatste tussentijdse tekst als eindtranscript gebruikt — sneller, maar de
+laatste seconden na die tussentijdse run kunnen ontbreken.
 
 **Event-journal:** elke dicteercyclus wordt als JSON-regels weggeschreven in
 `%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). Externe
