@@ -1,8 +1,8 @@
 # Design — Meeting Buddy tray- & agenda-UX
 
 - **Datum:** 2026-07-22
-- **Status:** Review (spec geschreven; wacht op goedkeuring)
-- **Branch (voorstel):** `feat/meeting-buddy-tray-ux`
+- **Status:** Review (herzien na feedback; wacht op goedkeuring)
+- **Branch:** `feat/meeting-buddy-tray-ux`
 - **Gerelateerd:**
   [2026-07-19-meeting-buddy-mvp-design.md](2026-07-19-meeting-buddy-mvp-design.md),
   [2026-07-19-modules-design.md](2026-07-19-modules-design.md),
@@ -21,15 +21,20 @@ herkenbare microfoonicoon van de tray.
 
 Meeting Buddy voelt als één duidelijke plek in tray én Modules-venster, met
 gescheiden **agenda** en **eigenschappen**, en met opslaan/laden van agenda’s
-zonder meteen een meeting te starten.
+zonder meteen een meeting te starten — inclusief een snelle startroute voor
+terugkerende meetings.
 
 ## Beslissingen (vastgelegd met gebruiker)
 
 | Onderwerp | Keuze |
 |-----------|--------|
-| Na module Opslaan | Modules-venster blijft open en toont actieknoppen |
+| Na module Opslaan | Modules-venster blijft **altijd** open (alle modules) |
 | Agenda-opslag | Bibliotheek in app **én** Open bestand / Opslaan als |
-| Meeting starten | Altijd eerst agenda-dialoog ter bevestiging |
+| Bestandsformaat (MVP) | Alleen `.md` |
+| Titel | Afgeleid van bestandsnaam (zoals Word); geen apart verplicht titelveld |
+| Meeting starten | Agenda-dialoog ter bevestiging |
+| Snelle start | Modifier+Start (Shift) → direct starten met huidige agenda |
+| Bibliotheek-UI | Sectie **Recent** boven **Alle agenda’s** |
 | Aanpak | Cascade + gesplitste dialogen + agenda-bibliotheek |
 
 ## Scope
@@ -38,11 +43,12 @@ zonder meteen een meeting te starten.
 
 - Tray: één cascade **Meeting Buddy ▸** (Start / Stop / Agenda bewerken /
   Eigenschappen); Start/Stop verdwijnen uit de tray-root
-- Modules-venster: na Opslaan open houden; bij enabled Meeting Buddy dezelfde
-  vier acties als knoppen
-- Agenda-dialoog met titel, punten, bibliotheek, Open/Opslaan/Opslaan als
+- Modules-venster: na Opslaan **altijd** open houden; bij enabled Meeting Buddy
+  dezelfde vier acties als knoppen
+- Agenda-dialoog: punten, bibliotheek (Recent + Alle), Open/Opslaan/Opslaan als
+  (`.md`)
 - Eigenschappen-dialoog: alleen loopback + uitvoerapparaat
-- Startflow: bevestiging via agenda-dialoog; audio-prefs uit Eigenschappen
+- Twee startroutes: bevestigen via agenda **of** Shift+Start direct
 - Zelfde microfoonicoon (tray-silhouet) op relevante Tk-dialogen
 - Locales, user help, modules-docs bijwerken
 
@@ -51,6 +57,9 @@ zonder meteen een meeting te starten.
 - Apart MeetingBuddy-hoofdvenster / workspace
 - Cloud-sync van agenda’s
 - Import uit Teams/Outlook-agenda
+- Instelling “Altijd agenda tonen” (later; MVP gebruikt Shift+Start)
+- Rijke Markdown-parsing (lijsten `-`/`*` e.d.) — formaat `.md` is gekozen
+  zodat dat later kan; MVP behandelt inhoud als regels/onderwerpen
 - Wijzigingen aan hint-engine of overlay-gedrag tijdens een lopende meeting
 
 ## Tray
@@ -59,7 +68,8 @@ zonder meteen een meeting te starten.
 Tray
 ├─ … bestaande items …
 ├─ Meeting Buddy ▸
-│  ├─ Meeting starten…
+│  ├─ Meeting starten…          (opent agenda-bevestiging)
+│  ├─ Meeting starten (snel)    (Shift-route — zie Startflow)
 │  ├─ Meeting stoppen
 │  ├─ Agenda bewerken
 │  └─ Eigenschappen
@@ -68,30 +78,48 @@ Tray
 
 - Cascade is zichtbaar wanneer de module enabled/running is (na
   `_reload_modules` / `refresh_modules_menu`, zoals nu).
-- Geen `in_tray_root` meer voor Start/Stop; alle Meeting Buddy-acties via
-  module-cascade (`in_tray`) of Modules-dialoogknoppen.
-- **Keuze:** een dedicated root-submenu **Meeting Buddy ▸** (niet begraven
-  onder het generieke “Modules”-submenu), zodat Start/Stop/Agenda/Eigenschappen
-  onder die ene herkenbare label hangen.
+- Geen `in_tray_root` meer voor Start/Stop.
+- **Keuze:** dedicated root-submenu **Meeting Buddy ▸** (niet begraven onder
+  het generieke “Modules”-submenu).
+
+### Shift+Start en pystray
+
+Pystray ondersteunt niet overal modifier+klik op menuitems. MVP-keuze:
+
+1. **Primair:** apart cascade-item **Meeting starten (snel)** naast
+   **Meeting starten…**
+2. **Aanvullend waar mogelijk:** Shift vastgehouden bij activeren van
+   “Meeting starten…” →zelfde snelle pad (nice-to-have; niet blocker)
+
+Documenteer beide labels in help/locales. Latere optie: voorkeursinstelling
+“Altijd agenda tonen” i.p.v. of naast het snelle item.
 
 ## Modules-venster
 
-1. Gebruiker schakelt Meeting Buddy in → Opslaan.
+1. Gebruiker wijzigt modules → Opslaan.
 2. `apply_settings` / `_reload_modules` / tray-refresh zoals nu.
-3. Dialoog **blijft open**.
-4. Onder de Meeting Buddy-rij (of in het actiegebied voor die module)
-   verschijnen knoppen: Meeting starten…, Meeting stoppen, Agenda bewerken,
-   Eigenschappen.
+3. Dialoog **blijft altijd open** (alle modules, geen Meeting Buddy-uitzondering).
+4. Onder de Meeting Buddy-rij verschijnen knoppen: Meeting starten…,
+   Meeting starten (snel), Meeting stoppen, Agenda bewerken, Eigenschappen.
 5. Geen aparte toast verplicht; de acties in hetzelfde scherm zijn de
    “wat nu?”-hint.
+
+Sluiten blijft expliciet via venster-sluitknop / Annuleren.
 
 ## Agenda-dialoog
 
 ### Inhoud
 
-- **Titel** — verplicht om in de bibliotheek op te slaan
-- **Agendapunten** — één onderwerp per regel (bestaande `parse_agenda`)
-- **Bibliotheek** — lijst van opgeslagen agenda’s
+- **Agendapunten** — één onderwerp per regel (bestaande `parse_agenda`;
+  Markdown-lijsten later)
+- **Geen verplicht titelveld** — titel = bestandsnaam zonder `.md`
+  (bijv. `Budgetoverleg.md` → “Budgetoverleg”), zoals Word
+- Optioneel: bestandsnaam tonen/bewerken bij **Opslaan als…** (save-dialog),
+  niet als apart formulierveld bij elke edit
+- **Bibliotheek** in twee secties:
+  1. **Recent** — laatst gebruikte agenda’s (openen, starten, of opslaan
+     telt als gebruik), max. ~5–8 items
+  2. **Alle agenda’s** — volledige bibliotheekmap
 - Bestandsacties: Openen (uit lijst), Opslaan, Opslaan als…, Open bestand…
 
 ### Opslag
@@ -99,11 +127,17 @@ Tray
 - Standaardmap:
   `%APPDATA%\praatMaar\meeting-buddy\agendas\` (Windows; equivalent onder
   bestaande app-datamap op andere platforms)
-- Bestandsformaat: UTF-8 plain text, extensie `.txt` of `.md`
-  - Regel 1: `# <titel>` (Markdown H1); ontbreekt die regel, dan is de
-    titel de bestandsnaam zonder extensie
-  - Overige niet-lege regels (geen `#`-heading): agendapunten (één per regel)
-- **Open bestand… / Opslaan als…** mogen buiten de bibliotheekmap
+- **MVP-formaat: alleen `.md`** (UTF-8)
+  - Optioneel regel 1: `# <titel>` — als aanwezig, mag de UI die als
+    weergavenaam gebruiken; ontbreekt die, dan bestandsnaam zonder extensie
+  - Bij **Opslaan** naar een nieuw bestand zonder gekozen naam: afleiden van
+    eerste agendapunt of `agenda-YYYYMMDD.md` (implementatie kiest één
+    eenvoudige default; Opslaan als… blijft beschikbaar)
+  - Overige niet-lege contentregels: agendapunten (MVP: plain lines)
+- **Open bestand… / Opslaan als…** mogen buiten de bibliotheekmap; filter
+  `.md`
+- Recent-lijst: paden + timestamps in
+  `meeting-buddy/config.json` (of klein `recents.json` ernaast)
 
 ### Knoppen
 
@@ -114,17 +148,19 @@ Tray
 
 ### Validatie
 
-- Bibliotheek-opslag: titel + minstens één agendapunt
+- Opslaan: minstens één agendapunt (bestandsnaam via dialoog of default)
 - Meeting starten met lege agenda: **niet toegestaan**; focus op het
   puntenveld
+- Snelle start met lege agenda: zelfde weigering + open agenda-dialoog of
+  foutmelding
 - Annuleren/Sluiten start geen meeting
 
 ### Sessiegeheugen
 
 - Laatst bevestigde/geladen agenda blijft in de orchestrator beschikbaar
-  (huidig `_agenda_text`-gedrag), zodat heropenen de tekst toont
-- Welke bibliotheek-entry “actief” is, mag in-process onthouden worden; hoeft
-  niet persistent tot een latere iteratie
+  (`_agenda_text`)
+- Actief bestandspad + recent-lijst zijn persistent genoeg voor “elke
+  maandag MT-overleg” (recent + snelle start)
 
 ## Eigenschappen-dialoog
 
@@ -141,64 +177,62 @@ Tray
 
 ```text
 Meeting starten…
-    → Agenda-dialoog (bevestiging; evtl. laden/opslaan)
+    → Agenda-dialoog (bevestiging; Recent / laden / opslaan)
     → gebruiker kiest “Meeting starten”
+    → markeer agenda als recent
     → loopback/device uit opgeslagen Eigenschappen
-    → bestaande orchestrator.start + overlay (ongewijzigd gedrag)
+    → orchestrator.start + overlay
+
+Meeting starten (snel)  [Shift-route]
+    → géén agenda-dialoog
+    → gebruik huidige sessie-agenda (laatst geladen/bevestigd)
+    → zo leeg: weigeren en agenda-dialoog openen (of duidelijke melding)
+    → anders: start met Eigenschappen-prefs + markeer recent
 
 Meeting stoppen
     → bestaande stop + overlay dicht
 ```
 
-- Oude gecombineerde prep-dialoog (`show_meeting_prep_dialog` met agenda +
-  loopback) verdwijnt; wordt vervangen door agenda-dialoog +
-  eigenschappen-dialoog.
-- “Meeting starten…” opent **altijd** eerst de agenda-dialoog, ook als er al
-  een agenda in geheugen staat.
+- Oude gecombineerde prep-dialoog verdwijnt; agenda- en
+  eigenschappen-dialoog gescheiden.
+- Latere uitbreiding (buiten MVP): voorkeur “Altijd agenda tonen” die het
+  snelle pad kan dempen of omdraaien.
 
 ## Icoon
 
 - Tray blijft het programmatische microfoonsilhouet (`tray._make_icon`).
 - Tk-dialogen (Modules, Agenda, Eigenschappen, en bij voorkeur overige
   app-dialogen in dezelfde ronde als het praktisch is) zetten `iconphoto` /
-  equivalent naar hetzelfde silhouet (gedeelde helper, geen veer/standaard-Tk
-  als producticoon).
+  equivalent naar hetzelfde silhouet (gedeelde helper).
 
 ## Module-contract / acties
-
-Nieuwe of herziene `ModuleAction`s voor Meeting Buddy:
 
 | id | Label (nl) | Tray | Modules-knop |
 |----|------------|------|--------------|
 | `start_meeting` | Meeting starten… | cascade | ja |
+| `start_meeting_quick` | Meeting starten (snel) | cascade | ja |
 | `stop_meeting` | Meeting stoppen | cascade | ja |
 | `prepare_agenda` | Agenda bewerken | cascade | ja |
 | `properties` | Eigenschappen | cascade | ja |
 
-- `in_tray_root=False` voor alle vier; zichtbaar in de Meeting Buddy-cascade
-  (`in_tray=True` of equivalent na eventuele tray-API-uitbreiding voor
-  genaamde cascademenu’s).
+- `in_tray_root=False` voor alle; zichtbaar in de Meeting Buddy-cascade.
 
 ## Tests (richting)
 
-- Cascade/menu-entry: Start/Stop niet langer als tray-root-acties
-- Modules-dialoog blijft open na apply wanneer gevraagd; actieknoppen voor
-  enabled Meeting Buddy
-- Agenda: opslaan/laden bibliotheek; Opslaan als / Open bestand
-- Start geweigerd bij lege agenda; start na bevestiging gebruikt opgeslagen
-  loopback-prefs
+- Cascade: Start/Stop niet langer tray-root; wel Meeting Buddy-submenu
+- Modules-dialoog blijft open na Opslaan (ongeacht welke module)
+- Agenda: `.md` opslaan/laden; Recent boven Alle; Opslaan als / Open bestand
+- Geen verplicht titelveld; weergavenaam uit bestandsnaam (of `#`-regel)
+- Bevestigde start vs. snelle start; snelle start met lege agenda geweigerd
 - Eigenschappen schrijven prefs zonder agenda te muteren
 
 ## Success criteria
 
-1. Na inschakelen + Opslaan ziet de gebruiker meteen Start / Stop / Agenda /
-   Eigenschappen zonder de tray opnieuw te hoeven “ontdekken”.
+1. Na inschakelen + Opslaan ziet de gebruiker meteen de Meeting Buddy-acties
+   zonder de tray opnieuw te moeten “ontdekken”.
 2. Tray toont één Meeting Buddy-cascade i.p.v. losse Start/Stop in de root.
-3. Agenda kan opgeslagen en later geladen worden zonder meeting te starten.
-4. Loopback/uitvoer zitten alleen onder Eigenschappen.
-5. Dialogen tonen het microfoonicoon.
-
-## Modules-venster: sluitgedrag
-
-Na **Opslaan** blijft het Modules-venster **altijd** open (niet alleen voor
-Meeting Buddy). Sluiten blijft expliciet via de venster-sluitknop / Annuleren.
+3. Agenda kan als `.md` opgeslagen/geladen worden zonder meeting te starten;
+   Recent staat bovenaan.
+4. Terugkerende meetings: snelle start zonder extra bevestigingsscherm.
+5. Loopback/uitvoer zitten alleen onder Eigenschappen.
+6. Dialogen tonen het microfoonicoon.
