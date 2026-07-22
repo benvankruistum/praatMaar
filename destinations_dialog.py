@@ -126,9 +126,7 @@ def _edit_destination(
 
     def _sync_append_row() -> None:
         if file_mode_var.get() == destinations.FILE_MODE_APPEND:
-            append_file_entry.grid(
-                row=append_row, column=1, sticky="ew", padx=(0, 8), pady=(0, 6)
-            )
+            append_file_entry.grid(row=append_row, column=1, sticky="ew", padx=(0, 8), pady=(0, 6))
             append_browse_btn.grid(row=append_row, column=2, padx=(0, 12), pady=(0, 6))
             append_label.grid(row=append_row, column=0, sticky="w", padx=(12, 8), pady=(0, 6))
         else:
@@ -310,9 +308,7 @@ def open_destinations_dialog(
                 if item.get("auto_paste")
                 else i18n.t("destinations.auto_paste.no")
             )
-            active_label = (
-                i18n.t("destinations.active.yes") if item["name"] == active_name else ""
-            )
+            active_label = i18n.t("destinations.active.yes") if item["name"] == active_name else ""
             tree.insert(
                 "",
                 "end",
@@ -483,9 +479,7 @@ def open_destinations_dialog(
     ttk.Button(crud, text=i18n.t("destinations.edit"), command=edit_item).grid(
         row=0, column=1, padx=(0, 6)
     )
-    ttk.Button(crud, text=i18n.t("destinations.delete"), command=delete_item).grid(
-        row=0, column=2
-    )
+    ttk.Button(crud, text=i18n.t("destinations.delete"), command=delete_item).grid(row=0, column=2)
 
     folders = ttk.Frame(win)
     folders.grid(row=4, column=0, sticky="w", pady=(0, 12))

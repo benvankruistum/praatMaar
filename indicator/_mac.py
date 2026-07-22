@@ -298,9 +298,10 @@ class RecordingIndicator:
         from AppKit import NSEvent  # type: ignore[import-not-found]
 
         mouse = NSEvent.mouseLocation()
-        if abs(float(mouse.x) - self._drag["start_x"]) > 1 or abs(
-            float(mouse.y) - self._drag["start_y"]
-        ) > 1:
+        if (
+            abs(float(mouse.x) - self._drag["start_x"]) > 1
+            or abs(float(mouse.y) - self._drag["start_y"]) > 1
+        ):
             self._drag["moved"] = True
         cocoa_x = float(mouse.x) - self._drag["dx"]
         cocoa_y = float(mouse.y) - self._drag["dy"]

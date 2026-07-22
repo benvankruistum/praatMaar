@@ -433,11 +433,23 @@ class RecordingIndicator:
             return
         if kind == "stop":
             # Zelfde plek als × tijdens opname (× is dan verborgen).
-            c.coords(self._control_hit, INDICATOR_WIDTH - 40, 8, INDICATOR_WIDTH - 8, INDICATOR_HEIGHT - 8)
+            c.coords(
+                self._control_hit,
+                INDICATOR_WIDTH - 40,
+                8,
+                INDICATOR_WIDTH - 8,
+                INDICATOR_HEIGHT - 8,
+            )
             c.coords(self._control_btn, INDICATOR_WIDTH - 22, INDICATOR_HEIGHT / 2)
             c.itemconfigure(self._control_btn, text="■", fill=TEXT_COLOR)
         else:
-            c.coords(self._control_hit, INDICATOR_WIDTH - 72, 8, INDICATOR_WIDTH - 44, INDICATOR_HEIGHT - 8)
+            c.coords(
+                self._control_hit,
+                INDICATOR_WIDTH - 72,
+                8,
+                INDICATOR_WIDTH - 44,
+                INDICATOR_HEIGHT - 8,
+            )
             c.coords(self._control_btn, INDICATOR_WIDTH - 58, INDICATOR_HEIGHT / 2)
             c.itemconfigure(self._control_btn, text="●", fill=COLOR_RECORDING)
         c.itemconfigure(self._control_hit, state="normal")

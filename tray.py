@@ -288,9 +288,7 @@ class TrayIcon:
                     continue
                 if kind == "submenu":
                     label, children = entry[1], entry[2]
-                    item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-                        label, None, ""
-                    )
+                    item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(label, None, "")
                     item.setSubmenu_(build(children))
                     menu.addItem_(item)
             return menu

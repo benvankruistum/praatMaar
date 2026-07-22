@@ -56,8 +56,20 @@ def test_sanitize_drops_reserved_and_normalized_duplicates(tmp_path: Path):
         {"name": "notities", "path": str(tmp_path / "n")},
     ]
     assert d.sanitize_destinations(raw) == [
-        {"name": "Project-A", "path": str(tmp_path / "a"), "auto_paste": False, "file_mode": "new", "append_file": ""},
-        {"name": "notities", "path": str(tmp_path / "n"), "auto_paste": False, "file_mode": "new", "append_file": ""},
+        {
+            "name": "Project-A",
+            "path": str(tmp_path / "a"),
+            "auto_paste": False,
+            "file_mode": "new",
+            "append_file": "",
+        },
+        {
+            "name": "notities",
+            "path": str(tmp_path / "n"),
+            "auto_paste": False,
+            "file_mode": "new",
+            "append_file": "",
+        },
     ]
 
 
@@ -67,8 +79,20 @@ def test_sanitize_preserves_auto_paste(tmp_path: Path):
         {"name": "b", "path": str(tmp_path / "b")},
     ]
     assert d.sanitize_destinations(raw) == [
-        {"name": "a", "path": str(tmp_path / "a"), "auto_paste": True, "file_mode": "new", "append_file": ""},
-        {"name": "b", "path": str(tmp_path / "b"), "auto_paste": False, "file_mode": "new", "append_file": ""},
+        {
+            "name": "a",
+            "path": str(tmp_path / "a"),
+            "auto_paste": True,
+            "file_mode": "new",
+            "append_file": "",
+        },
+        {
+            "name": "b",
+            "path": str(tmp_path / "b"),
+            "auto_paste": False,
+            "file_mode": "new",
+            "append_file": "",
+        },
     ]
 
 

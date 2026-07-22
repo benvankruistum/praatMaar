@@ -95,6 +95,7 @@ def preset_indicator_xy(
         y = margin
     return clamp_indicator_xy(x, y, screen_w, screen_h, width=width, height=height)
 
+
 # Max. tekens voor sticky bestemmingsnaam in de pill (voorkomt knippen).
 MAX_DESTINATION_DISPLAY_CHARS = 24
 
