@@ -41,10 +41,11 @@ def test_pick_emphasis_returns_none_without_active_hints() -> None:
 
 
 def test_listening_text_when_capture_active() -> None:
+    import i18n
     from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
     from modules.capabilities.continuous_capture import CaptureStatus
     from modules.capabilities.speech_to_text import TranscriptionStatus
 
-    assert "opname actief" in MeetingBuddyOverlay._listening_text(
-        CaptureStatus.ACTIVE, TranscriptionStatus.ACTIVE
-    ).lower()
+    i18n.set_ui_language("nl")
+    text = MeetingBuddyOverlay._listening_text(CaptureStatus.ACTIVE, TranscriptionStatus.ACTIVE)
+    assert "opname actief" in text.lower()

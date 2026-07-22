@@ -14,7 +14,6 @@ from typing import Any
 import numpy as np
 
 from modules._builtin.audio_capture_mix import mix_mono_chunks, resample_mono, stereo_to_mono
-
 from modules._contract import CycleEvent, ModuleContext
 from modules.capabilities.continuous_capture import (
     CAPABILITY_ID,

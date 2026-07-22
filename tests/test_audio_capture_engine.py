@@ -181,7 +181,9 @@ def test_loopback_and_microphone_are_mixed() -> None:
         None,
     )
 
-    assert chunk_ready.wait(timeout=1) or any(isinstance(event, AudioChunkReceived) for event in events)
+    assert chunk_ready.wait(timeout=1) or any(
+        isinstance(event, AudioChunkReceived) for event in events
+    )
     chunks = [event.chunk for event in events if isinstance(event, AudioChunkReceived)]
     assert chunks
     samples = np.frombuffer(chunks[0].pcm_f32, dtype="<f4")
