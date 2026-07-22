@@ -8,7 +8,7 @@ from typing import Any
 import i18n
 
 from .hints import HintType
-from .state import Hint, HintStatus, MeetingState
+from .state import Hint, HintStatus, MeetingState, Topic, TopicStatus
 
 
 def format_elapsed(seconds: float) -> str:
@@ -18,6 +18,13 @@ def format_elapsed(seconds: float) -> str:
     hours, remainder = divmod(total, 3600)
     minutes, seconds = divmod(remainder, 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def format_topic_line(topic: Topic) -> str:
+    """Compact agenda line: open ``○`` or discussed ``✓`` plus title."""
+
+    mark = "✓" if topic.status == TopicStatus.DISCUSSED else "○"
+    return f"{mark} {topic.title}"
 
 
 def pick_emphasis(hints: Sequence[Hint]) -> str | None:
@@ -43,6 +50,7 @@ class MeetingBuddyOverlay:
         on_dismiss: Callable[[str], None],
         on_confirm: Callable[[str], None],
         on_reconnect: Callable[[], None],
+        on_stop: Callable[[], None] | None = None,
         parent: Any = None,
     ) -> None:
         import tkinter as tk
@@ -54,10 +62,12 @@ class MeetingBuddyOverlay:
         self._on_dismiss = on_dismiss
         self._on_confirm = on_confirm
         self._on_reconnect = on_reconnect
+        self._on_stop = on_stop
         self._hint_cards: dict[str, Any] = {}
         self._empty_label: Any | None = None
         self._visible_hint_ids: tuple[str, ...] = ()
         self._shown_once = False
+        self._topic_labels: list[Any] = []
 
         self.window = tk.Toplevel(parent)
         self.window.withdraw()
@@ -100,6 +110,12 @@ class MeetingBuddyOverlay:
             foreground="#15334A",
             font=("Consolas", 11, "bold"),
         ).pack(side="left", padx=(8, 0))
+        if self._on_stop is not None:
+            ttk.Button(
+                header,
+                text=i18n.t("modules.meeting_buddy.overlay.stop"),
+                command=self._on_stop,
+            ).pack(side="right", padx=(6, 0))
         ttk.Button(
             header,
             text=i18n.t("modules.meeting_buddy.overlay.minimize"),
@@ -116,6 +132,18 @@ class MeetingBuddyOverlay:
             font=("Segoe UI Semibold", 10),
         )
         self._recording_label.pack(fill="x")
+
+        self._agenda = tk.Frame(self.window, background="#F4F7FA")
+        self._agenda.pack(fill="x", pady=(8, 0))
+        self._agenda_heading = tk.Label(
+            self._agenda,
+            text=i18n.t("modules.meeting_buddy.overlay.agenda"),
+            anchor="w",
+            background="#F4F7FA",
+            foreground="#536674",
+            font=("Segoe UI Semibold", 8),
+        )
+        self._agenda_list = tk.Frame(self._agenda, background="#F4F7FA")
 
         self._hints = tk.Frame(self.window, background="#F4F7FA")
         self._hints.pack(fill="x", pady=(9, 7))
@@ -150,6 +178,7 @@ class MeetingBuddyOverlay:
         active.sort(key=lambda hint: (-hint.priority, -hint.confidence, hint.id))
         visible = active[:3]
         emphasis_id = pick_emphasis(visible)
+        self._render_topics(state.topics)
         self._render_hints(visible, emphasis_id)
         self._capture_status = capture_status
         self._loopback_active = loopback_active
@@ -194,6 +223,30 @@ class MeetingBuddyOverlay:
     def close(self) -> None:
         if self.window.winfo_exists():
             self.window.destroy()
+
+    def _render_topics(self, topics: Sequence[Topic]) -> None:
+        for label in self._topic_labels:
+            label.destroy()
+        self._topic_labels.clear()
+        if not topics:
+            self._agenda_heading.pack_forget()
+            self._agenda_list.pack_forget()
+            return
+        if not self._agenda_heading.winfo_manager():
+            self._agenda_heading.pack(fill="x")
+            self._agenda_list.pack(fill="x", pady=(2, 0))
+        for topic in topics:
+            color = "#6C7C87" if topic.status == TopicStatus.DISCUSSED else "#15334A"
+            label = self._tk.Label(
+                self._agenda_list,
+                text=format_topic_line(topic),
+                anchor="w",
+                background="#F4F7FA",
+                foreground=color,
+                font=("Segoe UI", 9),
+            )
+            label.pack(fill="x")
+            self._topic_labels.append(label)
 
     def _render_hints(self, hints: Sequence[Hint], emphasis_id: str | None) -> None:
         hint_ids = tuple(hint.id for hint in hints)

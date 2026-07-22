@@ -33,6 +33,10 @@ class MeetingBuddyModule:
     def orchestrator(self) -> MeetingOrchestrator | None:
         return self._orchestrator
 
+    @property
+    def is_session_active(self) -> bool:
+        return self._orchestrator is not None and self._orchestrator.binding is not None
+
     def display_name_key(self) -> str:
         return "modules.meeting_buddy.name"
 
@@ -249,6 +253,7 @@ class MeetingBuddyModule:
                 on_dismiss=orchestrator.dismiss_hint,
                 on_confirm=orchestrator.confirm_hint,
                 on_reconnect=orchestrator.reconnect_capture,
+                on_stop=self.stop_meeting,
             )
         self._overlay.update(
             state,
