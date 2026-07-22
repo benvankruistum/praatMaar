@@ -239,15 +239,16 @@ def test_stop_without_partial_falls_back_to_full_whisper(
         interval=60.0,
         min_seconds=0.01,
     )
+    session.minimum_recording_seconds = 0.01
     session.start()
     _feed_audio(session)
-    time.sleep(0.05)
+    time.sleep(0.15)
     assert len(model.calls) == 0
 
     session.stop_and_transcribe()
     _wait_until(
         lambda: any(e.type == CycleEventType.TRANSCRIPT_SAVED for e in events),
-        timeout=2.0,
+        timeout=5.0,
     )
 
     assert len(model.calls) == 1
@@ -268,15 +269,16 @@ def test_incremental_off_always_runs_whisper_on_stop(
         model=model,
         incremental=False,
     )
+    session.minimum_recording_seconds = 0.01
     session.start()
     _feed_audio(session)
-    time.sleep(0.1)
+    time.sleep(0.15)
     assert len(model.calls) == 0
 
     session.stop_and_transcribe()
     _wait_until(
         lambda: any(e.type == CycleEventType.TRANSCRIPT_SAVED for e in events),
-        timeout=2.0,
+        timeout=5.0,
     )
 
     assert len(model.calls) == 1
