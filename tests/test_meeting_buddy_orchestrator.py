@@ -353,10 +353,13 @@ def test_module_registers_disabled_with_tray_actions(tmp_path: Path) -> None:
 
     assert module.id == "meeting-buddy"
     assert module.default_enabled() is False
-    assert [action.id for action in module_tray_actions(module)] == []
-    assert [action.id for action in module_tray_root_actions(module)] == [
+    assert [action.id for action in module_tray_root_actions(module)] == []
+    assert [action.id for action in module_tray_actions(module)] == [
         "start_meeting",
+        "start_meeting_quick",
         "stop_meeting",
+        "prepare_agenda",
+        "properties",
     ]
     assert any(item.id == "meeting-buddy" for item in all_builtin_modules())
 
@@ -382,15 +385,15 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
             pass
 
     monkeypatch.setattr(meeting_buddy_module, "MeetingBuddyOverlay", FakeOverlay)
-    from modules._builtin.meeting_buddy.prep_dialog import MeetingPrepResult
+    from modules._builtin.meeting_buddy.agenda_dialog import AgendaDialogResult
 
     monkeypatch.setattr(
         meeting_buddy_module,
-        "show_meeting_prep_dialog",
-        lambda **_kwargs: MeetingPrepResult(
-            agenda_text="",
-            enable_loopback=True,
-            loopback_device=None,
+        "show_agenda_dialog",
+        lambda **_kwargs: AgendaDialogResult(
+            agenda_text="Opening\n",
+            path=None,
+            start=True,
         ),
     )
     monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_args, **_kwargs: None)

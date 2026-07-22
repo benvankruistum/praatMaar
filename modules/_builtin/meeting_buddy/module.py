@@ -9,10 +9,12 @@ from indicator import RecordingState, notify_state, reset_levels
 from modules._contract import CycleEvent, ModuleAction, ModuleContext
 from modules.capabilities.continuous_capture import CaptureStatus
 
+from .agenda_dialog import can_start_meeting, show_agenda_dialog
+from .agenda_store import touch_recent
 from .config import save_meeting_buddy_preferences
 from .orchestrator import MeetingOrchestrator
 from .overlay import MeetingBuddyOverlay
-from .prep_dialog import show_meeting_prep_dialog
+from .properties_dialog import show_properties_dialog
 from .state import MeetingState
 
 
@@ -24,7 +26,8 @@ class MeetingBuddyModule:
         self._ui_dispatch = None
         self._overlay: MeetingBuddyOverlay | None = None
         self._pill_capture_status: CaptureStatus | None = None
-        self._app_dir = None
+        self._app_dir: Path | None = None
+        self._agenda_path: Path | None = None
 
     @property
     def orchestrator(self) -> MeetingOrchestrator | None:
@@ -57,18 +60,31 @@ class MeetingBuddyModule:
                 id="start_meeting",
                 label_key="modules.meeting_buddy.actions.start",
                 handler=self.start_meeting,
-                in_tray_root=True,
+                in_tray=True,
+            ),
+            ModuleAction(
+                id="start_meeting_quick",
+                label_key="modules.meeting_buddy.actions.start_quick",
+                handler=self.start_meeting_quick,
+                in_tray=True,
             ),
             ModuleAction(
                 id="stop_meeting",
                 label_key="modules.meeting_buddy.actions.stop",
                 handler=self.stop_meeting,
-                in_tray_root=True,
+                in_tray=True,
             ),
             ModuleAction(
                 id="prepare_agenda",
                 label_key="modules.meeting_buddy.actions.prepare_agenda",
                 handler=self.prepare_agenda,
+                in_tray=True,
+            ),
+            ModuleAction(
+                id="properties",
+                label_key="modules.meeting_buddy.actions.properties",
+                handler=self.open_properties,
+                in_tray=True,
             ),
         ]
 
@@ -80,6 +96,11 @@ class MeetingBuddyModule:
             raise RuntimeError("Meeting Buddy module is niet gestart")
         self._ui_dispatch(self._start_meeting_flow)
 
+    def start_meeting_quick(self) -> None:
+        if self._ui_dispatch is None:
+            raise RuntimeError("Meeting Buddy module is niet gestart")
+        self._ui_dispatch(self._start_meeting_quick_flow)
+
     def stop_meeting(self) -> None:
         self._require_orchestrator().stop()
         self._release_recording_pill()
@@ -89,7 +110,12 @@ class MeetingBuddyModule:
     def prepare_agenda(self) -> None:
         if self._ui_dispatch is None:
             raise RuntimeError("Meeting Buddy module is niet gestart")
-        self._ui_dispatch(self._show_agenda_dialog)
+        self._ui_dispatch(lambda: self._show_agenda_dialog(mode="edit"))
+
+    def open_properties(self) -> None:
+        if self._ui_dispatch is None:
+            raise RuntimeError("Meeting Buddy module is niet gestart")
+        self._ui_dispatch(self._show_properties_dialog)
 
     def on_app_shutdown(self) -> None:
         if self._orchestrator is not None:
@@ -98,57 +124,95 @@ class MeetingBuddyModule:
         self._close_overlay()
         self._orchestrator = None
         self._ui_dispatch = None
+        self._agenda_path = None
+
+    def _meeting_already_running(self) -> bool:
+        from tkinter import messagebox
+
+        if self._require_orchestrator().binding is None:
+            return False
+        messagebox.showinfo(
+            i18n.t("modules.meeting_buddy.dialog.title"),
+            i18n.t("modules.meeting_buddy.dialog.already_running"),
+        )
+        return True
 
     def _start_meeting_flow(self) -> None:
+        if self._meeting_already_running():
+            return
+        self._show_agenda_dialog(mode="start")
+
+    def _start_meeting_quick_flow(self) -> None:
+        from tkinter import messagebox
+
+        if self._meeting_already_running():
+            return
+        orchestrator = self._require_orchestrator()
+        if not can_start_meeting(orchestrator.agenda_text):
+            messagebox.showinfo(
+                i18n.t("modules.meeting_buddy.dialog.title"),
+                i18n.t("modules.meeting_buddy.dialog.empty_agenda"),
+            )
+            self._show_agenda_dialog(mode="start")
+            return
+        self._begin_meeting()
+
+    def _show_agenda_dialog(self, *, mode: str) -> None:
         from tkinter import messagebox
 
         orchestrator = self._require_orchestrator()
-        if orchestrator.binding is not None:
-            messagebox.showinfo(
-                i18n.t("modules.meeting_buddy.dialog.title"),
-                i18n.t("modules.meeting_buddy.dialog.already_running"),
-            )
+        app_dir = self._require_app_dir()
+        result = show_agenda_dialog(
+            agenda_text=orchestrator.agenda_text,
+            path=self._agenda_path,
+            app_dir=app_dir,
+            mode=mode,  # type: ignore[arg-type]
+        )
+        if result is None:
             return
 
-        prep = show_meeting_prep_dialog(
-            agenda_text=orchestrator.agenda_text,
+        orchestrator.set_agenda(result.agenda_text)
+        self._agenda_path = result.path
+        if result.path is not None:
+            touch_recent(app_dir, result.path)
+
+        if not result.start:
+            return
+        if not can_start_meeting(result.agenda_text):
+            messagebox.showinfo(
+                i18n.t("modules.meeting_buddy.dialog.title"),
+                i18n.t("modules.meeting_buddy.dialog.empty_agenda"),
+            )
+            return
+        self._begin_meeting()
+
+    def _show_properties_dialog(self) -> None:
+        orchestrator = self._require_orchestrator()
+        app_dir = self._require_app_dir()
+        result = show_properties_dialog(
             enable_loopback=orchestrator.loopback_requested,
             loopback_device=orchestrator.loopback_device,
         )
-        if prep is None:
+        if result is None:
             return
-
-        app_dir = self._require_app_dir()
         save_meeting_buddy_preferences(
             app_dir,
-            enable_loopback=prep.enable_loopback,
-            loopback_device=prep.loopback_device,
+            enable_loopback=result.enable_loopback,
+            loopback_device=result.loopback_device,
         )
         orchestrator.reload_config()
-        orchestrator.set_agenda(prep.agenda_text)
+
+    def _begin_meeting(self) -> None:
+        from tkinter import messagebox
+
+        orchestrator = self._require_orchestrator()
+        app_dir = self._require_app_dir()
+        if self._agenda_path is not None:
+            touch_recent(app_dir, self._agenda_path)
         try:
             orchestrator.start()
         except RuntimeError as exc:
             messagebox.showerror(i18n.t("modules.meeting_buddy.dialog.title"), str(exc))
-
-    def _show_agenda_dialog(self) -> None:
-        orchestrator = self._require_orchestrator()
-        prep = show_meeting_prep_dialog(
-            agenda_text=orchestrator.agenda_text,
-            enable_loopback=orchestrator.loopback_requested,
-            loopback_device=orchestrator.loopback_device,
-        )
-        if prep is None:
-            return
-
-        app_dir = self._require_app_dir()
-        save_meeting_buddy_preferences(
-            app_dir,
-            enable_loopback=prep.enable_loopback,
-            loopback_device=prep.loopback_device,
-        )
-        orchestrator.reload_config()
-        orchestrator.set_agenda(prep.agenda_text)
 
     def _on_ui_update(self, state: MeetingState) -> None:
         if self._ui_dispatch is None:
