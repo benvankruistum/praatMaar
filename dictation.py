@@ -1272,6 +1272,7 @@ def main() -> None:
                 lambda new: apply_settings(new, indicator),
                 on_module_action=run_module_action,
                 enabled_module_ids={module.id for module in module_bus.modules},
+                get_enabled_module_ids=lambda: {module.id for module in module_bus.modules},
             )
         )
 

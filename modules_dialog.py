@@ -15,8 +15,60 @@ from typing import Any
 import i18n
 from modules._contract import module_actions
 from modules.registry import all_builtin_modules, modules_config_for_settings
+from ui_icon import apply_window_icon
 
 _open_dialog: tk.Toplevel | None = None
+
+
+def module_shows_action_buttons(
+    module_id: str,
+    *,
+    has_actions: bool,
+    on_module_action: Callable[[str, str], None] | None,
+    enabled_module_ids: set[str],
+) -> bool:
+    """Return whether action buttons should appear for ``module_id``."""
+
+    return has_actions and on_module_action is not None and module_id in enabled_module_ids
+
+
+def _enabled_module_ids_from_settings(settings: dict[str, Any]) -> set[str]:
+    modules = settings.get("modules") or {}
+    return {module_id for module_id, cfg in modules.items() if cfg.get("enabled")}
+
+
+def _rebuild_module_action_rows(
+    *,
+    module_boxes: dict[str, ttk.LabelFrame],
+    module_action_rows: dict[str, ttk.Frame | None],
+    enabled_module_ids: set[str],
+    on_module_action: Callable[[str, str], None] | None,
+) -> None:
+    for module in all_builtin_modules():
+        box = module_boxes[module.id]
+        existing = module_action_rows.get(module.id)
+        if existing is not None:
+            existing.destroy()
+            module_action_rows[module.id] = None
+
+        actions = module_actions(module)
+        if not module_shows_action_buttons(
+            module.id,
+            has_actions=bool(actions),
+            on_module_action=on_module_action,
+            enabled_module_ids=enabled_module_ids,
+        ):
+            continue
+
+        action_row = ttk.Frame(box)
+        action_row.grid(row=2, column=0, sticky="w", pady=(8, 0))
+        for col, action in enumerate(actions):
+            ttk.Button(
+                action_row,
+                text=i18n.t(action.label_key),
+                command=lambda mid=module.id, aid=action.id: on_module_action(mid, aid),
+            ).grid(row=0, column=col, padx=(0, 8) if col == 0 else (0, 8))
+        module_action_rows[module.id] = action_row
 
 
 def open_modules_dialog(
@@ -27,6 +79,7 @@ def open_modules_dialog(
     wait: bool = False,
     on_module_action: Callable[[str, str], None] | None = None,
     enabled_module_ids: set[str] | None = None,
+    get_enabled_module_ids: Callable[[], set[str]] | None = None,
 ) -> None:
     """Opent het modules-overzicht; bij Opslaan roept `on_apply` de bijgewerkte settings aan."""
 
@@ -42,8 +95,9 @@ def open_modules_dialog(
             parent.wait_window(_open_dialog)
         return
 
-    modules_config = modules_config_for_settings(current.get("modules") or {})
-    incremental = bool(current.get("incremental_transcription", False))
+    settings = dict(current)
+    modules_config = modules_config_for_settings(settings.get("modules") or {})
+    incremental = bool(settings.get("incremental_transcription", False))
     running_ids = enabled_module_ids or set()
 
     dlg = tk.Toplevel(parent)
@@ -52,6 +106,7 @@ def open_modules_dialog(
     dlg.title(i18n.t("modules.title"))
     dlg.resizable(False, False)
     dlg.columnconfigure(0, weight=1)
+    apply_window_icon(dlg)
 
     frame = ttk.Frame(dlg, padding=12)
     frame.grid(row=0, column=0, sticky="nsew")
@@ -73,6 +128,8 @@ def open_modules_dialog(
     )
 
     module_vars: dict[str, tk.BooleanVar] = {}
+    module_boxes: dict[str, ttk.LabelFrame] = {}
+    module_action_rows: dict[str, ttk.Frame | None] = {}
     row = 3
     for module in all_builtin_modules():
         enabled = bool(modules_config.get(module.id, {}).get("enabled", module.default_enabled()))
@@ -82,6 +139,7 @@ def open_modules_dialog(
         box = ttk.LabelFrame(frame, text=i18n.t(module.display_name_key()), padding=8)
         box.grid(row=row, column=0, sticky="ew", pady=(0, 8))
         box.columnconfigure(0, weight=1)
+        module_boxes[module.id] = box
 
         ttk.Checkbutton(
             box,
@@ -96,7 +154,13 @@ def open_modules_dialog(
         ).grid(row=1, column=0, sticky="w", pady=(4, 0))
 
         actions = module_actions(module)
-        if actions and on_module_action is not None and module.id in running_ids:
+        module_action_rows[module.id] = None
+        if module_shows_action_buttons(
+            module.id,
+            has_actions=bool(actions),
+            on_module_action=on_module_action,
+            enabled_module_ids=running_ids,
+        ):
             action_row = ttk.Frame(box)
             action_row.grid(row=2, column=0, sticky="w", pady=(8, 0))
             for col, action in enumerate(actions):
@@ -105,21 +169,32 @@ def open_modules_dialog(
                     text=i18n.t(action.label_key),
                     command=lambda mid=module.id, aid=action.id: on_module_action(mid, aid),
                 ).grid(row=0, column=col, padx=(0, 8) if col == 0 else (0, 8))
+            module_action_rows[module.id] = action_row
 
         row += 1
 
+    def _resolve_enabled_module_ids(updated_settings: dict[str, Any]) -> set[str]:
+        if get_enabled_module_ids is not None:
+            return get_enabled_module_ids()
+        return _enabled_module_ids_from_settings(updated_settings)
+
     def save() -> None:
-        updated_modules = {
-            module_id: {"enabled": bool(var.get())} for module_id, var in module_vars.items()
+        nonlocal settings
+        updated_settings = {
+            **settings,
+            "incremental_transcription": bool(incremental_var.get()),
+            "modules": {
+                module_id: {"enabled": bool(var.get())} for module_id, var in module_vars.items()
+            },
         }
-        on_apply(
-            {
-                **current,
-                "incremental_transcription": bool(incremental_var.get()),
-                "modules": updated_modules,
-            }
+        on_apply(updated_settings)
+        settings = updated_settings
+        _rebuild_module_action_rows(
+            module_boxes=module_boxes,
+            module_action_rows=module_action_rows,
+            enabled_module_ids=_resolve_enabled_module_ids(updated_settings),
+            on_module_action=on_module_action,
         )
-        dlg.destroy()
 
     def cancel() -> None:
         dlg.destroy()

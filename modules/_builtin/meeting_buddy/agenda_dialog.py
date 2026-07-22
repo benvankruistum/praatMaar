@@ -60,9 +60,12 @@ def show_agenda_dialog(
     import tkinter as tk
     from tkinter import messagebox, scrolledtext, ttk
 
+    from ui_icon import apply_window_icon
+
     dlg = tk.Toplevel(parent)
     dlg.withdraw()
     dlg.title(i18n.t("modules.meeting_buddy.dialog.title"))
+    apply_window_icon(dlg)
     dlg.resizable(True, True)
     dlg.columnconfigure(0, weight=1)
     dlg.rowconfigure(0, weight=1)

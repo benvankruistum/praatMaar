@@ -203,13 +203,25 @@ def _run_modules_child(in_path: Path, out_path: Path) -> int:
     root.title("praatMaar")
 
     def on_apply(new_settings: dict[str, Any]) -> None:
+        nonlocal current
+        current = new_settings
         out_path.write_text(
             json.dumps(new_settings, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
     try:
-        open_modules_dialog(root, current, on_apply, wait=True)
+        open_modules_dialog(
+            root,
+            current,
+            on_apply,
+            wait=True,
+            get_enabled_module_ids=lambda: {
+                module_id
+                for module_id, cfg in (current.get("modules") or {}).items()
+                if cfg.get("enabled")
+            },
+        )
     finally:
         try:
             root.destroy()

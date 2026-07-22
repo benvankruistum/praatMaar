@@ -59,9 +59,12 @@ def show_properties_dialog(
         loopback_device,
     )
 
+    from ui_icon import apply_window_icon
+
     dlg = tk.Toplevel(parent)
     dlg.withdraw()
     dlg.title(i18n.t("modules.meeting_buddy.dialog.title"))
+    apply_window_icon(dlg)
     dlg.resizable(False, False)
     dlg.columnconfigure(0, weight=1)
 
