@@ -70,7 +70,7 @@
   "model.loaded": "Model geladen. Klaar voor gebruik.",
   "mic.warm": "Microfoon warm — opname start zonder wachttijd.",
   "mic.warm_failed": "Microfoon-warmup mislukt (opname probeert het later opnieuw): {error}",
-  "controls": "Bediening ({mode}): {hotkey} (of Esc) om te starten/stoppen.",
+  "controls": "Bediening ({mode}): {hotkey} om te starten/stoppen.",
   "shutdown": "Programma wordt afgesloten.",
 
   "splash.dep.whisper": "Spraakherkenning laden",
@@ -112,7 +112,7 @@
   "rec.check_restart": "- Of opnieuw dicteren helpt nadat de headset volledig is verbonden (praatMaar herkent hotplug bij de volgende opname).",
   "rec.started": "● OPNAME GESTART",
   "rec.speak": "  Spreek nu.",
-  "rec.stop_hint": "  Stop met de sneltoets of met Esc.",
+  "rec.stop_hint": "  Stop met de sneltoets.",
   "rec.stopped": "■ OPNAME GESTOPT ({seconds} seconden)",
   "rec.too_short": "De opname was te kort en wordt niet verwerkt.",
   "rec.no_audio": "Er is geen audio opgenomen.",

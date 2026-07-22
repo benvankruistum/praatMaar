@@ -67,7 +67,7 @@ Canonical types staan in `modules/_contract.py` (`CycleEventType`).
 | `type` | Wanneer |
 |--------|---------|
 | `cycle.started` | Opname begint |
-| `cycle.cancelled` | Geannuleerd (Shift+Esc) |
+| `cycle.cancelled` | Geannuleerd (bijv. bij afsluiten tijdens opname) |
 | `cycle.transcribing` | Whisper start na stop |
 | `transcript.partial` | Tussentijdse tekst (incrementele modus aan) |
 | `cycle.completed` | Finaal transcript klaar |

@@ -70,7 +70,7 @@
   "model.loaded": "Modell geladen. Bereit.",
   "mic.warm": "Mikrofon bereit — Aufnahme startet ohne Wartezeit.",
   "mic.warm_failed": "Mikrofon-Warmup fehlgeschlagen (Aufnahme versucht es später erneut): {error}",
-  "controls": "Bedienung ({mode}): {hotkey} (oder Esc) zum Starten/Stoppen.",
+  "controls": "Bedienung ({mode}): {hotkey} zum Starten/Stoppen.",
   "shutdown": "Programm wird beendet.",
 
   "splash.dep.whisper": "Spracherkennung laden",
@@ -112,7 +112,7 @@
   "rec.check_restart": "- Ob erneutes Diktieren hilft, nachdem das Headset vollständig verbunden ist (praatMaar aktualisiert Geräte beim nächsten Aufnahmeversuch).",
   "rec.started": "● AUFNAHME GESTARTET",
   "rec.speak": "  Bitte sprechen.",
-  "rec.stop_hint": "  Stoppen mit Tastenkürzel oder Esc.",
+  "rec.stop_hint": "  Stoppen mit dem Tastenkürzel.",
   "rec.stopped": "■ AUFNAHME GESTOPPT ({seconds} Sekunden)",
   "rec.too_short": "Die Aufnahme war zu kurz und wird nicht verarbeitet.",
   "rec.no_audio": "Es wurde kein Audio aufgenommen.",
