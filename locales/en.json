@@ -70,7 +70,7 @@
   "model.loaded": "Model loaded. Ready to use.",
   "mic.warm": "Microphone warm — recording starts without delay.",
   "mic.warm_failed": "Microphone warmup failed (recording will retry later): {error}",
-  "controls": "Controls ({mode}): {hotkey} (or Esc) to start/stop.",
+  "controls": "Controls ({mode}): {hotkey} to start/stop.",
   "shutdown": "Shutting down.",
 
   "splash.dep.whisper": "Loading speech recognition",
@@ -112,7 +112,7 @@
   "rec.check_restart": "- Whether dictating again helps after the headset is fully connected (praatMaar refreshes devices on the next recording).",
   "rec.started": "● RECORDING STARTED",
   "rec.speak": "  Speak now.",
-  "rec.stop_hint": "  Stop with the hotkey or Esc.",
+  "rec.stop_hint": "  Stop with the hotkey.",
   "rec.stopped": "■ RECORDING STOPPED ({seconds} seconds)",
   "rec.too_short": "Recording was too short and will not be processed.",
   "rec.no_audio": "No audio was recorded.",

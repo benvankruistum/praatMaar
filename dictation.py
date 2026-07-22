@@ -107,7 +107,7 @@ DELETE_TEMP_AUDIO = True
 INDICATOR_POSITION = "boven-midden"
 
 # Bedieningsmodus:
-# - "toggle" = indrukken start, nogmaals indrukken (of Esc) stopt en transcribeert
+# - "toggle" = indrukken start, nogmaals indrukken stopt en transcribeert
 # - "ptt"    = push-to-talk: ingedrukt houden neemt op, loslaten stopt
 MODE = "toggle"
 
@@ -464,13 +464,6 @@ def hotkey_is_pressed() -> bool:
 
     with state_lock:
         return bool(HOTKEY_TOKENS) and HOTKEY_TOKENS.issubset(pressed_tokens)
-
-
-def shift_is_pressed() -> bool:
-    """Controleert of Shift momenteel is ingedrukt."""
-
-    with state_lock:
-        return "shift" in pressed_tokens
 
 
 def wait_until_modifier_keys_released(
@@ -835,8 +828,6 @@ def on_press(
     De ingestelde sneltoets:
         - toggle: opname aan of uit
         - push-to-talk: opname start (loslaten stopt, zie on_release)
-    Esc:        stoppen en transcriberen (tijdens opname)
-    Shift+Esc:  opname annuleren
     """
 
     global toggle_latched
@@ -852,20 +843,6 @@ def on_press(
     if token is not None:
         with state_lock:
             pressed_tokens.add(token)
-
-    # Escape afhandelen voordat de sneltoets wordt gecontroleerd.
-    # Token-check (macOS MacKey) én pynput-Key.esc (Windows).
-    is_esc = token == "esc" or (keyboard is not None and key == keyboard.Key.esc)
-    if is_esc:
-        if not session.is_recording:
-            return
-
-        if shift_is_pressed():
-            session.cancel()
-        else:
-            session.stop_and_transcribe()
-
-        return
 
     if not hotkey_is_pressed():
         return

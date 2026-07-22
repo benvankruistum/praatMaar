@@ -90,7 +90,6 @@ gedownload. Daarna: systeemvak-/menubalk-icoon + status-pill.
 | Actie | Sneltoets |
 |--------|-----------|
 | Start/stop dicteren (toggle) | `Ctrl+Shift+Alt+Spatie` (op Mac: Control+Shift+Option+Spatie) |
-| Annuleren tijdens opname | `Esc` |
 | Instellingen / Bestemmingen / Modules / Help / afsluiten | Rechtsklik systeemvak-icoon (Mac: menubalk) |
 
 Sneltoets, modus (toggle of push-to-talk), microfoon en model zijn aanpasbaar
