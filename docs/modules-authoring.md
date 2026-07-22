@@ -269,6 +269,39 @@ Gebruik termen uit [CONTEXT.md](../CONTEXT.md) (`dicteercyclus`, `CycleEvent`,
 - Exceptions laten escaleren uit `on_event`
 - Alleen `locales/nl.json` bijwerken
 
+## Valkuilen (CI, imports, lifecycle)
+
+Lessen uit eerdere PR’s — voorkom dezelfde regressies.
+
+### Registry = volledige dependency-keten
+
+`modules/registry.py` importeert **eager** alle ingebouwde modules. Elke test
+die `modules`, `modules.registry` of `all_builtin_modules()` raakt, laadt daarmee
+de hele importketen (PyYAML, pystray, sounddevice, …).
+
+- Nieuwe **runtime**-dependency → `requirements.txt` **en** `pyproject.toml`
+- CI test-job installeert `requirements.txt`; houd die gelijk aan wat modules
+  bij import nodig hebben
+- Zware imports liever in `on_app_start` of lazy in de implementatie, niet in
+  package-`__init__.py`, tenzij nodig voor registratie
+
+### Ruff vóór push
+
+CI faalt op `ruff format --check`. Draai lokaal `ruff format .` (zie CONTRIBUTING).
+
+### Stop/lifecycle bij streaming-capabilities
+
+Voor capture → STT → consumer (Meeting Buddy, speech-to-text, audio-capture):
+
+- `stop_session` zet `stopping`, wacht op in-flight callbacks, ruimt daarna op
+- Code die **na** een lock of yield hervat (queue trimmen, drain, events
+  publiceren) moet `stopping` **opnieuw** checken vóór side effects
+- Tests voor concurrent stop: synchroniseer expliciet (`threading.Event`, wacht
+  tot `stopping` gezet is). Geen timing-aannames (`sleep(0.05)`) — flaky op CI
+
+Referentie: `IncrementalSpeechToText.stop_session` +
+`tests/test_speech_to_text_backpressure.py`.
+
 ## Verder lezen
 
 - Contract: `modules/_contract.py`
