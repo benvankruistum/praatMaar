@@ -81,7 +81,9 @@ def test_meeting_capture_active_shows_recording_pill(
     capabilities.register(CAP_STT, stt, "speech-to-text", 1)
 
     module = MeetingBuddyModule()
-    module.on_app_start(ModuleContext(app_dir=tmp_path, ui_dispatch=noop_ui_dispatch, capabilities=capabilities))
+    module.on_app_start(
+        ModuleContext(app_dir=tmp_path, ui_dispatch=noop_ui_dispatch, capabilities=capabilities)
+    )
     module._require_orchestrator().start()
 
     assert notified[-1] == (RecordingState.RECORDING, "meeting")
@@ -90,9 +92,7 @@ def test_meeting_capture_active_shows_recording_pill(
     assert notified[-1] == (RecordingState.IDLE, "meeting")
 
 
-def test_meeting_capture_error_shows_error_pill(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_meeting_capture_error_shows_error_pill(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     from indicator import RecordingState
     from modules._builtin.meeting_buddy.module import MeetingBuddyModule
     from modules._contract import ModuleContext, noop_ui_dispatch
@@ -117,7 +117,9 @@ def test_meeting_capture_error_shows_error_pill(
     capabilities.register(CAP_STT, stt, "speech-to-text", 1)
 
     module = MeetingBuddyModule()
-    module.on_app_start(ModuleContext(app_dir=tmp_path, ui_dispatch=noop_ui_dispatch, capabilities=capabilities))
+    module.on_app_start(
+        ModuleContext(app_dir=tmp_path, ui_dispatch=noop_ui_dispatch, capabilities=capabilities)
+    )
     orchestrator = module._require_orchestrator()
     orchestrator.start()
     binding = orchestrator.binding

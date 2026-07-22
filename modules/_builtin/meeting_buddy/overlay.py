@@ -276,9 +276,7 @@ class MeetingBuddyOverlay:
         self._timer.set(format_elapsed(self._elapsed_seconds()))
         if _enum_value(self._capture_status) == "active":
             self._pulse_on = not self._pulse_on
-            self._listening_dot.configure(
-                foreground="#E53935" if self._pulse_on else "#FF8A80"
-            )
+            self._listening_dot.configure(foreground="#E53935" if self._pulse_on else "#FF8A80")
         self.window.after(1000, self._tick)
 
     def _update_recording_banner(

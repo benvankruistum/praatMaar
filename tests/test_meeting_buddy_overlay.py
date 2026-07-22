@@ -47,7 +47,5 @@ def test_listening_text_when_capture_active() -> None:
     from modules.capabilities.speech_to_text import TranscriptionStatus
 
     i18n.set_ui_language("nl")
-    text = MeetingBuddyOverlay._listening_text(
-        CaptureStatus.ACTIVE, TranscriptionStatus.ACTIVE
-    )
+    text = MeetingBuddyOverlay._listening_text(CaptureStatus.ACTIVE, TranscriptionStatus.ACTIVE)
     assert "opname actief" in text.lower()
