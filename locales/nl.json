@@ -219,6 +219,7 @@
   "modules.meeting_buddy.dialog.already_running": "Er loopt al een meeting. Gebruik ‘Meeting stoppen’ om te beëindigen.",
   "modules.meeting_buddy.dialog.cancel": "Annuleren",
   "modules.meeting_buddy.dialog.start": "Meeting starten",
+  "modules.meeting_buddy.dialog.save": "Opslaan",
   "modules.meeting_buddy.dialog.topic_count": "{count} onderwerpen",
   "modules.meeting_buddy.settings.enable_loopback": "Meetinggeluid opnemen (Windows loopback)",
   "modules.meeting_buddy.settings.loopback_output": "Uitvoer voor meetinggeluid",

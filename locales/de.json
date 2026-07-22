@@ -219,6 +219,7 @@
   "modules.meeting_buddy.dialog.already_running": "Eine Besprechung läuft bereits. Beenden Sie sie mit „Besprechung beenden“.",
   "modules.meeting_buddy.dialog.cancel": "Abbrechen",
   "modules.meeting_buddy.dialog.start": "Meeting starten",
+  "modules.meeting_buddy.dialog.save": "Speichern",
   "modules.meeting_buddy.dialog.topic_count": "{count} Punkte",
   "modules.meeting_buddy.settings.enable_loopback": "Meeting-Audio aufnehmen (Windows-Loopback)",
   "modules.meeting_buddy.settings.loopback_output": "Ausgabe für Meeting-Audio",

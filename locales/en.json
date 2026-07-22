@@ -219,6 +219,7 @@
   "modules.meeting_buddy.dialog.already_running": "A meeting is already running. Use ‘Stop meeting’ to end it.",
   "modules.meeting_buddy.dialog.cancel": "Cancel",
   "modules.meeting_buddy.dialog.start": "Start meeting",
+  "modules.meeting_buddy.dialog.save": "Save",
   "modules.meeting_buddy.dialog.topic_count": "{count} topics",
   "modules.meeting_buddy.settings.enable_loopback": "Capture meeting audio (Windows loopback)",
   "modules.meeting_buddy.settings.loopback_output": "Output for meeting audio",
