@@ -62,7 +62,6 @@ def test_meeting_capture_active_shows_recording_pill(
     from modules._builtin.meeting_buddy.module import MeetingBuddyModule
     from modules._contract import ModuleContext, noop_ui_dispatch
     from modules.capabilities.continuous_capture import CAPABILITY_ID as CAP_CAPTURE
-    from modules.capabilities.continuous_capture import CaptureStatus
     from modules.capabilities.registry import CapabilityRegistry
     from modules.capabilities.speech_to_text import CAPABILITY_ID as CAP_STT
     from modules.testing.fake_capture import FakeContinuousCapture
