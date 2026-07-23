@@ -37,8 +37,12 @@ class WinHost:
         pyautogui.hotkey("ctrl", "v")
 
     def app_dir(self) -> Path:
+        # resolve(): onder Microsoft Store-Python is %APPDATA% gevirtualiseerd;
+        # Verkenner (os.startfile) ziet alleen het echte pad (LocalCache/...).
         base = os.environ.get("APPDATA") or os.path.expanduser("~")
-        return Path(base) / APP_NAME
+        path = Path(base) / APP_NAME
+        path.mkdir(parents=True, exist_ok=True)
+        return path.resolve()
 
     def acquire_single_instance(self) -> bool:
         import ctypes

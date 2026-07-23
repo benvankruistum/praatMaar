@@ -1,4 +1,6 @@
+import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import destinations as d
 
@@ -143,3 +145,24 @@ def test_sanitize_append_requires_file(tmp_path: Path):
             "append_file": "",
         }
     ]
+
+
+def test_open_in_explorer_uses_resolved_path(tmp_path: Path, monkeypatch):
+    target = tmp_path / "transcripts"
+    opened: list[Path] = []
+
+    if sys.platform == "win32":
+        monkeypatch.setattr(d.os, "startfile", lambda path: opened.append(Path(path)))
+        d.open_in_explorer(target)
+    else:
+        monkeypatch.setattr(d.sys, "platform", "darwin")
+
+        def fake_run(args, check=False):  # noqa: ARG001
+            opened.append(Path(args[1]))
+            return None
+
+        with patch.object(d.subprocess, "run", fake_run):
+            d.open_in_explorer(target)
+
+    assert target.is_dir()
+    assert opened == [target.resolve()]

@@ -95,6 +95,9 @@ def open_in_explorer(path: Path) -> None:
 
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
+    # resolve(): Store-Python virtualiseert %APPDATA%; Verkenner heeft het
+    # canonieke pad nodig (anders "Location is not available").
+    path = path.resolve()
     if sys.platform == "win32":
         os.startfile(path)  # type: ignore[attr-defined]
     elif sys.platform == "darwin":
