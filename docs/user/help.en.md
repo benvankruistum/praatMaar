@@ -91,9 +91,21 @@ destinations in shared or unsecured folders if you dictate sensitive content.
 
 ## Meeting Buddy and Microsoft Teams (Windows)
 
-**Meeting Buddy** (tray → **Modules**) listens during a meeting and shows compact
-hints. On Windows it can capture **meeting audio** from the default Windows output
-device via loopback, mixed with your microphone.
+Enable **Meeting Buddy** via tray → **Modules**. After **Save**, that window stays
+open and shows buttons for start, quick start, stop, agenda, and properties. The
+tray also has **Meeting Buddy ▸** with the same actions.
+
+- **Start meeting…** opens the agenda (library with Recent + all `.md` agendas).
+- **Start meeting (quick)** starts with the current agenda without a dialog.
+- **Edit agenda** to save/load agendas without starting.
+- **Properties** for meeting audio (Windows loopback) and output device.
+
+During a meeting the transcript grows as a `.md` file under
+`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (final text only). On stop you
+get a notification with the path.
+
+On Windows, Meeting Buddy can also capture **meeting audio** from the chosen
+Windows output device via loopback, mixed with your microphone.
 
 For Teams calls:
 
@@ -103,6 +115,3 @@ For Teams calls:
 
 The Meeting Buddy overlay shows whether meeting audio is active. If loopback is
 unavailable, only your microphone is captured and the overlay warns you.
-
-When you **Start meeting**, the prep dialog lets you choose the Windows **output
-device** for meeting audio (default = Windows default output).

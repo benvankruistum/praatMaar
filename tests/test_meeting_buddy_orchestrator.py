@@ -353,10 +353,13 @@ def test_module_registers_disabled_with_tray_actions(tmp_path: Path) -> None:
 
     assert module.id == "meeting-buddy"
     assert module.default_enabled() is False
-    assert [action.id for action in module_tray_actions(module)] == []
-    assert [action.id for action in module_tray_root_actions(module)] == [
+    assert [action.id for action in module_tray_root_actions(module)] == []
+    assert [action.id for action in module_tray_actions(module)] == [
         "start_meeting",
+        "start_meeting_quick",
         "stop_meeting",
+        "prepare_agenda",
+        "properties",
     ]
     assert any(item.id == "meeting-buddy" for item in all_builtin_modules())
 
@@ -382,15 +385,15 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
             pass
 
     monkeypatch.setattr(meeting_buddy_module, "MeetingBuddyOverlay", FakeOverlay)
-    from modules._builtin.meeting_buddy.prep_dialog import MeetingPrepResult
+    from modules._builtin.meeting_buddy.agenda_dialog import AgendaDialogResult
 
     monkeypatch.setattr(
         meeting_buddy_module,
-        "show_meeting_prep_dialog",
-        lambda **_kwargs: MeetingPrepResult(
-            agenda_text="",
-            enable_loopback=True,
-            loopback_device=None,
+        "show_agenda_dialog",
+        lambda **_kwargs: AgendaDialogResult(
+            agenda_text="Opening\n",
+            path=None,
+            start=True,
         ),
     )
     monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_args, **_kwargs: None)
@@ -417,6 +420,43 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
         "loopback_requested": True,
     }
     assert overlays[0].callbacks["on_reconnect"] == module.orchestrator.reconnect_capture
+
+
+def test_orchestrator_streams_finals_to_transcript_journal(tmp_path: Path) -> None:
+    from modules.capabilities.speech_to_text import TranscriptDelta, TranscriptDeltaReceived
+
+    capabilities, _capture, _stt = _capabilities()
+    orchestrator = MeetingOrchestrator(capabilities=capabilities, app_dir=tmp_path)
+    orchestrator.set_agenda("Opening\nGraph")
+    orchestrator.set_journal_title("MT-overleg")
+    orchestrator.start()
+    assert orchestrator.binding is not None
+    assert orchestrator.last_transcript_path is not None
+    assert orchestrator.last_transcript_path.is_file()
+    assert "Status: lopend" in orchestrator.last_transcript_path.read_text(encoding="utf-8")
+
+    binding = orchestrator.binding
+    orchestrator.on_stt_event(
+        TranscriptDeltaReceived(
+            TranscriptDelta(
+                session_id=binding.transcription_session_id,
+                sequence=1,
+                start_ms=0,
+                end_ms=1000,
+                text="Welkom allemaal",
+                is_final=True,
+                confidence=1.0,
+            )
+        )
+    )
+    text = orchestrator.last_transcript_path.read_text(encoding="utf-8")
+    assert "Welkom allemaal" in text
+
+    path = orchestrator.stop()
+    assert path is not None
+    final = path.read_text(encoding="utf-8")
+    assert "Status: gestopt" in final
+    assert "Welkom allemaal" in final
 
 
 def test_capture_config_uses_app_microphone_and_loopback_settings(

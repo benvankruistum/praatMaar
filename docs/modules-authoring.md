@@ -151,14 +151,16 @@ def actions(self) -> list[ModuleAction]:
             id="start",
             label_key="modules.my_module.start",
             handler=self._start,
-            in_tray=True,  # optioneel: ook onder tray → Modules
+            in_tray=True,  # optioneel: root-cascade onder modulenaam in tray
         ),
     ]
 ```
 
 - Standaard verschijnen acties als **knoppen in de Modules-dialoog** (alleen als
-  de module ingeschakeld is).
-- `in_tray=True` → extra entry onder tray → **Modules** (submenu).
+  de module ingeschakeld is). Na **Opslaan** blijft de dialoog open zodat nieuwe
+  actieknoppen zichtbaar worden.
+- `in_tray=True` → entries in een **root-cascade** genoemd naar de module
+  (bijv. **Meeting Buddy ▸**), niet begraven onder het generieke Modules-item.
 - macOS: dialoog draait in subprocess → actieknoppen alleen via tray
   (`in_tray=True`) tot er IPC komt.
 

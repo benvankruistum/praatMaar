@@ -93,9 +93,22 @@ dicteert.
 
 ## Meeting Buddy en Microsoft Teams (Windows)
 
-**Meeting Buddy** (systeemvak → **Modules**) luistert mee tijdens een vergadering en
-toont compacte hints. Op Windows kan het naast je microfoon ook **meetinggeluid**
-opnemen van het standaard Windows-uitvoerapparaat via loopback.
+**Meeting Buddy** schakel je in via systeemvak → **Modules**. Na **Opslaan** blijft
+dat venster open en zie je meteen knoppen voor starten, snelle start, stoppen,
+agenda en eigenschappen. In het traymenu staat ook **Meeting Buddy ▸** met dezelfde
+acties.
+
+- **Meeting starten…** opent de agenda (bibliotheek met Recent + alle `.md`-agenda’s).
+- **Meeting starten (snel)** start met de huidige agenda zonder dialoog.
+- **Agenda bewerken** om agenda’s op te slaan/laden zonder te starten.
+- **Eigenschappen** voor meetinggeluid (Windows loopback) en uitvoerapparaat.
+
+Tijdens een meeting groeit het transcript als `.md` onder
+`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (alleen definitieve tekst). Bij
+stoppen volgt een melding met het pad.
+
+Op Windows kan Meeting Buddy naast je microfoon ook **meetinggeluid** opnemen van
+het gekozen Windows-uitvoerapparaat via loopback.
 
 Voor Teams-gesprekken:
 
@@ -105,6 +118,3 @@ Voor Teams-gesprekken:
 
 De Meeting Buddy-overlay toont of meetinggeluid actief is. Als loopback niet
 beschikbaar is, neemt praatMaar alleen je microfoon op en zie je een waarschuwing.
-
-Bij **Meeting starten** kun je in de prep-dialoog het Windows-**uitvoerapparaat**
-voor meetinggeluid kiezen (standaard = Windows-standaarduitvoer).

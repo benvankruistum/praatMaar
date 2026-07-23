@@ -878,7 +878,11 @@ def on_press(
 
     else:
         # Toggle: dezelfde sneltoets wisselt tussen starten en stoppen.
-        if is_recording:
+        from modules._builtin.meeting_buddy.stop_routing import stop_active_meeting
+
+        if stop_active_meeting(list(module_bus.modules)):
+            print("\n" + i18n.t("modules.meeting_buddy.overlay.stopped"))
+        elif is_recording:
             print("\n" + i18n.t("dictation.stopped_hotkey"))
             session.stop_and_transcribe()
         elif is_processing:
@@ -1140,6 +1144,11 @@ def main() -> None:
     def pill_control_press() -> None:
         """Start of stop via de pill-knop (zelfde regels als de sneltoets)."""
 
+        from modules._builtin.meeting_buddy.stop_routing import stop_active_meeting
+
+        if stop_active_meeting(list(module_bus.modules)):
+            print("\n" + i18n.t("modules.meeting_buddy.overlay.stopped"))
+            return
         if session.is_recording:
             print("\n" + i18n.t("dictation.stopped_hotkey"))
             session.stop_and_transcribe()
@@ -1272,6 +1281,7 @@ def main() -> None:
                 lambda new: apply_settings(new, indicator),
                 on_module_action=run_module_action,
                 enabled_module_ids={module.id for module in module_bus.modules},
+                get_enabled_module_ids=lambda: {module.id for module in module_bus.modules},
             )
         )
 

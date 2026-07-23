@@ -55,6 +55,54 @@ def test_hints_equivalent_compares_message_and_status() -> None:
     assert _hints_equivalent((hint,), [hint])
 
 
+def test_meeting_start_forces_meeting_pill_mode_via_begin_meeting(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After start, explicitly sync pill so mode is meeting (not leftover ↔ toggle)."""
+
+    from indicator import RecordingState
+    from modules._builtin.meeting_buddy.module import MeetingBuddyModule
+    from modules._contract import ModuleContext, noop_ui_dispatch
+    from modules.capabilities.continuous_capture import CAPABILITY_ID as CAP_CAPTURE
+    from modules.capabilities.continuous_capture import CaptureStatus
+    from modules.capabilities.registry import CapabilityRegistry
+    from modules.capabilities.speech_to_text import CAPABILITY_ID as CAP_STT
+    from modules.testing.fake_capture import FakeContinuousCapture
+    from modules.testing.fake_stt import FakeSpeechToText
+
+    notified: list[tuple[RecordingState, str]] = []
+
+    def _notify(state: RecordingState, mode: str = "toggle") -> None:
+        notified.append((state, mode))
+
+    monkeypatch.setattr("modules._builtin.meeting_buddy.module.notify_state", _notify)
+    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *_a, **_k: None)
+    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_a, **_k: None)
+
+    capabilities = CapabilityRegistry()
+    capture = FakeContinuousCapture()
+    stt = FakeSpeechToText(text_for_chunk=lambda _chunk: "")
+    capabilities.register(CAP_CAPTURE, capture, "audio-capture", 1)
+    capabilities.register(CAP_STT, stt, "speech-to-text", 1)
+
+    module = MeetingBuddyModule()
+    module.on_app_start(
+        ModuleContext(app_dir=tmp_path, ui_dispatch=noop_ui_dispatch, capabilities=capabilities)
+    )
+    module.set_agenda("Opening")
+
+    original_start = module._require_orchestrator().start
+
+    def start_then_mark_active() -> None:
+        original_start()
+        module._require_orchestrator()._sessions._capture_status = CaptureStatus.ACTIVE
+
+    monkeypatch.setattr(module._require_orchestrator(), "start", start_then_mark_active)
+    module._begin_meeting()
+
+    assert notified[-1] == (RecordingState.RECORDING, "meeting")
+
+
 def test_meeting_capture_active_shows_recording_pill(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
