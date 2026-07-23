@@ -258,15 +258,32 @@ class MeetingBuddyModule:
         transcription_status = orchestrator.transcription_status
         loopback_active = orchestrator.loopback_active
         loopback_requested = orchestrator.loopback_requested
-        self._sync_recording_pill(capture_status)
         self._ui_dispatch(
-            lambda: self._show_overlay_update(
+            lambda: self._apply_ui_update(
                 state,
                 capture_status=capture_status,
                 transcription_status=transcription_status,
                 loopback_active=loopback_active,
                 loopback_requested=loopback_requested,
             )
+        )
+
+    def _apply_ui_update(
+        self,
+        state: MeetingState,
+        *,
+        capture_status: object,
+        transcription_status: object,
+        loopback_active: bool | None = None,
+        loopback_requested: bool = True,
+    ) -> None:
+        self._sync_recording_pill(capture_status)
+        self._show_overlay_update(
+            state,
+            capture_status=capture_status,
+            transcription_status=transcription_status,
+            loopback_active=loopback_active,
+            loopback_requested=loopback_requested,
         )
 
     def _show_overlay_update(

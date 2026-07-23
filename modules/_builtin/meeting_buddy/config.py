@@ -32,7 +32,7 @@ class MeetingBuddyConfig:
     min_hint_confidence: float
     max_whisper_queue_duration_s: float
     max_audio_buffer_duration_s: float
-    enable_loopback: bool = True
+    enable_loopback: bool = False
     loopback_device: int | None = None
     mic_mix_gain: float = 0.5
     loopback_mix_gain: float = 0.5

@@ -95,6 +95,7 @@ class CapabilitySessionController:
                 capture=capture,
                 config={
                     "max_whisper_queue_duration_s": self._config.max_whisper_queue_duration_s,
+                    "language": self._speech_language(),
                 },
             )
         except Exception as exc:
@@ -306,6 +307,14 @@ class CapabilitySessionController:
             "mic_mix_gain": self._config.mic_mix_gain,
             "loopback_mix_gain": self._config.loopback_mix_gain,
         }
+
+    @staticmethod
+    def _speech_language() -> str:
+        from config import load_config
+
+        raw = load_config().get("speech_language", "nl")
+        language = str(raw).strip() if raw is not None else "nl"
+        return language or "nl"
 
     def _cleanup_sessions(self, binding: MeetingSessionBinding) -> None:
         if self._on_stt_event is not None:

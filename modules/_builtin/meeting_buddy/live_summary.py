@@ -44,7 +44,7 @@ class LiveSummaryCoordinator:
         self._summary = ""
         self._buffer = ""
         self._chars_since = 0
-        self._last_run_at = 0.0
+        self._last_run_at = time.monotonic()
         self._busy = False
 
     @property
@@ -61,7 +61,8 @@ class LiveSummaryCoordinator:
             self._summary = ""
             self._buffer = ""
             self._chars_since = 0
-            self._last_run_at = 0.0
+            # Startinterval: eerste LLM-run wacht ook op interval_s (niet meteen bij 200 tekens).
+            self._last_run_at = time.monotonic()
             self._busy = False
 
     def on_final_text(self, text: str, *, now: float | None = None) -> None:
@@ -92,15 +93,14 @@ class LiveSummaryCoordinator:
             return False
         if self._chars_since < self._settings.min_new_chars:
             return False
-        if self._last_run_at and (now - self._last_run_at) < self._settings.interval_s:
+        if (now - self._last_run_at) < self._settings.interval_s:
             return False
+        # Alleen registry-lookup hier; geen HTTP. Ready-check gebeurt in de worker.
         provider = self._capabilities.get(
             CAPABILITY_ID,
             minimum_contract_version=CONTRACT_VERSION,
         )
-        if provider is None or not getattr(provider, "is_ready", lambda: False)():
-            return False
-        return True
+        return provider is not None
 
     def _run_analyze(self, transcript: str, previous: str, language: str) -> None:
         provider = self._capabilities.get(
@@ -109,6 +109,11 @@ class LiveSummaryCoordinator:
         )
         try:
             if provider is None:
+                return
+            if hasattr(provider, "is_ready") and not provider.is_ready():
+                # Back-off: voorkom een worker per final-chunk als Ollama nog niet klaar is.
+                with self._lock:
+                    self._last_run_at = time.monotonic()
                 return
             result = provider.analyze(
                 AnalysisRequest(

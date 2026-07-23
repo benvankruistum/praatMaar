@@ -45,17 +45,27 @@ def test_live_summary_requires_time_and_chars() -> None:
         settings=LiveSummarySettings(enabled=True, interval_s=30, min_new_chars=50),
         on_summary=seen.append,
     )
-    coord.on_final_text("kort", now=100.0)
+    # Simuleer start van meeting: timer vanaf t=100.
+    coord.reset()
+    with coord._lock:
+        coord._last_run_at = 100.0
+
+    coord.on_final_text("kort", now=110.0)
     assert provider.calls == []
-    coord.on_final_text("x" * 60, now=100.0)
-    # first run: last_run_at was 0 so interval ok
+    # genoeg tekens, maar interval nog niet voorbij
+    coord.on_final_text("x" * 60, now=120.0)
+    time.sleep(0.1)
+    assert provider.calls == []
+
+    # interval + tekens: eerste run
+    coord.on_final_text("y" * 60, now=135.0)
     deadline = time.time() + 2
     while not seen and time.time() < deadline:
         time.sleep(0.05)
     assert seen == ["Samenvatting X"]
     assert len(provider.calls) == 1
 
-    # too soon + not enough new chars
-    coord.on_final_text("nog wat", now=110.0)
+    # te vroeg + te weinig nieuwe tekens
+    coord.on_final_text("nog wat", now=140.0)
     time.sleep(0.1)
     assert len(provider.calls) == 1

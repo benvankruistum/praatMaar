@@ -14,7 +14,7 @@ def test_defaults_load_without_user_file(tmp_path: Path) -> None:
     assert cfg.max_visible_hints == 3
     assert cfg.topic_match_score == 0.55
     assert cfg.min_hint_confidence == 0.5
-    assert cfg.enable_loopback is True
+    assert cfg.enable_loopback is False
     assert cfg.loopback_device is None
 
 

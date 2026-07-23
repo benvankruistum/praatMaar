@@ -242,18 +242,20 @@ class AudioCaptureEngine:
             return
 
         try:
-            state.loopback_stream = sounddevice.InputStream(
-                samplerate=sample_rate,
-                channels=channels,
-                dtype="float32",
-                callback=lambda data, frames, time_info, status: self._loopback_stream_callback(
+            stream_kwargs: dict[str, Any] = {
+                "samplerate": sample_rate,
+                "channels": channels,
+                "dtype": "float32",
+                "callback": lambda data, frames, time_info, status: self._loopback_stream_callback(
                     state, data, frames, time_info, status
                 ),
-                finished_callback=lambda: self._loopback_stream_finished(state),
-                device=device,
-                extra_settings=extra_settings,
-                latency="low",
-            )
+                "finished_callback": lambda: self._loopback_stream_finished(state),
+                "device": device,
+                "latency": "low",
+            }
+            if extra_settings is not None:
+                stream_kwargs["extra_settings"] = extra_settings
+            state.loopback_stream = sounddevice.InputStream(**stream_kwargs)
             state.loopback_enabled = True
             state.loopback_sample_rate = sample_rate
         except Exception as exc:
@@ -612,26 +614,74 @@ class AudioCaptureEngine:
     def _resolve_loopback(
         sounddevice: Any,
         loopback_device: int | None,
-    ) -> tuple[int, int, int, Any]:
+    ) -> tuple[int, int, int, Any | None]:
+        """Resolve a capture source for system/meeting audio.
+
+        Prefers WASAPI loopback when ``WasapiSettings(loopback=True)`` exists.
+        sounddevice 0.5.x dropped that flag (high-level API not ready yet); then
+        we fall back to a Windows “Stereo Mix” / “What U Hear” input if present.
+        """
+
+        wasapi_extra = AudioCaptureEngine._wasapi_loopback_extra_settings(sounddevice)
+        if wasapi_extra is not None:
+            device = loopback_device
+            if device is None:
+                default = sounddevice.default.device
+                if isinstance(default, (tuple, list)) and len(default) >= 2:
+                    device = default[1]
+                else:
+                    device = sounddevice.default.device[1]
+            if device is None:
+                raise RuntimeError("No default output device for loopback capture.")
+            info = sounddevice.query_devices(device)
+            channels = int(info.get("max_input_channels") or info.get("max_output_channels") or 2)
+            channels = max(1, min(2, channels))
+            sample_rate = int(info.get("default_samplerate") or SAMPLE_RATE)
+            return int(device), sample_rate, channels, wasapi_extra
+
+        mix_device = AudioCaptureEngine._find_stereo_mix_device(sounddevice)
+        if mix_device is not None:
+            info = sounddevice.query_devices(mix_device)
+            channels = max(1, min(2, int(info.get("max_input_channels") or 2)))
+            sample_rate = int(info.get("default_samplerate") or SAMPLE_RATE)
+            return mix_device, sample_rate, channels, None
+
+        raise RuntimeError(
+            "WASAPI loopback is not supported by this sounddevice build, "
+            "and no Stereo Mix input was found."
+        )
+
+    @staticmethod
+    def _wasapi_loopback_extra_settings(sounddevice: Any) -> Any | None:
         wasapi_settings = getattr(sounddevice, "WasapiSettings", None)
         if wasapi_settings is None:
-            raise RuntimeError("WASAPI loopback is not available in this sounddevice build.")
+            return None
+        try:
+            return wasapi_settings(loopback=True)
+        except TypeError:
+            return None
 
-        device = loopback_device
-        if device is None:
-            default = sounddevice.default.device
-            if isinstance(default, (tuple, list)) and len(default) >= 2:
-                device = default[1]
-            else:
-                device = sounddevice.default.device[1]
-        if device is None:
-            raise RuntimeError("No default output device for loopback capture.")
-
-        info = sounddevice.query_devices(device)
-        channels = int(info.get("max_input_channels") or info.get("max_output_channels") or 2)
-        channels = max(1, min(2, channels))
-        sample_rate = int(info.get("default_samplerate") or SAMPLE_RATE)
-        return device, sample_rate, channels, wasapi_settings(loopback=True)
+    @staticmethod
+    def _find_stereo_mix_device(sounddevice: Any) -> int | None:
+        markers = (
+            "stereo mix",
+            "stereomix",
+            "what u hear",
+            "wave out mix",
+            "lussen naar",
+            "stereomischung",
+        )
+        try:
+            devices = list(sounddevice.query_devices())
+        except Exception:
+            return None
+        for index, device in enumerate(devices):
+            if int(device.get("max_input_channels") or 0) <= 0:
+                continue
+            name = str(device.get("name") or "").lower()
+            if any(marker in name for marker in markers):
+                return index
+        return None
 
     @staticmethod
     def _close_streams(state: _CaptureState) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from modules.capabilities.semantic_analysis import (
@@ -16,6 +17,7 @@ from .ollama_client import OllamaClient, OllamaError
 log = logging.getLogger("praatmaar.local_llm.provider")
 
 _LANG_LABEL = {"nl": "Nederlands", "en": "English", "de": "Deutsch"}
+_READY_TTL_S = 30.0
 
 
 class OllamaSemanticAnalysis:
@@ -24,16 +26,27 @@ class OllamaSemanticAnalysis:
     def __init__(self, client: OllamaClient, *, model: str) -> None:
         self._client = client
         self._model = model
+        self._ready_cache: bool | None = None
+        self._ready_checked_at = 0.0
 
     @property
     def model(self) -> str:
         return self._model
 
     def is_ready(self) -> bool:
+        now = time.monotonic()
+        if (
+            self._ready_cache is not None
+            and (now - self._ready_checked_at) < _READY_TTL_S
+        ):
+            return self._ready_cache
         try:
-            return self._client.has_model(self._model)
+            ready = self._client.has_model(self._model)
         except OllamaError:
-            return False
+            ready = False
+        self._ready_cache = ready
+        self._ready_checked_at = now
+        return ready
 
     def analyze(self, request: AnalysisRequest) -> AnalysisResult:
         if request.kind == KIND_RUNNING_SUMMARY:
@@ -60,7 +73,9 @@ class OllamaSemanticAnalysis:
         if previous:
             user_parts.append(f"Vorige samenvatting:\n{previous}")
         user_parts.append(f"Transcript tot nu toe:\n{transcript}")
-        user_parts.append("Werk de lopende samenvatting bij op basis van het transcript.")
+        user_parts.append(
+            "Werk de lopende samenvatting bij op basis van het transcript."
+        )
         content = self._client.chat(
             model=self._model,
             messages=[

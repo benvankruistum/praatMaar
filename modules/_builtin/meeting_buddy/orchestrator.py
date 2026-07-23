@@ -198,42 +198,51 @@ class MeetingOrchestrator:
             return path
 
     def on_stt_event(self, event: object) -> None:
+        final_text: str | None = None
+        notify_state: MeetingState | None = None
+        notify_force = False
         with self._lock:
             binding = self._sessions.binding
             if binding is None or self._state is None:
                 return
 
             if self._sessions.handle_stt_status_event(event):
-                self._ui.notify(self._state, force=True)
-                return
-            if not isinstance(event, TranscriptDeltaReceived):
-                return
+                notify_state = self._state
+                notify_force = True
+            elif isinstance(event, TranscriptDeltaReceived):
+                if event.delta.is_final:
+                    if self._journal is not None:
+                        self._journal.append_final(event.delta.text)
+                    # LLM-scheduling buiten de lock (geen HTTP onder RLock).
+                    final_text = event.delta.text
 
-            if event.delta.is_final:
-                if self._journal is not None:
-                    self._journal.append_final(event.delta.text)
-                self._live_summary.on_final_text(event.delta.text)
+                version_before = self._state.version
+                hints_before = self._state.emitted_hints
+                now_s = self._elapsed_s()
+                self._state = self._transcripts.process_delta(
+                    event,
+                    binding=binding,
+                    state=self._state,
+                    config=self._config,
+                    elapsed_s=now_s,
+                    observer=self._observer,
+                )
+                self._state = self._hints.update_hints(
+                    self._state,
+                    self._config,
+                    now_s,
+                    observer=self._observer,
+                )
+                state_changed = self._state.version != version_before
+                hints_changed = self._state.emitted_hints != hints_before
+                if state_changed or hints_changed:
+                    notify_state = self._state
+                    notify_force = True
 
-            version_before = self._state.version
-            hints_before = self._state.emitted_hints
-            now_s = self._elapsed_s()
-            self._state = self._transcripts.process_delta(
-                event,
-                binding=binding,
-                state=self._state,
-                config=self._config,
-                elapsed_s=now_s,
-                observer=self._observer,
-            )
-            self._state = self._hints.update_hints(
-                self._state,
-                self._config,
-                now_s,
-                observer=self._observer,
-            )
-            state_changed = self._state.version != version_before
-            hints_changed = self._state.emitted_hints != hints_before
-            self._ui.notify(self._state, force=state_changed or hints_changed)
+        if notify_state is not None:
+            self._ui.notify(notify_state, force=notify_force)
+        if final_text is not None:
+            self._live_summary.on_final_text(final_text)
 
     def on_capture_status(self, event: object) -> None:
         with self._lock:
@@ -327,4 +336,6 @@ class MeetingOrchestrator:
                 live_summary=text,
                 version=self._state.version + 1,
             )
-            self._ui.notify(self._state, force=True)
+            state = self._state
+        # UI buiten de lock: anders blokkeert de LLM-thread de STT-callback.
+        self._ui.notify(state, force=True)
