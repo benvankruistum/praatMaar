@@ -105,6 +105,10 @@ Aktionen.
 - **Agenda bearbeiten** zum Speichern/Laden ohne Start.
 - **Eigenschaften** für Meeting-Audio (Windows-Loopback) und Ausgabegerät.
 
+Während eines Meetings wächst das Transkript als `.md` unter
+`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (nur finale Texte). Beim Stoppen
+erscheint eine Meldung mit dem Pfad.
+
 Unter Windows kann Meeting Buddy neben dem Mikrofon optional **Meeting-Audio** vom
 gewählten Windows-Ausgabegerät per Loopback aufnehmen.
 

@@ -100,6 +100,10 @@ tray also has **Meeting Buddy ▸** with the same actions.
 - **Edit agenda** to save/load agendas without starting.
 - **Properties** for meeting audio (Windows loopback) and output device.
 
+During a meeting the transcript grows as a `.md` file under
+`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (final text only). On stop you
+get a notification with the path.
+
 On Windows, Meeting Buddy can also capture **meeting audio** from the chosen
 Windows output device via loopback, mixed with your microphone.
 

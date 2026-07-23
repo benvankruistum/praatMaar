@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from modules._builtin.meeting_buddy.state import Topic, TopicSource, TopicStatus
 from modules._builtin.meeting_buddy import transcript_journal as journal
+from modules._builtin.meeting_buddy.state import Topic, TopicSource, TopicStatus
 
 
 def test_transcripts_dir(tmp_path: Path) -> None:

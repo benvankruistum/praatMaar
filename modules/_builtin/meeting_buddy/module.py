@@ -106,10 +106,20 @@ class MeetingBuddyModule:
         self._ui_dispatch(self._start_meeting_quick_flow)
 
     def stop_meeting(self) -> None:
-        self._require_orchestrator().stop()
+        path = self._require_orchestrator().stop()
         self._release_recording_pill()
         if self._ui_dispatch is not None:
             self._ui_dispatch(self._close_overlay)
+        if path is not None:
+            message = i18n.t("modules.meeting_buddy.transcript.saved", path=str(path))
+            print(message)
+            if self._ui_dispatch is not None:
+                self._ui_dispatch(lambda: self._notify_transcript_saved(message))
+
+    def _notify_transcript_saved(self, message: str) -> None:
+        from tkinter import messagebox
+
+        messagebox.showinfo(i18n.t("modules.meeting_buddy.dialog.title"), message)
 
     def prepare_agenda(self) -> None:
         if self._ui_dispatch is None:
@@ -209,10 +219,15 @@ class MeetingBuddyModule:
     def _begin_meeting(self) -> None:
         from tkinter import messagebox
 
+        from .agenda_store import display_title
+
         orchestrator = self._require_orchestrator()
         app_dir = self._require_app_dir()
         if self._agenda_path is not None:
             touch_recent(app_dir, self._agenda_path)
+            orchestrator.set_journal_title(display_title(self._agenda_path))
+        else:
+            orchestrator.set_journal_title(None)
         try:
             orchestrator.start()
         except RuntimeError as exc:

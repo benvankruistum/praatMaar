@@ -243,6 +243,7 @@
   "modules.meeting_buddy.overlay.stop": "Stop",
   "modules.meeting_buddy.overlay.stopped": "Meeting Buddy stopped.",
   "modules.meeting_buddy.overlay.agenda": "Agenda",
+  "modules.meeting_buddy.transcript.saved": "Meeting transcript saved:\n{path}",
   "modules.meeting_buddy.overlay.capture": "Capture",
   "modules.meeting_buddy.overlay.capture.idle": "off",
   "modules.meeting_buddy.overlay.capture.starting": "starting",

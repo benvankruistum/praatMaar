@@ -1,7 +1,7 @@
 # Design — Meeting Buddy live transcript op schijf
 
 - **Datum:** 2026-07-22
-- **Status:** Review (wacht op goedkeuring)
+- **Status:** Geïmplementeerd (branch `feat/meeting-buddy-tray-ux`)
 - **Branch:** `feat/meeting-buddy-tray-ux` (of opvolger `feat/meeting-buddy-transcript-stream`)
 - **Gerelateerd:**
   [2026-07-19-meeting-buddy-mvp-design.md](2026-07-19-meeting-buddy-mvp-design.md),

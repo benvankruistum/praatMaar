@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import time
+from datetime import datetime
 from pathlib import Path
 from threading import RLock
 
@@ -14,12 +16,16 @@ from .binding import MeetingSessionBinding
 from .config import load_meeting_buddy_config
 from .hint_coordinator import HintCoordinator
 from .observability import EventObserver
+from .prep import parse_agenda
 from .session_controller import CapabilitySessionController
 from .state import MeetingState
+from .transcript_journal import TranscriptJournal
 from .transcript_processor import TranscriptProcessor
 from .ui_presenter import MeetingUiPresenter, UiUpdate
 
 __all__ = ["MeetingOrchestrator", "MeetingSessionBinding", "UiUpdate"]
+
+log = logging.getLogger(__name__)
 
 
 class MeetingOrchestrator:
@@ -46,6 +52,9 @@ class MeetingOrchestrator:
         self._hints = HintCoordinator()
         self._ui = MeetingUiPresenter(on_ui_update)
         self._agenda_text = ""
+        self._journal_title: str | None = None
+        self._journal: TranscriptJournal | None = None
+        self._last_transcript_path: Path | None = None
         self._state: MeetingState | None = None
         self._started_at: float | None = None
 
@@ -63,6 +72,10 @@ class MeetingOrchestrator:
     @property
     def agenda_text(self) -> str:
         return self._agenda_text
+
+    @property
+    def last_transcript_path(self) -> Path | None:
+        return self._last_transcript_path
 
     @property
     def capture_status(self) -> CaptureStatus:
@@ -97,6 +110,9 @@ class MeetingOrchestrator:
     def set_agenda(self, text: str) -> None:
         self._agenda_text = text
 
+    def set_journal_title(self, title: str | None) -> None:
+        self._journal_title = title.strip() if title else None
+
     def start(self, agenda_text: str | None = None) -> None:
         with self._lock:
             if self._sessions.binding is not None:
@@ -114,6 +130,7 @@ class MeetingOrchestrator:
                     on_stt_event=self.on_stt_event,
                 )
                 self._state = self._transcripts.apply_agenda(self._state, self._agenda_text)
+                self._open_transcript_journal()
                 self._sessions.log_started()
                 self._ui.notify(self._state, force=True)
             except CapabilityUnavailableError:
@@ -149,10 +166,10 @@ class MeetingOrchestrator:
                 raise
             self._ui.notify(self._state, force=True)
 
-    def stop(self) -> None:
+    def stop(self) -> Path | None:
         with self._lock:
             if self._sessions.binding is None:
-                return
+                return self._last_transcript_path
             duration_ms = int(self._elapsed_s() * 1000)
             try:
                 self._sessions.stop(duration_ms=duration_ms)
@@ -162,9 +179,12 @@ class MeetingOrchestrator:
                 self._ui.notify(self._state, force=True)
             except Exception:
                 pass
-            finally:
+            path = self._finalize_transcript_journal()
+            try:
                 self._sessions.clear()
+            finally:
                 self._clear_running_state()
+            return path
 
     def on_stt_event(self, event: object) -> None:
         with self._lock:
@@ -177,6 +197,9 @@ class MeetingOrchestrator:
                 return
             if not isinstance(event, TranscriptDeltaReceived):
                 return
+
+            if event.delta.is_final and self._journal is not None:
+                self._journal.append_final(event.delta.text)
 
             version_before = self._state.version
             hints_before = self._state.emitted_hints
@@ -226,12 +249,44 @@ class MeetingOrchestrator:
             )
             self._ui.notify(self._state, force=True)
 
+    def _open_transcript_journal(self) -> None:
+        titles = parse_agenda(self._agenda_text)
+        title = self._journal_title or (titles[0] if titles else "Meeting")
+        try:
+            self._journal = TranscriptJournal.create(
+                self._app_dir,
+                title=title,
+                agenda_titles=titles,
+                started_at=datetime.now(),
+            )
+            self._last_transcript_path = self._journal.path
+            log.info("Meeting transcript opened path=%s", self._journal.path)
+        except OSError as exc:
+            self._journal = None
+            log.warning("Meeting transcript create failed error=%s", exc)
+
+    def _finalize_transcript_journal(self) -> Path | None:
+        if self._journal is None:
+            return self._last_transcript_path
+        topics = self._state.topics if self._state is not None else None
+        try:
+            path = self._journal.finalize(topics=topics, ended_at=datetime.now())
+            self._last_transcript_path = path
+            log.info("Meeting transcript finalized path=%s", path)
+            return path
+        except OSError as exc:
+            log.warning("Meeting transcript finalize failed error=%s", exc)
+            return self._last_transcript_path
+        finally:
+            self._journal = None
+
     def _capture_config(self) -> dict[str, object]:
         return self._sessions.capture_config()
 
     def _clear_running_state(self) -> None:
         self._started_at = None
         self._state = None
+        self._journal = None
 
     def _elapsed_s(self) -> float:
         if self._started_at is None:

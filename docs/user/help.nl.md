@@ -103,6 +103,10 @@ acties.
 - **Agenda bewerken** om agenda’s op te slaan/laden zonder te starten.
 - **Eigenschappen** voor meetinggeluid (Windows loopback) en uitvoerapparaat.
 
+Tijdens een meeting groeit het transcript als `.md` onder
+`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (alleen definitieve tekst). Bij
+stoppen volgt een melding met het pad.
+
 Op Windows kan Meeting Buddy naast je microfoon ook **meetinggeluid** opnemen van
 het gekozen Windows-uitvoerapparaat via loopback.
 
