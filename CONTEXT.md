@@ -104,3 +104,23 @@ herstel-pad in `dictation.py`.
 Append-only JSONL (`events/events.jsonl` onder de app-datamap) — **hybride brug**
 voor externe tools. `ModuleBus` schrijft elk event altijd; in-process modules
 krijgen dezelfde payload. Schema: `schema_version` + `type` + payload-velden.
+
+### local-first inference
+
+AI-inferentie (STT, LLM, semantische analyse) draait op de machine van de
+gebruiker; **geen cloud-inference als default**. LLM hoort in een **eigen
+praatMaar-module** (`local-llm`) die capability `ai.semantic_analysis`
+registreert; andere modules consumeren die. Eerste runtime: Ollama + Qwen2.5
+Instruct. Beslissing: [ADR-0004](docs/adr/0004-local-first-inference.md).
+Design: [local-llm module](docs/superpowers/specs/2026-07-23-local-llm-module-design.md).
+
+### local-llm (module)
+
+Builtin module (default uit) die Ollama/Qwen (v1) beheert: detectie, installatie-
+begeleiding, model pull, en registratie van `ai.semantic_analysis`. Zelfde rang
+als Meeting Buddy in tray **Modules**.
+
+### agenda-review (Meeting Buddy)
+
+Optionele consumer van `ai.semantic_analysis`: per agendapunt samenvatting +
+kwaliteitsoordeel (`covered` / `thin` / `missing`). Geen eigen Ollama-client.
