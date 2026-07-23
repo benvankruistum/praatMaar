@@ -59,7 +59,7 @@ def show_properties_dialog(
     """Show loopback + transcript folder settings; return ``None`` on cancel."""
 
     import tkinter as tk
-    from tkinter import filedialog, ttk
+    from tkinter import ttk
 
     devices = list_loopback_output_devices()
     device_labels, device_value_by_label, _, current_device_label = device_selection_maps(
@@ -115,6 +115,10 @@ def show_properties_dialog(
     folder_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
     def browse_folder() -> None:
+        # Lazy import: top-level filedialog pulls simpledialog, which breaks
+        # when tests monkeypatch tk.Toplevel.
+        from tkinter import filedialog
+
         initial = folder_var.get().strip() or default_transcripts or None
         chosen = filedialog.askdirectory(
             parent=dlg,
