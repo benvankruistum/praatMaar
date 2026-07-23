@@ -77,9 +77,9 @@ Gatekeeper (zie roadmap).
    macOS `.app` handmatig of later via CI (signing later).
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
 2. macOS: eventuele Gatekeeper/signing-check op een schone Mac zonder TCC-dev-host.
-3. Module **Local LLM** (`local-llm`, Ollama + Qwen 2.5) + Meeting Buddy
-   agenda-review als consumer — smoke-test runtime, daarna implementatie volgens
-   [design](superpowers/specs/2026-07-23-local-llm-module-design.md).
+3. Module **Local LLM** + Meeting Buddy **fase 1** (live samenvatting op
+   configureerbare chunks) — daarna coverage per agendapunt en vragenlijst.
+   Zie [design](superpowers/specs/2026-07-23-local-llm-module-design.md).
 
 ## Historische handoffs
 

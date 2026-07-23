@@ -122,5 +122,6 @@ als Meeting Buddy in tray **Modules**.
 
 ### agenda-review (Meeting Buddy)
 
-Optionele consumer van `ai.semantic_analysis`: per agendapunt samenvatting +
-kwaliteitsoordeel (`covered` / `thin` / `missing`). Geen eigen Ollama-client.
+Consumer van `ai.semantic_analysis`, gefaseerd: (1) **live samenvatting** in het
+meeting-overzicht op configureerbare chunks, (2) later dekking per agendapunt,
+(3) later helder geformuleerde vragen van anderen. Geen eigen Ollama-client.
