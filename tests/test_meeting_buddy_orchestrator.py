@@ -144,9 +144,7 @@ def test_start_passes_backpressure_config_to_capture_and_stt(tmp_path: Path) -> 
             "loopback_mix_gain": 0.5,
         }
     ]
-    assert stt.start_configs == [
-        {"max_whisper_queue_duration_s": 4.25, "language": "nl"}
-    ]
+    assert stt.start_configs == [{"max_whisper_queue_duration_s": 4.25, "language": "nl"}]
 
 
 def test_start_failure_cleans_up_started_sessions_and_state(tmp_path: Path) -> None:

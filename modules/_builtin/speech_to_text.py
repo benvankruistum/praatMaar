@@ -307,9 +307,7 @@ class IncrementalSpeechToText:
                 start_ms, end_ms, audio = self._batch_audio(batch)
                 try:
                     if self._use_default_transcribe:
-                        text = self._transcribe_audio(
-                            model, audio, language=state.language
-                        ).strip()
+                        text = self._transcribe_audio(model, audio, language=state.language).strip()
                     else:
                         text = self._transcribe_fn(model, batch[0]).strip()
                 except Exception as exc:
@@ -390,26 +388,18 @@ class IncrementalSpeechToText:
             raise ValueError(f"Onbekende transcriptiesessie: {session_id}")
         return state
 
-    def _run_transcribe(
-        self, model: Any, chunk: AudioChunk, *, language: str | None
-    ) -> str:
+    def _run_transcribe(self, model: Any, chunk: AudioChunk, *, language: str | None) -> str:
         if self._use_default_transcribe:
             return self._transcribe(model, chunk, language=language)
         return self._transcribe_fn(model, chunk)
 
     @staticmethod
-    def _transcribe(
-        model: Any, chunk: AudioChunk, *, language: str | None = None
-    ) -> str:
+    def _transcribe(model: Any, chunk: AudioChunk, *, language: str | None = None) -> str:
         audio = np.frombuffer(chunk.pcm_f32, dtype="<f4")
-        return IncrementalSpeechToText._transcribe_audio(
-            model, audio, language=language
-        )
+        return IncrementalSpeechToText._transcribe_audio(model, audio, language=language)
 
     @staticmethod
-    def _transcribe_audio(
-        model: Any, audio: Any, *, language: str | None = None
-    ) -> str:
+    def _transcribe_audio(model: Any, audio: Any, *, language: str | None = None) -> str:
         # beam_size=1 houdt continuous STT dichter bij realtime (medium@CPU).
         kwargs: dict[str, Any] = {
             "beam_size": 1,
@@ -421,9 +411,7 @@ class IncrementalSpeechToText:
         if language:
             kwargs["language"] = language
         segments, _info = model.transcribe(audio, **kwargs)
-        return " ".join(
-            segment.text.strip() for segment in segments if segment.text.strip()
-        )
+        return " ".join(segment.text.strip() for segment in segments if segment.text.strip())
 
 
 class SpeechToTextModule:
