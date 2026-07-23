@@ -22,7 +22,6 @@ from modules.capabilities.registry import CapabilityRegistry
 from modules.capabilities.semantic_analysis import (
     KIND_AGENDA_REVIEW,
     AnalysisRequest,
-    AnalysisResult,
 )
 from modules.capabilities.speaker_detection import SpeakerRole
 
