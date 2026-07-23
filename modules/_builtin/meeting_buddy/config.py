@@ -109,13 +109,27 @@ def save_meeting_buddy_preferences(
     *,
     enable_loopback: bool,
     loopback_device: int | None,
+    transcripts_directory: str | None = None,
 ) -> None:
-    """Persist loopback UI choices in the module ``config.json``."""
+    """Persist loopback UI choices and optional transcript folder in ``config.json``."""
 
     current = load_module_json(app_dir, "meeting-buddy")
     current["enable_loopback"] = enable_loopback
     current["loopback_device"] = loopback_device
+    if transcripts_directory is None or not str(transcripts_directory).strip():
+        current.pop("transcripts_directory", None)
+    else:
+        current["transcripts_directory"] = str(transcripts_directory).strip()
     save_config(app_dir, "meeting-buddy", current)
+
+
+def load_transcripts_directory(app_dir: Path) -> str | None:
+    """Return configured transcript folder override, or ``None`` for the default."""
+
+    raw = load_module_json(app_dir, "meeting-buddy").get("transcripts_directory")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    return raw.strip()
 
 
 def _read_yaml_mapping(path: Path) -> dict[str, Any]:

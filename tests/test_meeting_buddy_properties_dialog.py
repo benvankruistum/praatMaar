@@ -3,25 +3,40 @@
 from __future__ import annotations
 
 import dataclasses
+from pathlib import Path
 
 import pytest
 
+from modules._builtin.meeting_buddy.config import (
+    load_transcripts_directory,
+    save_meeting_buddy_preferences,
+)
 from modules._builtin.meeting_buddy.properties_dialog import (
     PropertiesResult,
     build_properties_result,
     device_selection_maps,
     show_properties_dialog,
 )
+from modules._builtin.meeting_buddy.transcript_journal import TranscriptJournal, transcripts_dir
 
 
 def test_properties_result_fields() -> None:
-    result = PropertiesResult(enable_loopback=True, loopback_device=3)
+    result = PropertiesResult(
+        enable_loopback=True,
+        loopback_device=3,
+        transcripts_directory=r"C:\Meetings",
+    )
     assert result.enable_loopback is True
     assert result.loopback_device == 3
+    assert result.transcripts_directory == r"C:\Meetings"
 
 
 def test_properties_result_is_frozen() -> None:
-    result = PropertiesResult(enable_loopback=False, loopback_device=None)
+    result = PropertiesResult(
+        enable_loopback=False,
+        loopback_device=None,
+        transcripts_directory=None,
+    )
     with pytest.raises(dataclasses.FrozenInstanceError):
         result.enable_loopback = True  # type: ignore[misc]
 
@@ -52,8 +67,13 @@ def test_build_properties_result_loopback_enabled() -> None:
         selected_device_label="1: Speakers",
         device_value_by_label=mapping,
         fallback_device=None,
+        transcripts_directory="  D:/out  ",
     )
-    assert result == PropertiesResult(enable_loopback=True, loopback_device=1)
+    assert result == PropertiesResult(
+        enable_loopback=True,
+        loopback_device=1,
+        transcripts_directory="D:/out",
+    )
 
 
 def test_build_properties_result_loopback_disabled_clears_device() -> None:
@@ -63,8 +83,42 @@ def test_build_properties_result_loopback_disabled_clears_device() -> None:
         selected_device_label="1: Speakers",
         device_value_by_label=mapping,
         fallback_device=1,
+        transcripts_directory="",
     )
-    assert result == PropertiesResult(enable_loopback=False, loopback_device=None)
+    assert result == PropertiesResult(
+        enable_loopback=False,
+        loopback_device=None,
+        transcripts_directory=None,
+    )
+
+
+def test_save_and_load_transcripts_directory(tmp_path: Path) -> None:
+    save_meeting_buddy_preferences(
+        tmp_path,
+        enable_loopback=True,
+        loopback_device=None,
+        transcripts_directory=str(tmp_path / "custom"),
+    )
+    assert load_transcripts_directory(tmp_path) == str(tmp_path / "custom")
+    save_meeting_buddy_preferences(
+        tmp_path,
+        enable_loopback=True,
+        loopback_device=None,
+        transcripts_directory=None,
+    )
+    assert load_transcripts_directory(tmp_path) is None
+
+
+def test_journal_create_uses_override_directory(tmp_path: Path) -> None:
+    custom = tmp_path / "elsewhere"
+    doc = TranscriptJournal.create(
+        tmp_path,
+        title="Demo",
+        agenda_titles=["A"],
+        directory=transcripts_dir(tmp_path, override=custom),
+    )
+    assert doc.path.parent == custom
+    assert doc.path.is_file()
 
 
 def test_show_properties_dialog_cancel_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:

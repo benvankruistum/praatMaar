@@ -13,13 +13,13 @@ from modules.capabilities.registry import CapabilityRegistry, CapabilityUnavaila
 from modules.capabilities.speech_to_text import TranscriptDeltaReceived, TranscriptionStatus
 
 from .binding import MeetingSessionBinding
-from .config import load_meeting_buddy_config
+from .config import load_meeting_buddy_config, load_transcripts_directory
 from .hint_coordinator import HintCoordinator
 from .observability import EventObserver
 from .prep import parse_agenda
 from .session_controller import CapabilitySessionController
 from .state import MeetingState
-from .transcript_journal import TranscriptJournal
+from .transcript_journal import TranscriptJournal, transcripts_dir
 from .transcript_processor import TranscriptProcessor
 from .ui_presenter import MeetingUiPresenter, UiUpdate
 
@@ -252,12 +252,15 @@ class MeetingOrchestrator:
     def _open_transcript_journal(self) -> None:
         titles = parse_agenda(self._agenda_text)
         title = self._journal_title or (titles[0] if titles else "Meeting")
+        override = load_transcripts_directory(self._app_dir)
+        directory = transcripts_dir(self._app_dir, override=override)
         try:
             self._journal = TranscriptJournal.create(
                 self._app_dir,
                 title=title,
                 agenda_titles=titles,
                 started_at=datetime.now(),
+                directory=directory,
             )
             self._last_transcript_path = self._journal.path
             log.info("Meeting transcript opened path=%s", self._journal.path)

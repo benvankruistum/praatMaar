@@ -11,7 +11,7 @@ from modules.capabilities.continuous_capture import CaptureStatus
 
 from .agenda_dialog import can_start_meeting, show_agenda_dialog
 from .agenda_store import touch_recent
-from .config import save_meeting_buddy_preferences
+from .config import load_transcripts_directory, save_meeting_buddy_preferences
 from .orchestrator import MeetingOrchestrator
 from .overlay import MeetingBuddyOverlay
 from .properties_dialog import show_properties_dialog
@@ -206,6 +206,8 @@ class MeetingBuddyModule:
         result = show_properties_dialog(
             enable_loopback=orchestrator.loopback_requested,
             loopback_device=orchestrator.loopback_device,
+            transcripts_directory=load_transcripts_directory(app_dir),
+            app_dir=app_dir,
         )
         if result is None:
             return
@@ -213,6 +215,7 @@ class MeetingBuddyModule:
             app_dir,
             enable_loopback=result.enable_loopback,
             loopback_device=result.loopback_device,
+            transcripts_directory=result.transcripts_directory,
         )
         orchestrator.reload_config()
 
@@ -232,6 +235,9 @@ class MeetingBuddyModule:
             orchestrator.start()
         except RuntimeError as exc:
             messagebox.showerror(i18n.t("modules.meeting_buddy.dialog.title"), str(exc))
+            return
+        # Forceer meeting-modus op de pill (capture-events vóór subscribe gaan verloren).
+        self._sync_recording_pill(orchestrator.capture_status)
 
     def _on_ui_update(self, state: MeetingState) -> None:
         if self._ui_dispatch is None:
@@ -286,21 +292,25 @@ class MeetingBuddyModule:
     def _sync_recording_pill(self, capture_status: CaptureStatus) -> None:
         """Toon de opname-pill zolang Meeting Buddy microfooncapture actief is."""
 
-        if capture_status == self._pill_capture_status:
-            return
-
-        previous = self._pill_capture_status
-        self._pill_capture_status = capture_status
         recording_states = {
             CaptureStatus.ACTIVE,
             CaptureStatus.STARTING,
             CaptureStatus.RECONNECTING,
         }
+        previous = self._pill_capture_status
         if capture_status in recording_states:
+            # Altijd opnieuw 'meeting' zetten: anders blijft ↔ toggle zichtbaar als
+            # een eerdere dicteer-notify of gemiste status-event de modus overschrijft.
             if previous not in recording_states:
                 reset_levels()
+            self._pill_capture_status = capture_status
             notify_state(RecordingState.RECORDING, "meeting")
             return
+
+        if capture_status == previous:
+            return
+
+        self._pill_capture_status = capture_status
         if capture_status == CaptureStatus.ERROR:
             notify_state(RecordingState.ERROR, "meeting")
             return

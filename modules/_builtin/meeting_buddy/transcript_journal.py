@@ -20,7 +20,13 @@ _TRANSCRIPT_MARKER = "## Transcript\n"
 _AGENDA_MARKER = "## Agenda\n"
 
 
-def transcripts_dir(app_dir: Path) -> Path:
+def transcripts_dir(app_dir: Path, *, override: str | Path | None = None) -> Path:
+    """Default or user-configured directory for meeting transcript ``.md`` files."""
+
+    if override is not None:
+        text = str(override).strip()
+        if text:
+            return Path(text).expanduser()
     return module_dir(app_dir, _MODULE_ID) / "transcripts"
 
 
@@ -84,13 +90,14 @@ class TranscriptJournal:
         title: str,
         agenda_titles: Sequence[str],
         started_at: datetime | None = None,
+        directory: Path | None = None,
     ) -> TranscriptJournal:
         started = started_at or datetime.now()
         display = title.strip() or "Meeting"
-        directory = transcripts_dir(app_dir)
-        directory.mkdir(parents=True, exist_ok=True)
+        target_dir = directory if directory is not None else transcripts_dir(app_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{_format_filename_stamp(started)}_{safe_stem(display)}.md"
-        path = directory / filename
+        path = target_dir / filename
         path.write_text(
             _build_initial_markdown(
                 title=display,
