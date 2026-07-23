@@ -90,6 +90,7 @@ class MeetingState:
     questions: tuple[Question, ...]
     action_items: tuple[ActionItem, ...]
     emitted_hints: tuple[Hint, ...]
+    live_summary: str = ""
 
     @classmethod
     def empty(cls, meeting_session_id: str) -> MeetingState:
@@ -103,4 +104,5 @@ class MeetingState:
             questions=(),
             action_items=(),
             emitted_hints=(),
+            live_summary="",
         )

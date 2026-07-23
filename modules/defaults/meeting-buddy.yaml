@@ -22,8 +22,10 @@ min_hint_confidence: 0.5
 max_whisper_queue_duration_s: 10
 max_audio_buffer_duration_s: 30
 
-# Meeting-geluid via WASAPI loopback (standaard speakers). null = Windows-default output.
-enable_loopback: true
+# Meeting-geluid via WASAPI loopback — standaard uit: sounddevice 0.5.x
+# ondersteunt de loopback-flag nog niet (high-level API). Zet aan in
+# Eigenschappen als Stereo Mix beschikbaar is, of wanneer WASAPI loopback werkt.
+enable_loopback: false
 loopback_device: null
 
 # Mix-gewichten (0..1) wanneer mic + loopback actief zijn. Standaard 50/50.

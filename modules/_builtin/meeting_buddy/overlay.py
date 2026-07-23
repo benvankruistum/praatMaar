@@ -145,6 +145,27 @@ class MeetingBuddyOverlay:
         )
         self._agenda_list = tk.Frame(self._agenda, background="#F4F7FA")
 
+        self._summary_frame = tk.Frame(self.window, background="#F4F7FA")
+        self._summary_heading = tk.Label(
+            self._summary_frame,
+            text=i18n.t("modules.meeting_buddy.overlay.summary"),
+            anchor="w",
+            background="#F4F7FA",
+            foreground="#536674",
+            font=("Segoe UI Semibold", 8),
+        )
+        self._summary_var = tk.StringVar(value="")
+        self._summary_body = tk.Label(
+            self._summary_frame,
+            textvariable=self._summary_var,
+            anchor="nw",
+            justify="left",
+            wraplength=320,
+            background="#F4F7FA",
+            foreground="#15334A",
+            font=("Segoe UI", 9),
+        )
+
         self._hints = tk.Frame(self.window, background="#F4F7FA")
         self._hints.pack(fill="x", pady=(9, 7))
         tk.Label(
@@ -179,6 +200,7 @@ class MeetingBuddyOverlay:
         visible = active[:3]
         emphasis_id = pick_emphasis(visible)
         self._render_topics(state.topics)
+        self._render_summary(state.live_summary)
         self._render_hints(visible, emphasis_id)
         self._capture_status = capture_status
         self._loopback_active = loopback_active
@@ -247,6 +269,18 @@ class MeetingBuddyOverlay:
             )
             label.pack(fill="x")
             self._topic_labels.append(label)
+
+    def _render_summary(self, summary: str) -> None:
+        text = (summary or "").strip()
+        if not text:
+            self._summary_frame.pack_forget()
+            return
+        self._summary_var.set(text)
+        if not self._summary_frame.winfo_manager():
+            # Place between agenda and hints when possible.
+            self._summary_frame.pack(fill="x", pady=(8, 0), before=self._hints)
+            self._summary_heading.pack(fill="x")
+            self._summary_body.pack(fill="x", pady=(2, 0))
 
     def _render_hints(self, hints: Sequence[Hint], emphasis_id: str | None) -> None:
         hint_ids = tuple(hint.id for hint in hints)

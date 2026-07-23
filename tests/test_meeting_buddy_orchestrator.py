@@ -57,6 +57,8 @@ def test_loopback_unavailable_emits_observability_event(tmp_path: Path) -> None:
         app_dir=tmp_path,
         observer=observer,
     )
+    orchestrator._config = orchestrator._config.replace(enable_loopback=True)
+    orchestrator._sessions.update_config(orchestrator._config)
     orchestrator.start()
     assert orchestrator.binding is not None
     binding = orchestrator.binding
@@ -86,7 +88,7 @@ def test_capture_sources_logged_at_meeting_start(tmp_path: Path) -> None:
 
     assert "capture_sources" in observer.names
     sources = next(event for event in observer.events if event["name"] == "capture_sources")
-    assert sources["loopback_requested"] is True
+    assert sources["loopback_requested"] is False
 
 
 def test_start_wires_capture_and_stt_and_updates_state(tmp_path: Path) -> None:
@@ -136,13 +138,15 @@ def test_start_passes_backpressure_config_to_capture_and_stt(tmp_path: Path) -> 
         {
             "max_audio_buffer_duration_s": 12.5,
             "device": None,
-            "enable_loopback": True,
+            "enable_loopback": False,
             "loopback_device": None,
             "mic_mix_gain": 0.5,
             "loopback_mix_gain": 0.5,
         }
     ]
-    assert stt.start_configs == [{"max_whisper_queue_duration_s": 4.25}]
+    assert stt.start_configs == [
+        {"max_whisper_queue_duration_s": 4.25, "language": "nl"}
+    ]
 
 
 def test_start_failure_cleans_up_started_sessions_and_state(tmp_path: Path) -> None:
@@ -417,7 +421,7 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
         "capture_status": CaptureStatus.ACTIVE,
         "transcription_status": TranscriptionStatus.ACTIVE,
         "loopback_active": None,
-        "loopback_requested": True,
+        "loopback_requested": False,
     }
     assert overlays[0].callbacks["on_reconnect"] == module.orchestrator.reconnect_capture
 
@@ -470,7 +474,7 @@ def test_capture_config_uses_app_microphone_and_loopback_settings(
     config = orchestrator._capture_config()
 
     assert config["device"] == 5
-    assert config["enable_loopback"] is True
+    assert config["enable_loopback"] is False
     assert config["loopback_device"] is None
     assert config["mic_mix_gain"] == 0.5
     assert config["loopback_mix_gain"] == 0.5

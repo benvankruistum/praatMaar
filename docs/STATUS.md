@@ -32,8 +32,10 @@ Laatst bijgewerkt: 2026-07-23.
   optioneel meetinggeluid via WASAPI-loopback mixen (experimenteel)
 - `speech-to-text`: incrementele lokale transcriptie via het gedeelde
   Faster-Whisper-model
-- `meeting-buddy`: meetingstate, heuristische hints en compacte overlay; staat
-  standaard uit en kan via tray **Modules** worden ingeschakeld
+- `meeting-buddy`: meetingstate, heuristische hints, transcript-stream en
+  optionele live-samenvatting via capability `ai.semantic_analysis`
+- `local-llm`: Ollama + Qwen 2.5 als provider van `ai.semantic_analysis`
+  (standaard uit; setup via Modules)
 
 Deze Meeting Buddy-MVP is experimenteel. Op Windows neemt Meeting Buddy naast
 de microfoon optioneel meetinggeluid op via WASAPI-loopback (standaard aan).

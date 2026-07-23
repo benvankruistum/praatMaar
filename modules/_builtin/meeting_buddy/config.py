@@ -32,7 +32,7 @@ class MeetingBuddyConfig:
     min_hint_confidence: float
     max_whisper_queue_duration_s: float
     max_audio_buffer_duration_s: float
-    enable_loopback: bool = True
+    enable_loopback: bool = False
     loopback_device: int | None = None
     mic_mix_gain: float = 0.5
     loopback_mix_gain: float = 0.5
@@ -110,6 +110,9 @@ def save_meeting_buddy_preferences(
     enable_loopback: bool,
     loopback_device: int | None,
     transcripts_directory: str | None = None,
+    live_summary_enabled: bool | None = None,
+    llm_chunk_interval_s: float | None = None,
+    llm_chunk_min_new_chars: int | None = None,
 ) -> None:
     """Persist loopback UI choices and optional transcript folder in ``config.json``."""
 
@@ -120,6 +123,12 @@ def save_meeting_buddy_preferences(
         current.pop("transcripts_directory", None)
     else:
         current["transcripts_directory"] = str(transcripts_directory).strip()
+    if live_summary_enabled is not None:
+        current["live_summary_enabled"] = bool(live_summary_enabled)
+    if llm_chunk_interval_s is not None:
+        current["llm_chunk_interval_s"] = float(llm_chunk_interval_s)
+    if llm_chunk_min_new_chars is not None:
+        current["llm_chunk_min_new_chars"] = int(llm_chunk_min_new_chars)
     save_config(app_dir, "meeting-buddy", current)
 
 
@@ -130,6 +139,27 @@ def load_transcripts_directory(app_dir: Path) -> str | None:
     if not isinstance(raw, str) or not raw.strip():
         return None
     return raw.strip()
+
+
+def load_live_summary_prefs(app_dir: Path) -> dict[str, Any]:
+    """Live-summary prefs from module ``config.json`` (defaults if missing)."""
+
+    data = load_module_json(app_dir, "meeting-buddy")
+    interval = data.get("llm_chunk_interval_s", 60)
+    min_chars = data.get("llm_chunk_min_new_chars", 200)
+    try:
+        interval_f = float(interval)
+    except (TypeError, ValueError):
+        interval_f = 60.0
+    try:
+        min_chars_i = int(min_chars)
+    except (TypeError, ValueError):
+        min_chars_i = 200
+    return {
+        "live_summary_enabled": bool(data.get("live_summary_enabled", False)),
+        "llm_chunk_interval_s": max(15.0, interval_f),
+        "llm_chunk_min_new_chars": max(50, min_chars_i),
+    }
 
 
 def _read_yaml_mapping(path: Path) -> dict[str, Any]:

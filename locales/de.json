@@ -10,7 +10,6 @@
   "tray.tooltip.cancelled": "praatMaar — abgebrochen",
   "tray.tooltip.error": "praatMaar — Fehler",
   "tray.tooltip.attention_mic": "praatMaar — Aktion erforderlich: Mikrofon in Einstellungen prüfen",
-
   "state.recording": "Aufnahme",
   "state.transcribing": "Transkription",
   "state.transcribing_progress": "Transkription {percent}%",
@@ -19,7 +18,6 @@
   "state.tag.toggle": "toggle",
   "state.tag.ptt": "ptt",
   "state.tag.meeting": "meeting",
-
   "settings.title": "praatMaar — Einstellungen",
   "settings.tab.general": "Allgemein",
   "settings.tab.language": "Sprache",
@@ -49,7 +47,6 @@
   "settings.save": "Speichern",
   "settings.saved": "Einstellungen gespeichert.",
   "settings.model_restart_note": "Hinweis: Das neue Modell wirkt erst nach Neustart.",
-
   "recovery.section": "Wiederherstellungs-Audio",
   "recovery.empty": "Keine Wiederherstellungsaufnahmen.",
   "recovery.open_folder": "Ordner öffnen",
@@ -64,9 +61,7 @@
   "recovery.busy": "Es läuft bereits eine Aufnahme oder Transkription. Bitte später erneut versuchen.",
   "recovery.invalid_file": "Keine gültige Wiederherstellungs-Audiodatei.",
   "recovery.unavailable": "Erneutes Transkribieren ist hier nicht verfügbar.",
-
   "key.space": "Leertaste",
-
   "ready": "Bereit. Drücken Sie {hotkey}, um eine Aufnahme zu starten.",
   "log.path": "Protokolldatei: {path}",
   "already_running": "praatMaar läuft bereits; dieser zweite Start wurde beendet.",
@@ -77,7 +72,6 @@
   "mic.warm_failed": "Mikrofon-Warmup fehlgeschlagen (Aufnahme versucht es später erneut): {error}",
   "controls": "Bedienung ({mode}): {hotkey} zum Starten/Stoppen.",
   "shutdown": "Programm wird beendet.",
-
   "splash.dep.whisper": "Spracherkennung laden",
   "splash.dep.audio": "Audioverarbeitung laden",
   "splash.dep.mic": "Mikrofon laden",
@@ -89,13 +83,11 @@
   "splash.starting": "Wird gestartet…",
   "splash.close": "Schließen",
   "splash.model_failed": "Das Modell konnte nicht geladen werden.",
-
   "dictation.busy": "Eine vorherige Aufnahme wird noch verarbeitet.",
   "dictation.ptt_started": "Diktat (Push-to-talk) gestartet.",
   "dictation.stopped_hotkey": "Diktat über Tastenkürzel gestoppt.",
   "dictation.started_hotkey": "Diktat über Tastenkürzel gestartet.",
   "dictation.ptt_stopped": "Diktat (Push-to-talk) gestoppt.",
-
   "rec.busy": "Eine vorherige Aufnahme wird noch verarbeitet.",
   "rec.start_failed": "Mikrofonaufnahme konnte nicht gestartet werden.",
   "rec.start_failed_title": "Mikrofon nicht verfügbar",
@@ -146,10 +138,8 @@
   "rec.mic_close_warn": "Warnung beim Schließen des Mikrofons: {error}",
   "rec.device_invalid": "Mikrofon {device} ist ungültig ({error}); Fallback auf Windows-Standard.",
   "rec.device_no_input": "Gerät {device} ({name}) hat keinen Mikrofoneingang; Fallback auf Windows-Standard.",
-
   "destination.switched": "Ziel gewechselt zu: {name}.",
   "destination.reset": "Ziel auf Standard zurückgesetzt.",
-
   "destinations.title": "praatMaar — Ziele",
   "destinations.intro": "Mit Zielen wählen Sie per Sprache, wohin die nächste Aufnahme geht. Sagen Sie den Zielnamen in einer kurzen Aufnahme, um es zu aktivieren; sagen Sie Standard, default oder standaard, um zum Standardordner zurückzukehren.",
   "destinations.empty": "Noch keine eigenen Ziele. Die Zeile Standard ist immer verfügbar; klicken Sie auf Hinzufügen für ein eigenes Ziel.",
@@ -190,7 +180,6 @@
   "destinations.error.name_collision": "Dieser Name kollidiert mit \"{existing}\" (gleicher Sprachbefehl).",
   "destinations.error.select_first": "Wählen Sie zuerst ein Ziel in der Liste.",
   "destinations.error.default_readonly": "Die Standardzeile kann nicht bearbeitet oder gelöscht werden. Klicken Sie auf Aktiv, um dorthin zurückzukehren.",
-
   "modules.title": "praatMaar — Module",
   "modules.intro": "Erweiterungen ein- oder ausschalten. Alle Diktierzyklus-Ereignisse werden auch ins Event-Journal (events/events.jsonl) geschrieben — für externe Tools.",
   "modules.incremental": "Inkrementelle Transkription (während Aufnahme; letzter Partial = Endtext)",
@@ -280,8 +269,24 @@
   "modules.meeting_buddy.overlay.recording.active_delayed": "● Aufnahme aktiv — Transkription verzögert",
   "modules.meeting_buddy.overlay.recording.starting": "Mikrofon wird gestartet…",
   "modules.meeting_buddy.overlay.recording.error": "Keine Mikrofonaufnahme — Gerät prüfen",
-
   "help.title": "praatMaar — Hilfe",
   "help.close": "Schließen",
-  "help.fallback": "Hilfe ist vorübergehend nicht verfügbar. Öffnen Sie Ziele über das Infobereich-Symbol oder lesen Sie docs/user/ in der Dokumentation."
+  "help.fallback": "Hilfe ist vorübergehend nicht verfügbar. Öffnen Sie Ziele über das Infobereich-Symbol oder lesen Sie docs/user/ in der Dokumentation.",
+  "modules.local_llm.name": "Local LLM",
+  "modules.local_llm.description": "Lokale KI über Ollama (Qwen 2.5). Andere Module können dies für Zusammenfassungen und Analysen nutzen.",
+  "modules.local_llm.actions.check_status": "Status prüfen",
+  "modules.local_llm.actions.open_install": "Ollama installieren…",
+  "modules.local_llm.actions.pull_model": "Qwen 2.5 herunterladen",
+  "modules.local_llm.dialog.title": "Local LLM",
+  "modules.local_llm.status.ollama_offline": "Ollama ist nicht erreichbar. Installieren und starten Sie Ollama, oder prüfen Sie, ob es läuft.",
+  "modules.local_llm.status.ollama_missing": "Ollama-Programm nicht gefunden. Nutzen Sie zuerst „Ollama installieren…“.",
+  "modules.local_llm.status.model_missing": "Modell {model} fehlt. Verfügbar: {available}. Nutzen Sie „Qwen 2.5 herunterladen“.",
+  "modules.local_llm.status.ready": "Bereit. Modell {model} steht anderen Modulen zur Verfügung.",
+  "modules.local_llm.status.pull_started": "Download von {model} in einem separaten Ollama-Fenster gestartet. Prüfen Sie danach erneut den Status.",
+  "modules.local_llm.status.pull_failed": "Download starten fehlgeschlagen: {error}",
+  "modules.meeting_buddy.overlay.summary": "Zusammenfassung",
+  "modules.meeting_buddy.settings.live_summary_enabled": "Live-Zusammenfassung (Local LLM)",
+  "modules.meeting_buddy.settings.live_summary_hint": "Erfordert das Modul Local LLM mit bereitem Modell. Updates basierend auf Zeit und neuem Transkripttext.",
+  "modules.meeting_buddy.settings.llm_chunk_interval_s": "Min. Sekunden zwischen LLM-Aufrufen",
+  "modules.meeting_buddy.settings.llm_chunk_min_new_chars": "Min. neue Zeichen"
 }

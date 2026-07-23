@@ -17,6 +17,15 @@ from modules.testing.fake_capture import FakeContinuousCapture
 from modules.whisper import SharedWhisper
 
 
+def _wait_until(predicate, *, timeout: float = 2.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.01)
+    raise AssertionError(f"condition not met within {timeout}s")
+
+
 class AlwaysBusyWhisper:
     dictation_active = False
 
@@ -99,6 +108,9 @@ def test_available_whisper_emits_final_delta() -> None:
 
     capture.emit_seconds(3)
 
+    _wait_until(
+        lambda: any(isinstance(event, TranscriptDeltaReceived) for event in events)
+    )
     received = [event for event in events if isinstance(event, TranscriptDeltaReceived)]
     assert len(received) == 1
     assert received[0].delta.session_id == session.session_id
@@ -126,6 +138,7 @@ def test_transcription_failure_stays_inside_stt_session() -> None:
 
     capture.emit_seconds(3)
 
+    _wait_until(lambda: stt.get_status(session.session_id) == TranscriptionStatus.ERROR)
     assert stt.get_status(session.session_id) == TranscriptionStatus.ERROR
 
 
