@@ -1,6 +1,6 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-07-22.
+Laatst bijgewerkt: 2026-07-23.
 
 ## Ondersteund
 
@@ -38,8 +38,11 @@ Laatst bijgewerkt: 2026-07-22.
 Deze Meeting Buddy-MVP is experimenteel. Op Windows neemt Meeting Buddy naast
 de microfoon optioneel meetinggeluid op via WASAPI-loopback (standaard aan).
 De overlay toont of loopback actief is. Device-keuze voor loopback staat in de
-prep-dialoog bij meeting start. AI-provider en review/export ontbreken nog. Zie het
-[MVP-design](superpowers/specs/2026-07-19-meeting-buddy-mvp-design.md) en
+prep-dialoog bij meeting start. Optionele lokale LLM (module `local-llm` +
+Meeting Buddy agenda-review) is ontworpen maar nog niet gebouwd — zie
+[ADR-0004](adr/0004-local-first-inference.md) en
+[local-llm design](superpowers/specs/2026-07-23-local-llm-module-design.md).
+Zie ook het [MVP-design](superpowers/specs/2026-07-19-meeting-buddy-mvp-design.md) en
 [handoff loopback/Teams](HANDOFF-meeting-buddy-teams-loopback.md).
 
 ## macOS
@@ -74,6 +77,9 @@ Gatekeeper (zie roadmap).
    macOS `.app` handmatig of later via CI (signing later).
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
 2. macOS: eventuele Gatekeeper/signing-check op een schone Mac zonder TCC-dev-host.
+3. Module **Local LLM** + Meeting Buddy **fase 1** (live samenvatting op
+   configureerbare chunks) — daarna coverage per agendapunt en vragenlijst.
+   Zie [design](superpowers/specs/2026-07-23-local-llm-module-design.md).
 
 ## Historische handoffs
 
