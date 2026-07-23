@@ -29,6 +29,8 @@ from modules.capabilities.speech_to_text import (
 from modules.whisper import SharedWhisper
 
 MAX_WHISPER_QUEUE_DURATION_S = 10.0
+# Meerdere capture-chunks in één Whisper-call: minder overhead, beter realtime-houden.
+MAX_TRANSCRIBE_BATCH_MS = 24_000
 
 log = logging.getLogger("praatmaar.speech_to_text")
 
@@ -227,6 +229,12 @@ class IncrementalSpeechToText:
                     reason="whisper_queue_overflow",
                 )
             )
+            log.warning(
+                "STT-wachtrij vol: drop %sms–%sms (sessie %s)",
+                dropped.start_ms,
+                gap_end_ms,
+                state.session_id,
+            )
         return gaps
 
     def _drain_queue(self, state: _TranscriptionState) -> bool:
@@ -234,6 +242,40 @@ class IncrementalSpeechToText:
 
         with state.drain_lock:
             return self._drain_queue_serially(state)
+
+    def _pop_batch(self, state: _TranscriptionState) -> list[AudioChunk] | None:
+        """Neem opeenvolgende chunks tot ``MAX_TRANSCRIBE_BATCH_MS`` (tijdsbereik)."""
+
+        with self._lock:
+            if not state.queue:
+                return None
+            batch = [state.queue.popleft()]
+            span = batch[0].end_ms - batch[0].start_ms
+            while state.queue:
+                nxt = state.queue[0]
+                next_span = nxt.end_ms - batch[0].start_ms
+                if next_span > MAX_TRANSCRIBE_BATCH_MS:
+                    break
+                batch.append(state.queue.popleft())
+                span = next_span
+            del span
+            return batch
+
+    @staticmethod
+    def _batch_audio(chunks: list[AudioChunk]) -> tuple[int, int, Any]:
+        """Plak chunks aaneen; overlappinge samples (capture-overlap) worden overgeslagen."""
+
+        first = chunks[0]
+        parts = [np.frombuffer(first.pcm_f32, dtype="<f4")]
+        prev_end = first.end_ms
+        for chunk in chunks[1:]:
+            audio = np.frombuffer(chunk.pcm_f32, dtype="<f4")
+            overlap_ms = max(0, prev_end - chunk.start_ms)
+            skip = min(audio.size, int(round(overlap_ms * chunk.sample_rate / 1000.0)))
+            if skip < audio.size:
+                parts.append(audio[skip:])
+            prev_end = chunk.end_ms
+        return first.start_ms, chunks[-1].end_ms, np.concatenate(parts)
 
     def _drain_queue_serially(self, state: _TranscriptionState) -> bool:
         while True:
@@ -255,14 +297,21 @@ class IncrementalSpeechToText:
                 if model is None:
                     self._set_status(state, TranscriptionStatus.DELAYED)
                     return True
-                with self._lock:
-                    if not state.queue:
-                        continue
-                    chunk = state.queue.popleft()
+                if self._use_default_transcribe:
+                    batch = self._pop_batch(state)
+                else:
+                    with self._lock:
+                        batch = [state.queue.popleft()] if state.queue else None
+                if not batch:
+                    continue
+                start_ms, end_ms, audio = self._batch_audio(batch)
                 try:
-                    text = self._run_transcribe(
-                        model, chunk, language=state.language
-                    ).strip()
+                    if self._use_default_transcribe:
+                        text = self._transcribe_audio(
+                            model, audio, language=state.language
+                        ).strip()
+                    else:
+                        text = self._transcribe_fn(model, batch[0]).strip()
                 except Exception as exc:
                     with self._lock:
                         if state.stopping:
@@ -287,8 +336,8 @@ class IncrementalSpeechToText:
                         TranscriptDelta(
                             session_id=state.session_id,
                             sequence=sequence,
-                            start_ms=chunk.start_ms,
-                            end_ms=chunk.end_ms,
+                            start_ms=start_ms,
+                            end_ms=end_ms,
                             text=text,
                             is_final=True,
                             confidence=1.0,
@@ -353,10 +402,18 @@ class IncrementalSpeechToText:
         model: Any, chunk: AudioChunk, *, language: str | None = None
     ) -> str:
         audio = np.frombuffer(chunk.pcm_f32, dtype="<f4")
-        # beam_size=1: continuous 3s-chunks moeten sneller dan realtime blijven,
-        # anders blokkeert de UI (Tk) door CPU/GIL-druk rond ~40s.
+        return IncrementalSpeechToText._transcribe_audio(
+            model, audio, language=language
+        )
+
+    @staticmethod
+    def _transcribe_audio(
+        model: Any, audio: Any, *, language: str | None = None
+    ) -> str:
+        # beam_size=1 houdt continuous STT dichter bij realtime (medium@CPU).
         kwargs: dict[str, Any] = {
             "beam_size": 1,
+            "best_of": 1,
             "vad_filter": True,
             "condition_on_previous_text": False,
             "without_timestamps": True,

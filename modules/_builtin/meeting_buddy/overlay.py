@@ -8,7 +8,8 @@ from typing import Any
 import i18n
 
 from .hints import HintType
-from .state import Hint, HintStatus, MeetingState, Topic, TopicStatus
+from .state import Hint, HintStatus, MeetingState, Question, QuestionStatus, Topic, TopicStatus
+from .topic_ladder import is_at_least_sequential
 
 
 def format_elapsed(seconds: float) -> str:
@@ -20,11 +21,29 @@ def format_elapsed(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-def format_topic_line(topic: Topic) -> str:
-    """Compact agenda line: open ``○`` or discussed ``✓`` plus title."""
+_TOPIC_MARK = {
+    TopicStatus.OPEN: "○",
+    TopicStatus.TREATED: "◐",
+    TopicStatus.SEQUENTIAL: "●",
+    TopicStatus.CONFIRMED: "✓",
+}
 
-    mark = "✓" if topic.status == TopicStatus.DISCUSSED else "○"
+
+def format_topic_line(topic: Topic) -> str:
+    """Compact agenda line with ladder mark plus title."""
+
+    mark = _TOPIC_MARK.get(topic.status, "○")
     return f"{mark} {topic.title}"
+
+
+def topic_line_color(topic: Topic) -> str:
+    if topic.status == TopicStatus.CONFIRMED:
+        return "#6C7C87"
+    if is_at_least_sequential(topic.status):
+        return "#3D5A6C"
+    if topic.status == TopicStatus.TREATED:
+        return "#1F4E79"
+    return "#15334A"
 
 
 def pick_emphasis(hints: Sequence[Hint]) -> str | None:
@@ -68,6 +87,7 @@ class MeetingBuddyOverlay:
         self._visible_hint_ids: tuple[str, ...] = ()
         self._shown_once = False
         self._topic_labels: list[Any] = []
+        self._question_labels: list[Any] = []
 
         self.window = tk.Toplevel(parent)
         self.window.withdraw()
@@ -166,6 +186,17 @@ class MeetingBuddyOverlay:
             font=("Segoe UI", 9),
         )
 
+        self._questions_frame = tk.Frame(self.window, background="#F4F7FA")
+        self._questions_heading = tk.Label(
+            self._questions_frame,
+            text=i18n.t("modules.meeting_buddy.overlay.questions"),
+            anchor="w",
+            background="#F4F7FA",
+            foreground="#536674",
+            font=("Segoe UI Semibold", 8),
+        )
+        self._questions_list = tk.Frame(self._questions_frame, background="#F4F7FA")
+
         self._hints = tk.Frame(self.window, background="#F4F7FA")
         self._hints.pack(fill="x", pady=(9, 7))
         tk.Label(
@@ -200,7 +231,11 @@ class MeetingBuddyOverlay:
         visible = active[:3]
         emphasis_id = pick_emphasis(visible)
         self._render_topics(state.topics)
-        self._render_summary(state.live_summary)
+        self._render_summary(
+            state.live_summary,
+            enabled=bool(getattr(state, "live_summary_enabled", False)),
+        )
+        self._render_questions(state.questions)
         self._render_hints(visible, emphasis_id)
         self._capture_status = capture_status
         self._loopback_active = loopback_active
@@ -258,7 +293,7 @@ class MeetingBuddyOverlay:
             self._agenda_heading.pack(fill="x")
             self._agenda_list.pack(fill="x", pady=(2, 0))
         for topic in topics:
-            color = "#6C7C87" if topic.status == TopicStatus.DISCUSSED else "#15334A"
+            color = topic_line_color(topic)
             label = self._tk.Label(
                 self._agenda_list,
                 text=format_topic_line(topic),
@@ -270,11 +305,42 @@ class MeetingBuddyOverlay:
             label.pack(fill="x")
             self._topic_labels.append(label)
 
-    def _render_summary(self, summary: str) -> None:
-        text = (summary or "").strip()
-        if not text:
+    def _render_questions(self, questions: Sequence[Question]) -> None:
+        for label in self._question_labels:
+            label.destroy()
+        self._question_labels.clear()
+        open_qs = [q for q in questions if q.status == QuestionStatus.OPEN][:5]
+        if not open_qs:
+            self._questions_frame.pack_forget()
+            return
+        if not self._questions_frame.winfo_manager():
+            self._questions_frame.pack(fill="x", pady=(8, 0), before=self._hints)
+            self._questions_heading.pack(fill="x")
+            self._questions_list.pack(fill="x", pady=(2, 0))
+        for question in open_qs:
+            label = self._tk.Label(
+                self._questions_list,
+                text=f"? {question.text}",
+                anchor="w",
+                justify="left",
+                wraplength=320,
+                background="#F4F7FA",
+                foreground="#8A4B08",
+                font=("Segoe UI", 9),
+            )
+            label.pack(fill="x")
+            self._question_labels.append(label)
+
+    def _render_summary(self, summary: str, *, enabled: bool = False) -> None:
+        if not enabled:
             self._summary_frame.pack_forget()
             return
+        text = (summary or "").strip()
+        if not text:
+            text = i18n.t("modules.meeting_buddy.overlay.summary_waiting")
+            self._summary_body.configure(foreground="#6C7C87")
+        else:
+            self._summary_body.configure(foreground="#15334A")
         self._summary_var.set(text)
         if not self._summary_frame.winfo_manager():
             # Place between agenda and hints when possible.

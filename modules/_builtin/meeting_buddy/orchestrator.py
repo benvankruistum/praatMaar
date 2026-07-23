@@ -11,8 +11,17 @@ from threading import RLock
 
 from modules.capabilities.continuous_capture import CaptureStatus
 from modules.capabilities.registry import CapabilityRegistry, CapabilityUnavailableError
+from modules.capabilities.speaker_detection import (
+    CAPABILITY_ID as SPEAKER_DETECTION_ID,
+)
+from modules.capabilities.speaker_detection import (
+    AudioSource,
+    SpeakerRole,
+    TranscriptSegment,
+)
 from modules.capabilities.speech_to_text import TranscriptDeltaReceived, TranscriptionStatus
 
+from .agenda_review import AgendaReviewCoordinator, AgendaReviewSettings, LabeledFinal
 from .binding import MeetingSessionBinding
 from .config import load_live_summary_prefs, load_meeting_buddy_config, load_transcripts_directory
 from .hint_coordinator import HintCoordinator
@@ -64,6 +73,12 @@ class MeetingOrchestrator:
             settings=self._live_summary_settings(),
             on_summary=self._on_live_summary,
         )
+        self._agenda_review = AgendaReviewCoordinator(
+            capabilities=capabilities,
+            settings=self._agenda_review_settings(),
+            on_review=self._on_agenda_review,
+        )
+        self._capabilities = capabilities
 
     @property
     def binding(self) -> MeetingSessionBinding | None:
@@ -111,6 +126,7 @@ class MeetingOrchestrator:
             self._config = load_meeting_buddy_config(self._app_dir)
             self._sessions.update_config(self._config)
             self._live_summary.update_settings(self._live_summary_settings())
+            self._agenda_review.update_settings(self._agenda_review_settings())
 
     def elapsed_seconds(self) -> float:
         return self._elapsed_s()
@@ -140,7 +156,14 @@ class MeetingOrchestrator:
                 self._state = self._transcripts.apply_agenda(self._state, self._agenda_text)
                 self._open_transcript_journal()
                 self._live_summary.reset()
-                self._live_summary.update_settings(self._live_summary_settings())
+                self._agenda_review.reset()
+                summary_settings = self._live_summary_settings()
+                self._live_summary.update_settings(summary_settings)
+                self._agenda_review.update_settings(self._agenda_review_settings())
+                self._state = replace(
+                    self._state,
+                    live_summary_enabled=bool(summary_settings.enabled),
+                )
                 self._sessions.log_started()
                 self._ui.notify(self._state, force=True)
             except CapabilityUnavailableError:
@@ -194,11 +217,14 @@ class MeetingOrchestrator:
                 self._sessions.clear()
             finally:
                 self._live_summary.reset()
+                self._agenda_review.reset()
                 self._clear_running_state()
             return path
 
     def on_stt_event(self, event: object) -> None:
         final_text: str | None = None
+        labeled: LabeledFinal | None = None
+        review_state: MeetingState | None = None
         notify_state: MeetingState | None = None
         notify_force = False
         with self._lock:
@@ -213,12 +239,13 @@ class MeetingOrchestrator:
                 if event.delta.is_final:
                     if self._journal is not None:
                         self._journal.append_final(event.delta.text)
-                    # LLM-scheduling buiten de lock (geen HTTP onder RLock).
                     final_text = event.delta.text
+                    labeled = self._label_final(event.delta.text, binding.meeting_session_id)
 
                 version_before = self._state.version
                 hints_before = self._state.emitted_hints
                 now_s = self._elapsed_s()
+                use_topic_heuristics = not self._agenda_review.provider_is_ready()
                 self._state = self._transcripts.process_delta(
                     event,
                     binding=binding,
@@ -226,6 +253,7 @@ class MeetingOrchestrator:
                     config=self._config,
                     elapsed_s=now_s,
                     observer=self._observer,
+                    use_topic_heuristics=use_topic_heuristics,
                 )
                 self._state = self._hints.update_hints(
                     self._state,
@@ -233,6 +261,8 @@ class MeetingOrchestrator:
                     now_s,
                     observer=self._observer,
                 )
+                if labeled is not None:
+                    review_state = self._state
                 state_changed = self._state.version != version_before
                 hints_changed = self._state.emitted_hints != hints_before
                 if state_changed or hints_changed:
@@ -243,6 +273,8 @@ class MeetingOrchestrator:
             self._ui.notify(notify_state, force=notify_force)
         if final_text is not None:
             self._live_summary.on_final_text(final_text)
+        if labeled is not None and review_state is not None:
+            self._agenda_review.on_final(labeled, state=review_state)
 
     def on_capture_status(self, event: object) -> None:
         with self._lock:
@@ -327,6 +359,35 @@ class MeetingOrchestrator:
             language="nl",
         )
 
+    def _agenda_review_settings(self) -> AgendaReviewSettings:
+        prefs = load_live_summary_prefs(self._app_dir)
+        return AgendaReviewSettings(
+            enabled=bool(prefs["live_summary_enabled"]),
+            interval_s=float(prefs["llm_chunk_interval_s"]),
+            min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
+            language="nl",
+        )
+
+    def _label_final(self, text: str, meeting_session_id: str) -> LabeledFinal:
+        provider = self._capabilities.get(SPEAKER_DETECTION_ID)
+        if provider is None:
+            return LabeledFinal(text=text, speaker_role=SpeakerRole.UNKNOWN)
+        source = AudioSource.UNKNOWN
+        if self.loopback_active is False:
+            source = AudioSource.MICROPHONE
+        try:
+            assignment = provider.assign_speaker(
+                TranscriptSegment(
+                    text=text,
+                    session_id=meeting_session_id,
+                    source=source,
+                )
+            )
+            return LabeledFinal(text=text, speaker_role=assignment.role)
+        except Exception:
+            log.exception("Speaker label failed")
+            return LabeledFinal(text=text, speaker_role=SpeakerRole.UNKNOWN)
+
     def _on_live_summary(self, text: str) -> None:
         with self._lock:
             if self._state is None:
@@ -338,4 +399,19 @@ class MeetingOrchestrator:
             )
             state = self._state
         # UI buiten de lock: anders blokkeert de LLM-thread de STT-callback.
+        self._ui.notify(state, force=True)
+
+    def _on_agenda_review(self, reviewed: MeetingState) -> None:
+        with self._lock:
+            if self._state is None:
+                return
+            if reviewed.meeting_session_id != self._state.meeting_session_id:
+                return
+            self._state = replace(
+                reviewed,
+                live_summary=self._state.live_summary,
+                live_summary_enabled=self._state.live_summary_enabled,
+                version=max(self._state.version, reviewed.version) + 1,
+            )
+            state = self._state
         self._ui.notify(state, force=True)

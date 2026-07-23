@@ -17,9 +17,9 @@ class PropertiesResult:
     enable_loopback: bool
     loopback_device: int | None
     transcripts_directory: str | None
-    live_summary_enabled: bool = False
-    llm_chunk_interval_s: float = 60.0
-    llm_chunk_min_new_chars: int = 200
+    live_summary_enabled: bool = True
+    llm_chunk_interval_s: float = 45.0
+    llm_chunk_min_new_chars: int = 120
 
 
 def device_selection_maps(
@@ -41,9 +41,9 @@ def build_properties_result(
     device_value_by_label: dict[str, int | None],
     fallback_device: int | None,
     transcripts_directory: str | None,
-    live_summary_enabled: bool = False,
-    llm_chunk_interval_s: float = 60.0,
-    llm_chunk_min_new_chars: int = 200,
+    live_summary_enabled: bool = True,
+    llm_chunk_interval_s: float = 45.0,
+    llm_chunk_min_new_chars: int = 120,
 ) -> PropertiesResult:
     selected_device = device_value_by_label.get(selected_device_label, fallback_device)
     folder = transcripts_directory.strip() if transcripts_directory else None
@@ -62,9 +62,9 @@ def show_properties_dialog(
     enable_loopback: bool,
     loopback_device: int | None,
     transcripts_directory: str | None = None,
-    live_summary_enabled: bool = False,
-    llm_chunk_interval_s: float = 60.0,
-    llm_chunk_min_new_chars: int = 200,
+    live_summary_enabled: bool = True,
+    llm_chunk_interval_s: float = 45.0,
+    llm_chunk_min_new_chars: int = 120,
     app_dir: Path | None = None,
     parent: Any = None,
 ) -> PropertiesResult | None:

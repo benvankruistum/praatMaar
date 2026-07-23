@@ -40,12 +40,26 @@ def test_stop_active_meeting_ignores_other_modules() -> None:
 
 def test_format_topic_line_marks_status() -> None:
     open_topic = Topic(id="t1", title="Opening", status=TopicStatus.OPEN, source=TopicSource.AGENDA)
-    done = Topic(
+    treated = Topic(
         id="t2",
+        title="Budget",
+        status=TopicStatus.TREATED,
+        source=TopicSource.AGENDA,
+    )
+    sequential = Topic(
+        id="t3",
+        title="Roadmap",
+        status=TopicStatus.SEQUENTIAL,
+        source=TopicSource.AGENDA,
+    )
+    confirmed = Topic(
+        id="t4",
         title="Rondvraag",
-        status=TopicStatus.DISCUSSED,
+        status=TopicStatus.CONFIRMED,
         source=TopicSource.AGENDA,
     )
     assert format_topic_line(open_topic).startswith("○")
+    assert format_topic_line(treated).startswith("◐")
+    assert format_topic_line(sequential).startswith("●")
+    assert format_topic_line(confirmed).startswith("✓")
     assert "Opening" in format_topic_line(open_topic)
-    assert format_topic_line(done).startswith("✓")

@@ -68,7 +68,7 @@ def test_session_config_controls_ring_buffer_capacity() -> None:
     engine.stop_session(session.session_id)
 
 
-def test_engine_emits_three_second_float32_chunk() -> None:
+def test_engine_emits_configured_float32_chunk() -> None:
     sounddevice = FakeSoundDevice()
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
@@ -99,7 +99,7 @@ def test_engine_emits_three_second_float32_chunk() -> None:
     assert chunks[0].start_ms == 0
     assert chunks[0].end_ms == CHUNK_DURATION_MS
     assert len(chunks[0].pcm_f32) == SAMPLE_RATE * CHUNK_DURATION_MS * 4 // 1000
-    assert CHUNK_OVERLAP_MS == 500
+    assert CHUNK_OVERLAP_MS == 800
 
     engine.stop_session(session.session_id)
 

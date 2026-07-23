@@ -19,8 +19,8 @@ hint_min_wait_s:
 max_visible_hints: 3
 min_hint_confidence: 0.5
 
-max_whisper_queue_duration_s: 10
-max_audio_buffer_duration_s: 30
+max_whisper_queue_duration_s: 180
+max_audio_buffer_duration_s: 240
 
 # Meeting-geluid via WASAPI loopback — standaard uit: sounddevice 0.5.x
 # ondersteunt de loopback-flag nog niet (high-level API). Zet aan in

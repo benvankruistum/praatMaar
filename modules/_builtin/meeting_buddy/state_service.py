@@ -12,6 +12,7 @@ from .state import (
     ActionItemStatus,
     Hint,
     HintStatus,
+    MeetingPhase,
     MeetingState,
     Question,
     QuestionStatus,
@@ -19,17 +20,23 @@ from .state import (
     TopicSource,
     TopicStatus,
 )
+from .topic_ladder import apply_sequential_catch_up, may_mark_treated, status_rank
 
 
 class StateProposalType(str, Enum):
     ADD_TOPICS = "add_topics"
-    MARK_TOPIC_DISCUSSED = "mark_topic_discussed"
+    MARK_TOPIC_TREATED = "mark_topic_treated"
+    SET_TOPIC_STATUS = "set_topic_status"
+    APPLY_TOPIC_CATCH_UP = "apply_topic_catch_up"
+    SET_MEETING_PHASE = "set_meeting_phase"
     ADD_QUESTION = "add_question"
     UPDATE_QUESTION = "update_question"
     ADD_ACTION = "add_action"
     UPDATE_ACTION = "update_action"
     UPSERT_HINTS = "upsert_hints"
     SET_HINTS = "set_hints"
+    # Compat alias used by older tests / call sites
+    MARK_TOPIC_DISCUSSED = "mark_topic_discussed"
 
 
 @dataclass(frozen=True)
@@ -55,7 +62,11 @@ class MeetingStateService:
 
         handlers = {
             StateProposalType.ADD_TOPICS: self._add_topics,
-            StateProposalType.MARK_TOPIC_DISCUSSED: self._mark_topic_discussed,
+            StateProposalType.MARK_TOPIC_TREATED: self._mark_topic_treated,
+            StateProposalType.MARK_TOPIC_DISCUSSED: self._mark_topic_treated,
+            StateProposalType.SET_TOPIC_STATUS: self._set_topic_status,
+            StateProposalType.APPLY_TOPIC_CATCH_UP: self._apply_topic_catch_up,
+            StateProposalType.SET_MEETING_PHASE: self._set_meeting_phase,
             StateProposalType.ADD_QUESTION: self._add_question,
             StateProposalType.UPDATE_QUESTION: self._update_question,
             StateProposalType.ADD_ACTION: self._add_action,
@@ -95,15 +106,66 @@ class MeetingStateService:
         return replace(state, topics=tuple(topics))
 
     @staticmethod
-    def _mark_topic_discussed(state: MeetingState, proposal: StateProposal) -> MeetingState:
+    def _mark_topic_treated(state: MeetingState, proposal: StateProposal) -> MeetingState:
+        """Heuristics / LLM: open → treated only (no catch-up)."""
+
         topic_id = str(proposal.payload["topic_id"])
+        if not may_mark_treated(state.topics, topic_id, phase=state.meeting_phase):
+            return state
         topic = _find_by_id(state.topics, topic_id, "Topic")
+        if topic.status != TopicStatus.OPEN:
+            return state
         updated = replace(
             topic,
-            status=TopicStatus.DISCUSSED,
+            status=TopicStatus.TREATED,
             last_matched_at=proposal.payload.get("matched_at", proposal.created_at),
+            confidence=float(proposal.payload.get("confidence", proposal.confidence)),
         )
         return replace(state, topics=_replace_by_id(state.topics, updated))
+
+    @staticmethod
+    def _set_topic_status(state: MeetingState, proposal: StateProposal) -> MeetingState:
+        topic_id = str(proposal.payload["topic_id"])
+        target = TopicStatus(proposal.payload["status"])
+        topic = _find_by_id(state.topics, topic_id, "Topic")
+
+        if target == TopicStatus.TREATED:
+            if not may_mark_treated(state.topics, topic_id, phase=state.meeting_phase):
+                return state
+            if topic.status != TopicStatus.OPEN:
+                return state
+        elif target == TopicStatus.CONFIRMED:
+            if topic.status != TopicStatus.SEQUENTIAL:
+                return state
+        elif target == TopicStatus.SEQUENTIAL:
+            # Prefer catch-up proposal; allow explicit set only from treated
+            if topic.status != TopicStatus.TREATED:
+                return state
+        elif target == TopicStatus.OPEN:
+            return state
+        else:
+            return state
+
+        if status_rank(target) < status_rank(topic.status):
+            return state
+
+        updated = replace(
+            topic,
+            status=target,
+            last_matched_at=proposal.payload.get("matched_at", proposal.created_at),
+            confidence=float(proposal.payload.get("confidence", proposal.confidence)),
+        )
+        return replace(state, topics=_replace_by_id(state.topics, updated))
+
+    @staticmethod
+    def _apply_topic_catch_up(state: MeetingState, proposal: StateProposal) -> MeetingState:
+        del proposal  # unused; catch-up is deterministic from topics
+        return replace(state, topics=apply_sequential_catch_up(state.topics))
+
+    @staticmethod
+    def _set_meeting_phase(state: MeetingState, proposal: StateProposal) -> MeetingState:
+        phase = MeetingPhase(proposal.payload["phase"])
+        return replace(state, meeting_phase=phase)
 
     @staticmethod
     def _add_question(state: MeetingState, proposal: StateProposal) -> MeetingState:

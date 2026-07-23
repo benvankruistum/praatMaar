@@ -48,6 +48,7 @@ class TranscriptProcessor:
         config: MeetingBuddyConfig,
         elapsed_s: float,
         observer: EventObserver | None,
+        use_topic_heuristics: bool = True,
     ) -> MeetingState:
         if event.delta.session_id != binding.transcription_session_id:
             return state
@@ -59,6 +60,11 @@ class TranscriptProcessor:
             config,
             elapsed_s,
         ):
+            if not use_topic_heuristics and proposal.type in (
+                StateProposalType.MARK_TOPIC_TREATED,
+                StateProposalType.MARK_TOPIC_DISCUSSED,
+            ):
+                continue
             previous_version = updated.version
             updated = self._state_service.apply(updated, proposal)
             log_event(

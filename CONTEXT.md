@@ -123,5 +123,34 @@ als Meeting Buddy in tray **Modules**.
 ### agenda-review (Meeting Buddy)
 
 Consumer van `ai.semantic_analysis`, gefaseerd: (1) **live samenvatting** in het
-meeting-overzicht op configureerbare chunks, (2) later dekking per agendapunt,
-(3) later helder geformuleerde vragen van anderen. Geen eigen Ollama-client.
+meeting-overzicht op configureerbare chunks, (2) **agendapunt-status** via LLM
+(chunk `agenda_review`), (3) **vraag-van-anderen** via dezelfde review. Geen
+eigen Ollama-client. Zonder klaarstaande LLM: heuristiek mag alleen
+`open → treated`; geen vraagherkenning.
+
+### agendapunt-status
+
+Status van één agendapunt in Meeting Buddy (`TopicStatus`):
+
+- **open** — nog niet substantieel besproken
+- **treated** (`behandeld`) — wel substantieel besproken, mogelijk uit volgorde
+- **sequential** (`sequentieel behandeld`) — treated én alle voorgangers minstens
+  sequential (automatische inhaal; bij het eerste punt valt dit samen met treated)
+- **confirmed** (`bevestigd behandeld`) — sequential dat **opnieuw** substantieel
+  is besproken
+
+Alleen substantiële bespreking telt; noemen of doorlopen in de opening niet.
+Oude term “discussed” ≈ minstens **sequential** (journal-checkbox / ✓).
+
+### meeting-fase
+
+LLM-inschatting van waar de meeting zit: `opening` \| `body` \| `closing`. In
+`opening` mogen geen latere agendapunten naar **treated** (wel het
+opening-punt zelf).
+
+### vraag-van-anderen
+
+Door de LLM herformuleerde open vraag uit het transcript, bedoeld als hint voor
+de host. Filter op `audio.speaker_detection`: rol ≠ `ME` (`OTHER` en `UNKNOWN`
+mogen). Geen regex-heuristiek wanneer de LLM-review actief is; zonder LLM geen
+automatische vragenlijst.

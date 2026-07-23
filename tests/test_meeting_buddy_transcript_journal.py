@@ -68,7 +68,7 @@ def test_finalize_updates_status_and_agenda(tmp_path: Path) -> None:
     doc.append_final("tekst")
     ended = datetime(2026, 7, 22, 10, 30)
     topics = (
-        Topic(id="1", title="Opening", status=TopicStatus.DISCUSSED, source=TopicSource.AGENDA),
+        Topic(id="1", title="Opening", status=TopicStatus.SEQUENTIAL, source=TopicSource.AGENDA),
         Topic(id="2", title="Graph", status=TopicStatus.OPEN, source=TopicSource.AGENDA),
     )
     path = doc.finalize(topics=topics, ended_at=ended)

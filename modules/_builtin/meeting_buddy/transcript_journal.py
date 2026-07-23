@@ -11,7 +11,8 @@ from pathlib import Path
 
 from modules.settings_store import module_dir
 
-from .state import Topic, TopicStatus
+from .state import Topic
+from .topic_ladder import is_journal_checked
 
 log = logging.getLogger(__name__)
 
@@ -145,7 +146,7 @@ class TranscriptJournal:
         titles = list(self._agenda_titles)
         if topics:
             titles = [topic.title for topic in topics] or titles
-            checked = {topic.title for topic in topics if topic.status == TopicStatus.DISCUSSED}
+            checked = {topic.title for topic in topics if is_journal_checked(topic.status)}
 
         # Replace status line and inject Gestopt after Gestart if missing.
         lines = raw.splitlines(keepends=True)

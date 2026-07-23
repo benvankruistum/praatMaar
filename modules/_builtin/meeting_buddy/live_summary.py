@@ -21,9 +21,9 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class LiveSummarySettings:
-    enabled: bool = False
-    interval_s: float = 60.0
-    min_new_chars: int = 200
+    enabled: bool = True
+    interval_s: float = 45.0
+    min_new_chars: int = 120
     language: str = "nl"
 
 
@@ -81,6 +81,10 @@ class LiveSummaryCoordinator:
             snapshot_transcript = self._buffer
             snapshot_previous = self._summary
             language = self._settings.language
+            log.info(
+                "Live summary starten (%s tekens, interval ok)",
+                len(snapshot_transcript),
+            )
         Thread(
             target=self._run_analyze,
             args=(snapshot_transcript, snapshot_previous, language),
@@ -109,9 +113,11 @@ class LiveSummaryCoordinator:
         )
         try:
             if provider is None:
+                log.warning("Live summary: geen ai.semantic_analysis capability")
                 return
             if hasattr(provider, "is_ready") and not provider.is_ready():
                 # Back-off: voorkom een worker per final-chunk als Ollama nog niet klaar is.
+                log.warning("Live summary: Local LLM niet klaar (Ollama/model)")
                 with self._lock:
                     self._last_run_at = time.monotonic()
                 return
@@ -125,11 +131,13 @@ class LiveSummaryCoordinator:
             )
             text = (result.text or "").strip()
             if not text:
+                log.warning("Live summary: leeg antwoord van model")
                 return
             with self._lock:
                 self._summary = text
                 self._chars_since = 0
                 self._last_run_at = time.monotonic()
+            log.info("Live summary bijgewerkt (%s tekens)", len(text))
             if self._on_summary is not None:
                 self._on_summary(text)
         except Exception:

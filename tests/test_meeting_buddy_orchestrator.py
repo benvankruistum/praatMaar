@@ -478,7 +478,7 @@ def test_capture_config_uses_app_microphone_and_loopback_settings(
     assert config["loopback_device"] is None
     assert config["mic_mix_gain"] == 0.5
     assert config["loopback_mix_gain"] == 0.5
-    assert config["max_audio_buffer_duration_s"] == 30
+    assert config["max_audio_buffer_duration_s"] == 240
 
 
 def test_concurrent_callbacks_do_not_raise(tmp_path: Path) -> None:
