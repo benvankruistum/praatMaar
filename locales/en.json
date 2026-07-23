@@ -10,7 +10,6 @@
   "tray.tooltip.cancelled": "praatMaar — cancelled",
   "tray.tooltip.error": "praatMaar — error",
   "tray.tooltip.attention_mic": "praatMaar — action needed: check microphone in Settings",
-
   "state.recording": "Recording",
   "state.transcribing": "Transcribing",
   "state.transcribing_progress": "Transcribing {percent}%",
@@ -19,7 +18,6 @@
   "state.tag.toggle": "toggle",
   "state.tag.ptt": "ptt",
   "state.tag.meeting": "meeting",
-
   "settings.title": "praatMaar — Settings",
   "settings.tab.general": "General",
   "settings.tab.language": "Language",
@@ -49,7 +47,6 @@
   "settings.save": "Save",
   "settings.saved": "Settings saved.",
   "settings.model_restart_note": "Note: the new model only works after restart.",
-
   "recovery.section": "Recovery audio",
   "recovery.empty": "No recovery recordings.",
   "recovery.open_folder": "Open folder",
@@ -64,9 +61,7 @@
   "recovery.busy": "A recording or transcription is already running. Try again later.",
   "recovery.invalid_file": "Not a valid recovery audio file.",
   "recovery.unavailable": "Re-transcribe is not available here.",
-
   "key.space": "Space",
-
   "ready": "Ready. Press {hotkey} to start recording.",
   "log.path": "Log file: {path}",
   "already_running": "praatMaar is already running; this second start was stopped.",
@@ -77,7 +72,6 @@
   "mic.warm_failed": "Microphone warmup failed (recording will retry later): {error}",
   "controls": "Controls ({mode}): {hotkey} to start/stop.",
   "shutdown": "Shutting down.",
-
   "splash.dep.whisper": "Loading speech recognition",
   "splash.dep.audio": "Loading audio processing",
   "splash.dep.mic": "Loading microphone",
@@ -89,13 +83,11 @@
   "splash.starting": "Starting up…",
   "splash.close": "Close",
   "splash.model_failed": "The model could not be loaded.",
-
   "dictation.busy": "A previous recording is still being processed.",
   "dictation.ptt_started": "Dictation (push-to-talk) started.",
   "dictation.stopped_hotkey": "Dictation stopped via hotkey.",
   "dictation.started_hotkey": "Dictation started via hotkey.",
   "dictation.ptt_stopped": "Dictation (push-to-talk) stopped.",
-
   "rec.busy": "A previous recording is still being processed.",
   "rec.start_failed": "Could not start microphone recording.",
   "rec.start_failed_title": "Microphone unavailable",
@@ -146,10 +138,8 @@
   "rec.mic_close_warn": "Warning while closing microphone: {error}",
   "rec.device_invalid": "Microphone device {device} is invalid ({error}); falling back to Windows default.",
   "rec.device_no_input": "Device {device} ({name}) has no microphone input; falling back to Windows default.",
-
   "destination.switched": "Destination switched to: {name}.",
   "destination.reset": "Destination reset to default.",
-
   "destinations.title": "praatMaar — Destinations",
   "destinations.intro": "Destinations let you choose by voice where your next recording goes. Say the destination name in a short recording to activate it; say default, standard, or standaard to return to the default folder.",
   "destinations.empty": "No custom destinations yet. The Default row is always available; click Add to create your own.",
@@ -190,7 +180,6 @@
   "destinations.error.name_collision": "This name collides with \"{existing}\" (same voice command).",
   "destinations.error.select_first": "Select a destination in the list first.",
   "destinations.error.default_readonly": "The Default row cannot be edited or deleted. Click Active to switch back to it.",
-
   "modules.title": "praatMaar — Modules",
   "modules.intro": "Enable or disable extensions. All dictation cycle events are also written to the event journal (events/events.jsonl) for external tools.",
   "modules.incremental": "Incremental transcription (during recording; last partial = final text)",
@@ -280,8 +269,24 @@
   "modules.meeting_buddy.overlay.recording.active_delayed": "● Recording active — transcription is delayed",
   "modules.meeting_buddy.overlay.recording.starting": "Starting microphone…",
   "modules.meeting_buddy.overlay.recording.error": "No microphone capture — check your device",
-
   "help.title": "praatMaar — Help",
   "help.close": "Close",
-  "help.fallback": "Help is temporarily unavailable. Open Destinations from the system tray to manage destinations, or see docs/user/ in the project."
+  "help.fallback": "Help is temporarily unavailable. Open Destinations from the system tray to manage destinations, or see docs/user/ in the project.",
+  "modules.local_llm.name": "Local LLM",
+  "modules.local_llm.description": "Local AI via Ollama (Qwen 2.5). Other modules can use this for summaries and analysis.",
+  "modules.local_llm.actions.check_status": "Check status",
+  "modules.local_llm.actions.open_install": "Install Ollama…",
+  "modules.local_llm.actions.pull_model": "Download Qwen 2.5",
+  "modules.local_llm.dialog.title": "Local LLM",
+  "modules.local_llm.status.ollama_offline": "Ollama is not reachable. Install Ollama and start it, or verify it is running.",
+  "modules.local_llm.status.ollama_missing": "Ollama program not found. Use “Install Ollama…” first.",
+  "modules.local_llm.status.model_missing": "Model {model} is missing. Available: {available}. Use “Download Qwen 2.5”.",
+  "modules.local_llm.status.ready": "Ready. Model {model} is available for other modules.",
+  "modules.local_llm.status.pull_started": "Download of {model} started in a separate Ollama window. Check status again afterwards.",
+  "modules.local_llm.status.pull_failed": "Failed to start download: {error}",
+  "modules.meeting_buddy.overlay.summary": "Summary",
+  "modules.meeting_buddy.settings.live_summary_enabled": "Live summary (Local LLM)",
+  "modules.meeting_buddy.settings.live_summary_hint": "Requires the Local LLM module with a ready model. Updates based on time and new transcript text.",
+  "modules.meeting_buddy.settings.llm_chunk_interval_s": "Min. seconds between LLM calls",
+  "modules.meeting_buddy.settings.llm_chunk_min_new_chars": "Min. new characters"
 }

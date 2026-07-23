@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
@@ -13,8 +14,9 @@ from modules.capabilities.registry import CapabilityRegistry, CapabilityUnavaila
 from modules.capabilities.speech_to_text import TranscriptDeltaReceived, TranscriptionStatus
 
 from .binding import MeetingSessionBinding
-from .config import load_meeting_buddy_config, load_transcripts_directory
+from .config import load_live_summary_prefs, load_meeting_buddy_config, load_transcripts_directory
 from .hint_coordinator import HintCoordinator
+from .live_summary import LiveSummaryCoordinator, LiveSummarySettings
 from .observability import EventObserver
 from .prep import parse_agenda
 from .session_controller import CapabilitySessionController
@@ -57,6 +59,11 @@ class MeetingOrchestrator:
         self._last_transcript_path: Path | None = None
         self._state: MeetingState | None = None
         self._started_at: float | None = None
+        self._live_summary = LiveSummaryCoordinator(
+            capabilities=capabilities,
+            settings=self._live_summary_settings(),
+            on_summary=self._on_live_summary,
+        )
 
     @property
     def binding(self) -> MeetingSessionBinding | None:
@@ -103,6 +110,7 @@ class MeetingOrchestrator:
         with self._lock:
             self._config = load_meeting_buddy_config(self._app_dir)
             self._sessions.update_config(self._config)
+            self._live_summary.update_settings(self._live_summary_settings())
 
     def elapsed_seconds(self) -> float:
         return self._elapsed_s()
@@ -131,6 +139,8 @@ class MeetingOrchestrator:
                 )
                 self._state = self._transcripts.apply_agenda(self._state, self._agenda_text)
                 self._open_transcript_journal()
+                self._live_summary.reset()
+                self._live_summary.update_settings(self._live_summary_settings())
                 self._sessions.log_started()
                 self._ui.notify(self._state, force=True)
             except CapabilityUnavailableError:
@@ -183,6 +193,7 @@ class MeetingOrchestrator:
             try:
                 self._sessions.clear()
             finally:
+                self._live_summary.reset()
                 self._clear_running_state()
             return path
 
@@ -198,8 +209,10 @@ class MeetingOrchestrator:
             if not isinstance(event, TranscriptDeltaReceived):
                 return
 
-            if event.delta.is_final and self._journal is not None:
-                self._journal.append_final(event.delta.text)
+            if event.delta.is_final:
+                if self._journal is not None:
+                    self._journal.append_final(event.delta.text)
+                self._live_summary.on_final_text(event.delta.text)
 
             version_before = self._state.version
             hints_before = self._state.emitted_hints
@@ -295,3 +308,23 @@ class MeetingOrchestrator:
         if self._started_at is None:
             return 0.0
         return time.monotonic() - self._started_at
+
+    def _live_summary_settings(self) -> LiveSummarySettings:
+        prefs = load_live_summary_prefs(self._app_dir)
+        return LiveSummarySettings(
+            enabled=bool(prefs["live_summary_enabled"]),
+            interval_s=float(prefs["llm_chunk_interval_s"]),
+            min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
+            language="nl",
+        )
+
+    def _on_live_summary(self, text: str) -> None:
+        with self._lock:
+            if self._state is None:
+                return
+            self._state = replace(
+                self._state,
+                live_summary=text,
+                version=self._state.version + 1,
+            )
+            self._ui.notify(self._state, force=True)

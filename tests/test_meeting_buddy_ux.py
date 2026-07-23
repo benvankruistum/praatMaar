@@ -78,6 +78,10 @@ def test_meeting_start_forces_meeting_pill_mode_via_begin_meeting(
     monkeypatch.setattr("modules._builtin.meeting_buddy.module.notify_state", _notify)
     monkeypatch.setattr("tkinter.messagebox.showerror", lambda *_a, **_k: None)
     monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.MeetingBuddyModule._show_overlay_update",
+        lambda *a, **k: None,
+    )
 
     capabilities = CapabilityRegistry()
     capture = FakeContinuousCapture()
@@ -98,9 +102,11 @@ def test_meeting_start_forces_meeting_pill_mode_via_begin_meeting(
         module._require_orchestrator()._sessions._capture_status = CaptureStatus.ACTIVE
 
     monkeypatch.setattr(module._require_orchestrator(), "start", start_then_mark_active)
-    module._begin_meeting()
-
-    assert notified[-1] == (RecordingState.RECORDING, "meeting")
+    try:
+        module._begin_meeting()
+        assert notified[-1] == (RecordingState.RECORDING, "meeting")
+    finally:
+        module.stop_meeting()
 
 
 def test_meeting_capture_active_shows_recording_pill(
@@ -121,6 +127,12 @@ def test_meeting_capture_active_shows_recording_pill(
         notified.append((state, mode))
 
     monkeypatch.setattr("modules._builtin.meeting_buddy.module.notify_state", _notify)
+    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *_a, **_k: None)
+    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.MeetingBuddyModule._show_overlay_update",
+        lambda *a, **k: None,
+    )
 
     capabilities = CapabilityRegistry()
     capture = FakeContinuousCapture()
@@ -132,12 +144,14 @@ def test_meeting_capture_active_shows_recording_pill(
     module.on_app_start(
         ModuleContext(app_dir=tmp_path, ui_dispatch=noop_ui_dispatch, capabilities=capabilities)
     )
-    module._require_orchestrator().start()
-
-    assert notified[-1] == (RecordingState.RECORDING, "meeting")
-
-    module.stop_meeting()
-    assert notified[-1] == (RecordingState.IDLE, "meeting")
+    try:
+        module._require_orchestrator().start()
+        assert notified[-1] == (RecordingState.RECORDING, "meeting")
+        module.stop_meeting()
+        assert notified[-1] == (RecordingState.IDLE, "meeting")
+    finally:
+        if module._require_orchestrator().binding is not None:
+            module.stop_meeting()
 
 
 def test_meeting_capture_error_shows_error_pill(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -157,6 +171,12 @@ def test_meeting_capture_error_shows_error_pill(tmp_path, monkeypatch: pytest.Mo
         notified.append((state, mode))
 
     monkeypatch.setattr("modules._builtin.meeting_buddy.module.notify_state", _notify)
+    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *_a, **_k: None)
+    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.MeetingBuddyModule._show_overlay_update",
+        lambda *a, **k: None,
+    )
 
     capabilities = CapabilityRegistry()
     capture = FakeContinuousCapture()
@@ -169,13 +189,16 @@ def test_meeting_capture_error_shows_error_pill(tmp_path, monkeypatch: pytest.Mo
         ModuleContext(app_dir=tmp_path, ui_dispatch=noop_ui_dispatch, capabilities=capabilities)
     )
     orchestrator = module._require_orchestrator()
-    orchestrator.start()
-    binding = orchestrator.binding
-    assert binding is not None
+    try:
+        orchestrator.start()
+        binding = orchestrator.binding
+        assert binding is not None
 
-    capture._emit(
-        binding.capture_session_id,
-        CaptureStatusChanged(binding.capture_session_id, CaptureStatus.ERROR),
-    )
+        capture._emit(
+            binding.capture_session_id,
+            CaptureStatusChanged(binding.capture_session_id, CaptureStatus.ERROR),
+        )
 
-    assert notified[-1] == (RecordingState.ERROR, "meeting")
+        assert notified[-1] == (RecordingState.ERROR, "meeting")
+    finally:
+        module.stop_meeting()

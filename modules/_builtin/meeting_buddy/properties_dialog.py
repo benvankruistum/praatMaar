@@ -17,6 +17,9 @@ class PropertiesResult:
     enable_loopback: bool
     loopback_device: int | None
     transcripts_directory: str | None
+    live_summary_enabled: bool = False
+    llm_chunk_interval_s: float = 60.0
+    llm_chunk_min_new_chars: int = 200
 
 
 def device_selection_maps(
@@ -38,6 +41,9 @@ def build_properties_result(
     device_value_by_label: dict[str, int | None],
     fallback_device: int | None,
     transcripts_directory: str | None,
+    live_summary_enabled: bool = False,
+    llm_chunk_interval_s: float = 60.0,
+    llm_chunk_min_new_chars: int = 200,
 ) -> PropertiesResult:
     selected_device = device_value_by_label.get(selected_device_label, fallback_device)
     folder = transcripts_directory.strip() if transcripts_directory else None
@@ -45,6 +51,9 @@ def build_properties_result(
         enable_loopback=enable_loopback,
         loopback_device=selected_device if enable_loopback else None,
         transcripts_directory=folder or None,
+        live_summary_enabled=bool(live_summary_enabled),
+        llm_chunk_interval_s=max(15.0, float(llm_chunk_interval_s)),
+        llm_chunk_min_new_chars=max(50, int(llm_chunk_min_new_chars)),
     )
 
 
@@ -53,6 +62,9 @@ def show_properties_dialog(
     enable_loopback: bool,
     loopback_device: int | None,
     transcripts_directory: str | None = None,
+    live_summary_enabled: bool = False,
+    llm_chunk_interval_s: float = 60.0,
+    llm_chunk_min_new_chars: int = 200,
     app_dir: Path | None = None,
     parent: Any = None,
 ) -> PropertiesResult | None:
@@ -115,8 +127,6 @@ def show_properties_dialog(
     folder_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
     def browse_folder() -> None:
-        # Lazy import: top-level filedialog pulls simpledialog, which breaks
-        # when tests monkeypatch tk.Toplevel.
         from tkinter import filedialog
 
         initial = folder_var.get().strip() or default_transcripts or None
@@ -144,6 +154,38 @@ def show_properties_dialog(
         foreground="#5f6368",
     ).grid(row=5, column=0, sticky="w", pady=(0, 10))
 
+    summary_var = tk.BooleanVar(value=live_summary_enabled)
+    ttk.Checkbutton(
+        frame,
+        text=i18n.t("modules.meeting_buddy.settings.live_summary_enabled"),
+        variable=summary_var,
+    ).grid(row=6, column=0, sticky="w", pady=(0, 4))
+    ttk.Label(
+        frame,
+        text=i18n.t("modules.meeting_buddy.settings.live_summary_hint"),
+        wraplength=420,
+        foreground="#5f6368",
+    ).grid(row=7, column=0, sticky="w", pady=(0, 8))
+
+    chunk_row = ttk.Frame(frame)
+    chunk_row.grid(row=8, column=0, sticky="ew", pady=(0, 10))
+    ttk.Label(
+        chunk_row,
+        text=i18n.t("modules.meeting_buddy.settings.llm_chunk_interval_s"),
+    ).grid(row=0, column=0, sticky="w")
+    interval_var = tk.StringVar(value=str(int(llm_chunk_interval_s)))
+    ttk.Entry(chunk_row, textvariable=interval_var, width=8).grid(
+        row=0, column=1, sticky="w", padx=(8, 16)
+    )
+    ttk.Label(
+        chunk_row,
+        text=i18n.t("modules.meeting_buddy.settings.llm_chunk_min_new_chars"),
+    ).grid(row=0, column=2, sticky="w")
+    chars_var = tk.StringVar(value=str(int(llm_chunk_min_new_chars)))
+    ttk.Entry(chunk_row, textvariable=chars_var, width=8).grid(
+        row=0, column=3, sticky="w", padx=(8, 0)
+    )
+
     def _sync_loopback_controls() -> None:
         state = "readonly" if loopback_var.get() else "disabled"
         device_combo.configure(state=state)
@@ -155,12 +197,23 @@ def show_properties_dialog(
 
     def confirm() -> None:
         nonlocal result
+        try:
+            interval = float(interval_var.get().strip() or "60")
+        except ValueError:
+            interval = 60.0
+        try:
+            min_chars = int(chars_var.get().strip() or "200")
+        except ValueError:
+            min_chars = 200
         result = build_properties_result(
             enable_loopback=bool(loopback_var.get()),
             selected_device_label=device_var.get(),
             device_value_by_label=device_value_by_label,
             fallback_device=loopback_device,
             transcripts_directory=folder_var.get(),
+            live_summary_enabled=bool(summary_var.get()),
+            llm_chunk_interval_s=interval,
+            llm_chunk_min_new_chars=min_chars,
         )
         dlg.destroy()
 
@@ -168,7 +221,7 @@ def show_properties_dialog(
         dlg.destroy()
 
     buttons = ttk.Frame(frame)
-    buttons.grid(row=6, column=0, sticky="e")
+    buttons.grid(row=9, column=0, sticky="e")
     ttk.Button(buttons, text=i18n.t("modules.meeting_buddy.dialog.cancel"), command=cancel).grid(
         row=0, column=0, padx=(0, 8)
     )
@@ -184,7 +237,7 @@ def show_properties_dialog(
 
     dlg.update_idletasks()
     width = max(dlg.winfo_reqwidth(), 480)
-    height = max(dlg.winfo_reqheight(), 220)
+    height = max(dlg.winfo_reqheight(), 320)
     x = (dlg.winfo_screenwidth() - width) // 2
     y = (dlg.winfo_screenheight() - height) // 3
     dlg.geometry(f"{width}x{height}+{x}+{y}")

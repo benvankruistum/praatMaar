@@ -10,7 +10,6 @@
   "tray.tooltip.cancelled": "praatMaar — geannuleerd",
   "tray.tooltip.error": "praatMaar — fout",
   "tray.tooltip.attention_mic": "praatMaar — actie vereist: controleer microfoon in Instellingen",
-
   "state.recording": "Opname",
   "state.transcribing": "Transcriberen",
   "state.transcribing_progress": "Transcriberen {percent}%",
@@ -19,7 +18,6 @@
   "state.tag.toggle": "toggle",
   "state.tag.ptt": "ptt",
   "state.tag.meeting": "meeting",
-
   "settings.title": "praatMaar — Instellingen",
   "settings.tab.general": "Algemeen",
   "settings.tab.language": "Taal",
@@ -49,7 +47,6 @@
   "settings.save": "Opslaan",
   "settings.saved": "Instellingen opgeslagen.",
   "settings.model_restart_note": "Let op: het gewijzigde model werkt pas na herstart.",
-
   "recovery.section": "Herstel-audio",
   "recovery.empty": "Geen herstel-opnames.",
   "recovery.open_folder": "Map openen",
@@ -64,9 +61,7 @@
   "recovery.busy": "Er loopt al een opname of transcriptie. Probeer het later opnieuw.",
   "recovery.invalid_file": "Geen geldig herstel-audiobestand.",
   "recovery.unavailable": "Opnieuw transcriberen is hier niet beschikbaar.",
-
   "key.space": "Spatie",
-
   "ready": "Gereed. Druk {hotkey} om een opname te starten.",
   "log.path": "Logbestand: {path}",
   "already_running": "praatMaar draait al; deze tweede start wordt gestopt.",
@@ -77,7 +72,6 @@
   "mic.warm_failed": "Microfoon-warmup mislukt (opname probeert het later opnieuw): {error}",
   "controls": "Bediening ({mode}): {hotkey} om te starten/stoppen.",
   "shutdown": "Programma wordt afgesloten.",
-
   "splash.dep.whisper": "Spraakherkenning laden",
   "splash.dep.audio": "Audioverwerking laden",
   "splash.dep.mic": "Microfoon laden",
@@ -89,13 +83,11 @@
   "splash.starting": "Bezig met opstarten…",
   "splash.close": "Sluiten",
   "splash.model_failed": "Het model kon niet worden geladen.",
-
   "dictation.busy": "Er wordt nog een vorige opname verwerkt.",
   "dictation.ptt_started": "Dicteren (push-to-talk) gestart.",
   "dictation.stopped_hotkey": "Dicteren wordt gestopt via de sneltoets.",
   "dictation.started_hotkey": "Dicteren wordt gestart via de sneltoets.",
   "dictation.ptt_stopped": "Dicteren (push-to-talk) gestopt.",
-
   "rec.busy": "Er wordt nog een vorige opname verwerkt.",
   "rec.start_failed": "De microfoonopname kon niet worden gestart.",
   "rec.start_failed_title": "Microfoon niet beschikbaar",
@@ -146,10 +138,8 @@
   "rec.mic_close_warn": "Waarschuwing bij sluiten microfoon: {error}",
   "rec.device_invalid": "Microfoon-apparaat {device} is ongeldig ({error}); val terug op Windows-standaard.",
   "rec.device_no_input": "Apparaat {device} ({name}) heeft geen microfooningang; val terug op Windows-standaard.",
-
   "destination.switched": "Bestemming gewijzigd naar: {name}.",
   "destination.reset": "Bestemming teruggezet naar standaard.",
-
   "destinations.title": "praatMaar — Bestemmingen",
   "destinations.intro": "Met bestemmingen kies je via spraak waar je volgende opname naartoe gaat. Zeg eerst de bestemmingsnaam in een korte opname om die te activeren; zeg standaard, default of standard om terug te gaan naar de standaardmap.",
   "destinations.empty": "Nog geen eigen bestemmingen. De rij Standaard is altijd beschikbaar; klik op Toevoegen voor een eigen bestemming.",
@@ -190,7 +180,6 @@
   "destinations.error.name_collision": "Deze naam botst met \"{existing}\" (zelfde spraakopdracht).",
   "destinations.error.select_first": "Selecteer eerst een bestemming in de lijst.",
   "destinations.error.default_readonly": "De standaardrij kun je niet wijzigen of verwijderen. Klik op Actief om ernaar terug te gaan.",
-
   "modules.title": "praatMaar — Modules",
   "modules.intro": "Schakel uitbreidingen in of uit. Alle dicteercyclus-events worden ook weggeschreven naar het event-journal (events/events.jsonl) voor externe tools.",
   "modules.incremental": "Incrementele transcriptie (tijdens opname; laatste partial = eindtekst)",
@@ -280,8 +269,24 @@
   "modules.meeting_buddy.overlay.recording.active_delayed": "● Opname actief — transcriptie loopt achter",
   "modules.meeting_buddy.overlay.recording.starting": "Microfoon wordt gestart…",
   "modules.meeting_buddy.overlay.recording.error": "Geen microfoonopname — controleer je apparaat",
-
   "help.title": "praatMaar — Help",
   "help.close": "Sluiten",
-  "help.fallback": "Help is tijdelijk niet beschikbaar. Open Bestemmingen via het systeemvak voor bestemmingsbeheer, of raadpleeg de documentatie in docs/user/."
+  "help.fallback": "Help is tijdelijk niet beschikbaar. Open Bestemmingen via het systeemvak voor bestemmingsbeheer, of raadpleeg de documentatie in docs/user/.",
+  "modules.local_llm.name": "Local LLM",
+  "modules.local_llm.description": "Lokale AI via Ollama (Qwen 2.5). Andere modules kunnen dit gebruiken voor samenvattingen en analyse.",
+  "modules.local_llm.actions.check_status": "Status controleren",
+  "modules.local_llm.actions.open_install": "Ollama installeren…",
+  "modules.local_llm.actions.pull_model": "Qwen 2.5 downloaden",
+  "modules.local_llm.dialog.title": "Local LLM",
+  "modules.local_llm.status.ollama_offline": "Ollama is niet bereikbaar. Installeer Ollama en start de app, of controleer of die draait.",
+  "modules.local_llm.status.ollama_missing": "Ollama-programma niet gevonden. Gebruik ‘Ollama installeren…’ eerst.",
+  "modules.local_llm.status.model_missing": "Model {model} ontbreekt. Beschikbaar: {available}. Gebruik ‘Qwen 2.5 downloaden’.",
+  "modules.local_llm.status.ready": "Klaar. Model {model} is beschikbaar voor andere modules.",
+  "modules.local_llm.status.pull_started": "Download van {model} gestart in een aparte Ollama-prompt. Controleer daarna de status opnieuw.",
+  "modules.local_llm.status.pull_failed": "Download starten mislukt: {error}",
+  "modules.meeting_buddy.overlay.summary": "Samenvatting",
+  "modules.meeting_buddy.settings.live_summary_enabled": "Live samenvatting (Local LLM)",
+  "modules.meeting_buddy.settings.live_summary_hint": "Vereist de module Local LLM met een klaarstaand model. Updates op basis van tijd én nieuwe transcripttekst.",
+  "modules.meeting_buddy.settings.llm_chunk_interval_s": "Min. seconden tussen LLM-calls",
+  "modules.meeting_buddy.settings.llm_chunk_min_new_chars": "Min. nieuwe tekens"
 }

@@ -11,7 +11,11 @@ from modules.capabilities.continuous_capture import CaptureStatus
 
 from .agenda_dialog import can_start_meeting, show_agenda_dialog
 from .agenda_store import touch_recent
-from .config import load_transcripts_directory, save_meeting_buddy_preferences
+from .config import (
+    load_live_summary_prefs,
+    load_transcripts_directory,
+    save_meeting_buddy_preferences,
+)
 from .orchestrator import MeetingOrchestrator
 from .overlay import MeetingBuddyOverlay
 from .properties_dialog import show_properties_dialog
@@ -203,10 +207,14 @@ class MeetingBuddyModule:
     def _show_properties_dialog(self) -> None:
         orchestrator = self._require_orchestrator()
         app_dir = self._require_app_dir()
+        prefs = load_live_summary_prefs(app_dir)
         result = show_properties_dialog(
             enable_loopback=orchestrator.loopback_requested,
             loopback_device=orchestrator.loopback_device,
             transcripts_directory=load_transcripts_directory(app_dir),
+            live_summary_enabled=bool(prefs["live_summary_enabled"]),
+            llm_chunk_interval_s=float(prefs["llm_chunk_interval_s"]),
+            llm_chunk_min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
             app_dir=app_dir,
         )
         if result is None:
@@ -216,6 +224,9 @@ class MeetingBuddyModule:
             enable_loopback=result.enable_loopback,
             loopback_device=result.loopback_device,
             transcripts_directory=result.transcripts_directory,
+            live_summary_enabled=result.live_summary_enabled,
+            llm_chunk_interval_s=result.llm_chunk_interval_s,
+            llm_chunk_min_new_chars=result.llm_chunk_min_new_chars,
         )
         orchestrator.reload_config()
 
