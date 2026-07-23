@@ -11,6 +11,7 @@ from modules._builtin.local_llm.provider import OllamaSemanticAnalysis
 from modules.capabilities.semantic_analysis import (
     CAPABILITY_ID,
     CONTRACT_VERSION,
+    KIND_AGENDA_REVIEW,
     KIND_RUNNING_SUMMARY,
     AnalysisRequest,
 )
@@ -21,6 +22,7 @@ def test_semantic_analysis_contract_ids() -> None:
     assert CAPABILITY_ID == "ai.semantic_analysis"
     assert CONTRACT_VERSION == 2
     assert KIND_RUNNING_SUMMARY == "running_summary"
+    assert KIND_AGENDA_REVIEW == "agenda_review"
 
 
 def test_local_llm_in_builtin_registry() -> None:

@@ -25,6 +25,7 @@ from modules.capabilities.semantic_analysis import (
     CONTRACT_VERSION as SEMANTIC_ANALYSIS_CONTRACT_VERSION,
 )
 from modules.capabilities.semantic_analysis import (
+    KIND_AGENDA_REVIEW,
     KIND_RUNNING_SUMMARY,
     AnalysisRequest,
     AnalysisResult,
@@ -69,6 +70,7 @@ __all__ = [
     "ContinuousCaptureCapability",
     "SEMANTIC_ANALYSIS_CAPABILITY_ID",
     "SEMANTIC_ANALYSIS_CONTRACT_VERSION",
+    "KIND_AGENDA_REVIEW",
     "KIND_RUNNING_SUMMARY",
     "AnalysisRequest",
     "AnalysisResult",

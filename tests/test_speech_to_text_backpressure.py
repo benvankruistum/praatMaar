@@ -108,9 +108,7 @@ def test_available_whisper_emits_final_delta() -> None:
 
     capture.emit_seconds(3)
 
-    _wait_until(
-        lambda: any(isinstance(event, TranscriptDeltaReceived) for event in events)
-    )
+    _wait_until(lambda: any(isinstance(event, TranscriptDeltaReceived) for event in events))
     received = [event for event in events if isinstance(event, TranscriptDeltaReceived)]
     assert len(received) == 1
     assert received[0].delta.session_id == session.session_id

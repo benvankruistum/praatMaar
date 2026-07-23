@@ -285,6 +285,8 @@
   "modules.local_llm.status.pull_started": "Download von {model} in einem separaten Ollama-Fenster gestartet. Prüfen Sie danach erneut den Status.",
   "modules.local_llm.status.pull_failed": "Download starten fehlgeschlagen: {error}",
   "modules.meeting_buddy.overlay.summary": "Zusammenfassung",
+  "modules.meeting_buddy.overlay.summary_waiting": "Live-Zusammenfassung erscheint, sobald genug Transkript da ist (Local LLM)…",
+  "modules.meeting_buddy.overlay.questions": "Fragen von anderen",
   "modules.meeting_buddy.settings.live_summary_enabled": "Live-Zusammenfassung (Local LLM)",
   "modules.meeting_buddy.settings.live_summary_hint": "Erfordert das Modul Local LLM mit bereitem Modell. Updates basierend auf Zeit und neuem Transkripttext.",
   "modules.meeting_buddy.settings.llm_chunk_interval_s": "Min. Sekunden zwischen LLM-Aufrufen",

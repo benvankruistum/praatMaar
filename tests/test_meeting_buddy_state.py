@@ -64,7 +64,7 @@ def test_apply_supports_all_meeting_state_transitions() -> None:
     )
     state = service.apply(
         state,
-        proposal("mark_topic_discussed", {"topic_id": "t1", "matched_at": 12.0}),
+        proposal("mark_topic_treated", {"topic_id": "t1", "matched_at": 12.0}),
     )
     state = service.apply(
         state,
@@ -115,7 +115,7 @@ def test_apply_supports_all_meeting_state_transitions() -> None:
     )
 
     assert state.version == 8
-    assert state.topics[0].status == TopicStatus.DISCUSSED
+    assert state.topics[0].status == TopicStatus.TREATED
     assert state.topics[0].last_matched_at == 12.0
     assert state.questions[0].status == QuestionStatus.ANSWERED
     assert state.questions[0].source_delta_id == "d1"
@@ -128,7 +128,7 @@ def test_apply_supports_all_meeting_state_transitions() -> None:
 @pytest.mark.parametrize(
     ("proposal_type", "payload"),
     [
-        ("mark_topic_discussed", {"topic_id": "missing"}),
+        ("mark_topic_treated", {"topic_id": "missing"}),
         ("update_question", {"question_id": "missing", "status": "answered"}),
         ("update_action", {"action_id": "missing", "status": "confirmed"}),
     ],

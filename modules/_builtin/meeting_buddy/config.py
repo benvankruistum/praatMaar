@@ -145,18 +145,18 @@ def load_live_summary_prefs(app_dir: Path) -> dict[str, Any]:
     """Live-summary prefs from module ``config.json`` (defaults if missing)."""
 
     data = load_module_json(app_dir, "meeting-buddy")
-    interval = data.get("llm_chunk_interval_s", 60)
-    min_chars = data.get("llm_chunk_min_new_chars", 200)
+    interval = data.get("llm_chunk_interval_s", 45)
+    min_chars = data.get("llm_chunk_min_new_chars", 120)
     try:
         interval_f = float(interval)
     except (TypeError, ValueError):
-        interval_f = 60.0
+        interval_f = 45.0
     try:
         min_chars_i = int(min_chars)
     except (TypeError, ValueError):
-        min_chars_i = 200
+        min_chars_i = 120
     return {
-        "live_summary_enabled": bool(data.get("live_summary_enabled", False)),
+        "live_summary_enabled": bool(data.get("live_summary_enabled", True)),
         "llm_chunk_interval_s": max(15.0, interval_f),
         "llm_chunk_min_new_chars": max(50, min_chars_i),
     }

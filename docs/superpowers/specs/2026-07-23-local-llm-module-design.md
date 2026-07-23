@@ -114,17 +114,17 @@ gestructureerde analyse-API. Meeting Buddy-prompts horen **niet** in deze module
   bij trage LLM (toon “bezig…” / behoud vorige tekst).
 - Falen: loggen; meeting en transcript gaan door.
 
-### Fase 2 — agendapunt-dekking (later)
+### Fase 2 — agendapunt-status (ladder)
 
-- Zelfde chunk- of stop-moment; output per topic: `summary`, `coverage`,
-  `rationale` (JSON zoals eerder geschetst).
-- UI: checklist naast agenda in overlay.
+Zie [meeting-buddy-agenda-review-design](2026-07-23-meeting-buddy-agenda-review-design.md).
 
-### Fase 3 — vragen (later)
+- Kind `agenda_review`: meeting-fase + topic-updates (`treated` / `confirmed`).
+- Ladder: open → treated → sequential (inhaal) → confirmed (herbespreking).
+- UI: checklist als leidraad met vier standen.
 
-- Detecteer vragen gesteld door anderen (niet alleen de host).
-- Herformuleer tot één heldere vraagzin.
-- Toon als aparte lijst in overlay (cap, dedupe, cooldown — nader te bepalen).
+### Fase 3 — vraag-van-anderen
+
+Zelfde `agenda_review`-chunk: herformuleerde vragen; filter speaker-role ≠ `ME`.
 
 ## Scope
 

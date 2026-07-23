@@ -8,7 +8,15 @@ from enum import Enum
 
 class TopicStatus(str, Enum):
     OPEN = "open"
-    DISCUSSED = "discussed"
+    TREATED = "treated"
+    SEQUENTIAL = "sequential"
+    CONFIRMED = "confirmed"
+
+
+class MeetingPhase(str, Enum):
+    OPENING = "opening"
+    BODY = "body"
+    CLOSING = "closing"
 
 
 class TopicSource(str, Enum):
@@ -91,6 +99,8 @@ class MeetingState:
     action_items: tuple[ActionItem, ...]
     emitted_hints: tuple[Hint, ...]
     live_summary: str = ""
+    live_summary_enabled: bool = False
+    meeting_phase: MeetingPhase = MeetingPhase.BODY
 
     @classmethod
     def empty(cls, meeting_session_id: str) -> MeetingState:
@@ -105,4 +115,6 @@ class MeetingState:
             action_items=(),
             emitted_hints=(),
             live_summary="",
+            live_summary_enabled=False,
+            meeting_phase=MeetingPhase.BODY,
         )
