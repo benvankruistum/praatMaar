@@ -34,6 +34,7 @@ from modules import (
 )
 from opnamesessie import Opnamesessie
 from splash import Splash
+from ui.app import ensure_app
 
 # De zware libraries worden bewust NIET bij import geladen, maar pas in
 # _load_dependencies() op de achtergrond-thread van het laadscherm. Zo verschijnt
@@ -676,47 +677,6 @@ def retranscribe_recovery_wav(path: Path) -> str:
     return transcript
 
 
-def _start_recovery_retranscribe(path: Path, indicator: RecordingIndicator) -> None:
-    """Start herstel-transcriptie op een achtergrondthread (macOS-parent-pad)."""
-
-    from tkinter import messagebox
-
-    def worker() -> None:
-        error: str | None = None
-        try:
-            retranscribe_recovery_wav(path)
-        except Exception as exc:
-            error = str(exc)
-
-        def done() -> None:
-            if error is not None:
-                messagebox.showerror(
-                    i18n.t("settings.title"),
-                    error,
-                    parent=indicator.root,
-                )
-                return
-            if not path.exists():
-                return
-            if messagebox.askyesno(
-                i18n.t("settings.title"),
-                i18n.t("recovery.ask_delete_after", name=path.name),
-                parent=indicator.root,
-            ):
-                try:
-                    recovery.delete_recovery_file(path)
-                except (OSError, ValueError) as exc:
-                    messagebox.showerror(
-                        i18n.t("settings.title"),
-                        str(exc),
-                        parent=indicator.root,
-                    )
-
-        indicator.call_on_main(done)
-
-    threading.Thread(target=worker, daemon=True).start()
-
-
 def _handle_destination_command(kind: str, name: str | None) -> None:
     """Werkt sticky bestemming bij na een stem-commando."""
 
@@ -759,14 +719,13 @@ def _report_user_error(message: str) -> None:
         return
 
     def show() -> None:
-        from tkinter import messagebox
+        from ui.dialogs.message import error
 
-        parent = getattr(indicator, "root", None)
         try:
-            messagebox.showerror(
+            error(
                 i18n.t("rec.start_failed_title"),
                 message,
-                parent=parent,
+                parent=indicator,
             )
         except Exception:
             pass
@@ -1080,11 +1039,8 @@ def main() -> None:
     Start de indicator, het systeemvak-/menubalk-icoon en de globale
     toetsenbordlistener.
 
-    Threading per OS:
-    - Windows: tkinter-mainloop op de hoofdthread; pystray detached; pynput
-      op een eigen thread.
-    - macOS: Cocoa-runloop op de hoofdthread via pystray (`TrayIcon.run`);
-      de native NSPanel-indicator plant een NSTimer op dezelfde runloop.
+    Eén QApplication draait alle Qt-vensters en de tray op de hoofdthread.
+    Audio, transcriptie en de globale toetsenbordlistener draaien daarnaast.
     """
 
     global model, _tray, _indicator
@@ -1095,6 +1051,7 @@ def main() -> None:
     # Bestandslog: onder pythonw / windowed exe is er geen console.
     log_file = app_logging.setup_logging()
     config.ensure_app_data_dirs()
+    app = ensure_app()
     print(i18n.t("log.path", path=log_file))
 
     # Slechts één instantie tegelijk. Een tweede start (bijv. autostart én een
@@ -1107,9 +1064,7 @@ def main() -> None:
         raise SystemExit(0)
 
     # Eerst het laadscherm: het model wordt op een achtergrond-thread geladen
-    # (en zo nodig gedownload) terwijl de splash de voortgang toont. De splash
-    # draait zijn eigen mainloop op de hoofdthread en wordt volledig afgebroken
-    # voordat de indicator zijn venster opbouwt.
+    # (en zo nodig gedownload) terwijl de Qt-splash voortgang toont.
     try:
         model = Splash().run(_startup)
     except Exception as exc:
@@ -1188,41 +1143,13 @@ def main() -> None:
     def run_module_action(module_id: str, action_id: str) -> None:
         indicator.call_on_main(lambda: module_bus.run_action(module_id, action_id))
 
-    # Systeemvak-/menubalk. "Afsluiten" en Ctrl+C funnelen naar request_stop +
-    # tray.stop; "Instellingen" wordt naar de hoofdthread gemarshald.
+    # Systeemvak-/menubalk. Dialoogvensters draaien altijd in dit Qt-proces.
     def open_settings() -> None:
-        # Lazy import: settings.py trekt zelf sounddevice binnen; die is op dit
-        # punt (na de splash) allang geladen, dus deze import is direct.
-        if sys.platform == "darwin":
-            # Apart Tk-proces: een Toplevel in pystray's NSApp-runloop crasht
-            # bij sluiten (PyEval_RestoreThread → SIGABRT op macOS 26+).
-            from settings_process import run_settings_subprocess
-
-            def _mac_settings() -> None:
-                # Onderdruk dicteer-hotkeys terwijl Instellingen open is.
-                set_capture(lambda *_: None)
-                try:
-                    new = run_settings_subprocess(current_settings())
-                finally:
-                    set_capture(None)
-                if new is None:
-                    return
-                path_str = new.get("_recovery_retranscribe")
-                if path_str:
-                    indicator.call_on_main(
-                        lambda: _start_recovery_retranscribe(Path(str(path_str)), indicator)
-                    )
-                    return
-                indicator.call_on_main(lambda: apply_settings(new, indicator))
-
-            threading.Thread(target=_mac_settings, daemon=True).start()
-            return
-
         from settings import open_settings_dialog
 
         indicator.call_on_main(
             lambda: open_settings_dialog(
-                indicator.root,
+                indicator,
                 current_settings(),
                 lambda new: apply_settings(new, indicator),
                 set_capture,
@@ -1231,52 +1158,22 @@ def main() -> None:
         )
 
     def open_destinations() -> None:
-        if sys.platform == "darwin":
-            from settings_process import run_destinations_subprocess
-
-            def _mac_destinations() -> None:
-                set_capture(lambda *_: None)
-                try:
-                    new = run_destinations_subprocess(current_settings())
-                finally:
-                    set_capture(None)
-                if new is not None:
-                    indicator.call_on_main(lambda: apply_settings(new, indicator))
-
-            threading.Thread(target=_mac_destinations, daemon=True).start()
-            return
-
         from destinations_dialog import open_destinations_dialog
 
         indicator.call_on_main(
             lambda: open_destinations_dialog(
-                indicator.root,
+                indicator,
                 current_settings(),
                 lambda new: apply_settings(new, indicator),
             )
         )
 
     def open_modules() -> None:
-        if sys.platform == "darwin":
-            from settings_process import run_modules_subprocess
-
-            def _mac_modules() -> None:
-                set_capture(lambda *_: None)
-                try:
-                    new = run_modules_subprocess(current_settings())
-                finally:
-                    set_capture(None)
-                if new is not None:
-                    indicator.call_on_main(lambda: apply_settings(new, indicator))
-
-            threading.Thread(target=_mac_modules, daemon=True).start()
-            return
-
         from modules_dialog import open_modules_dialog
 
         indicator.call_on_main(
             lambda: open_modules_dialog(
-                indicator.root,
+                indicator,
                 current_settings(),
                 lambda new: apply_settings(new, indicator),
                 on_module_action=run_module_action,
@@ -1286,26 +1183,13 @@ def main() -> None:
         )
 
     def open_help() -> None:
-        if sys.platform == "darwin":
-            from settings_process import run_help_subprocess
-
-            def _mac_help() -> None:
-                set_capture(lambda *_: None)
-                try:
-                    run_help_subprocess(current_settings())
-                finally:
-                    set_capture(None)
-
-            threading.Thread(target=_mac_help, daemon=True).start()
-            return
-
         from help_dialog import open_help as show_help
 
-        indicator.call_on_main(lambda: show_help(indicator.root))
+        indicator.call_on_main(lambda: show_help(indicator))
 
     def request_shutdown() -> None:
         indicator.request_stop()
-        tray.stop()
+        app.quit()
 
     tray = TrayIcon(
         on_quit=request_shutdown,
@@ -1323,37 +1207,25 @@ def main() -> None:
     indicator.state_listener = tray.set_state
 
     def show_pill_context_menu(x: int, y: int) -> None:
-        parent = getattr(indicator, "root", None)
-        tray.popup_menu(x, y, tk_parent=parent)
+        tray.popup_menu(x, y)
 
     indicator.on_context_menu = show_pill_context_menu
     tray.start()
     _refresh_mic_attention()
 
-    # macOS 26+: géén pynput.Listener (TSM-crash op achtergrondthread).
-    # NSEvent-monitor op de Cocoa-mainloop i.p.v. pynput.
-    if tray.owns_main_thread:
-        from mac_input import QuartzKeyListener
-
-        listener = QuartzKeyListener(on_press=on_press, on_release=on_release)
-    else:
-        listener = keyboard.Listener(
-            on_press=on_press,
-            on_release=on_release,
-        )
+    listener = keyboard.Listener(
+        on_press=on_press,
+        on_release=on_release,
+    )
     listener.start()
 
     # Ctrl+C in de console laat de mainloop netjes eindigen.
     signal.signal(signal.SIGINT, lambda *_: request_shutdown())
 
     try:
-        if tray.owns_main_thread:
-            # macOS: NSTimer + NSEvent-monitor op de Cocoa-runloop; pystray
-            # blokkeert met NSApp (menubalk-icoon rechtsboven).
-            indicator.prepare_external_runloop()
-            tray.run()
-        else:
-            indicator.run()
+        # ``run`` starts the pill's timer; QApplication owns the blocking loop.
+        indicator.run()
+        app.exec()
 
     except KeyboardInterrupt:
         pass
@@ -1377,15 +1249,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # Frozen macOS: dialogen als apart proces (zelfde binary).
-    for _flag in (
-        "--praatmaar-settings-ui",
-        "--praatmaar-destinations-ui",
-        "--praatmaar-modules-ui",
-        "--praatmaar-help-ui",
-    ):
-        if _flag in sys.argv:
-            from settings_process import main as settings_ui_main
-
-            raise SystemExit(settings_ui_main(sys.argv[1:]))
     main()

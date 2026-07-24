@@ -275,11 +275,6 @@ class TrayIcon:
                 button.setMenu(self._menu)
         old_menu.deleteLater()
 
-    @property
-    def owns_main_thread(self) -> bool:
-        """Qt owns the application event loop on every supported platform."""
-        return False
-
     def _handle_module_action(self, module_id: str, action_id: str) -> None:
         if self._on_module_action is not None:
             self._on_module_action(module_id, action_id)
@@ -289,9 +284,6 @@ class TrayIcon:
             self._icon.show()
         elif self._fallback_window is not None:
             self._fallback_window.show()
-
-    def run(self) -> None:
-        """Compatibility no-op; Task 8 will run ``QApplication.exec()``."""
 
     def stop(self) -> None:
         self._icon.hide()

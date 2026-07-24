@@ -6,7 +6,8 @@ een sneltoets, transcribeert lokaal met
 (geen cloud-API) en plakt de tekst in het actieve invoerveld.
 
 > **Platform:** Windows 10/11 is primair ondersteund. **macOS** (Apple Silicon)
-> werkt met native NSPanel-overlay; runtime geverifieerd —
+> gebruikt een PySide6/Qt 6-shell voor tray, dialoogvensters en status-pill —
+> runtime geverifieerd —
 > zie [docs/STATUS.md](docs/STATUS.md).
 
 ## Vereisten
@@ -81,8 +82,9 @@ Zonder consolevenster (achtergrond):
 
 Of dubbelklik `start-praatMaar.vbs` (stil, geen zwarte cmd-flash).
 
-Bij de eerste start verschijnt een laadscherm terwijl het model wordt
-gedownload. Daarna: systeemvak-/menubalk-icoon + status-pill.
+Bij de eerste start verschijnt een PySide6/Qt-laadscherm terwijl het model wordt
+gedownload. Daarna draait één Qt-eventloop voor het systeemvak-/menubalk-icoon,
+dialoogvensters en de status-pill.
 
 ### Bediening (standaard)
 
