@@ -19,6 +19,7 @@ from typing import Any
 
 from ._contract import (
     CANCELLED_DURATION_MS,
+    COLOR_MEETING_TAG,
     COLOR_RECORDING,
     COLOR_TRANSCRIBING,
     ERROR_DURATION_MS,
@@ -514,6 +515,8 @@ class RecordingIndicator:
 
         if state in (RecordingState.RECORDING, RecordingState.TRANSCRIBING):
             self._tag_field.setStringValue_(mode_tag(self._mode))
+            tag_color = COLOR_MEETING_TAG if self._mode == "meeting" else MUTED_COLOR
+            self._tag_field.setTextColor_(self._ns_color(tag_color))
             self._tag_field.setHidden_(False)
         else:
             self._tag_field.setStringValue_("")

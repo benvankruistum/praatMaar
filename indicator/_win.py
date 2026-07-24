@@ -16,6 +16,7 @@ from typing import Any
 
 from ._contract import (
     CANCELLED_DURATION_MS,
+    COLOR_MEETING_TAG,
     COLOR_RECORDING,
     COLOR_TRANSCRIBING,
     ERROR_DURATION_MS,
@@ -677,7 +678,8 @@ class RecordingIndicator:
         if state in (RecordingState.RECORDING, RecordingState.TRANSCRIBING):
             # ↔ en ● renderen betrouwbaar in Segoe UI (⇄/◉ niet altijd).
             tag = mode_tag(self._mode)
-            c.itemconfigure(self._tag, text=tag, state="normal")
+            tag_fill = COLOR_MEETING_TAG if self._mode == "meeting" else MUTED_COLOR
+            c.itemconfigure(self._tag, text=tag, state="normal", fill=tag_fill)
         else:
             c.itemconfigure(self._tag, text="", state="hidden")
 

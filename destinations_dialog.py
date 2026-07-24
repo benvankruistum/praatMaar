@@ -16,6 +16,7 @@ from typing import Any
 import destinations
 import i18n
 import recovery
+import ui_theme
 
 _open_dialog: tk.Toplevel | None = None
 
@@ -197,10 +198,12 @@ def _edit_destination(
 
     buttons = ttk.Frame(dlg)
     buttons.grid(row=row, column=0, columnspan=3, sticky="e", padx=12, pady=(6, 12))
-    ttk.Button(buttons, text=i18n.t("destinations.cancel"), command=cancel).grid(
-        row=0, column=0, padx=(0, 8)
-    )
-    ttk.Button(buttons, text=i18n.t("destinations.save"), command=confirm).grid(row=0, column=1)
+    ttk.Button(
+        buttons, text=i18n.t("destinations.cancel"), style="Ghost.TButton", command=cancel
+    ).grid(row=0, column=0, padx=(0, 8))
+    ttk.Button(
+        buttons, text=i18n.t("destinations.save"), style="Primary.TButton", command=confirm
+    ).grid(row=0, column=1)
 
     dlg.protocol("WM_DELETE_WINDOW", cancel)
     _sync_append_row()
@@ -234,9 +237,10 @@ def open_destinations_dialog(
     win.title(i18n.t("destinations.title"))
     win.resizable(True, True)
     win.minsize(560, 400)
-    win.configure(padx=18, pady=16)
+    win.configure(padx=18, pady=16, background=ui_theme.COLOR_SURFACE)
     win.columnconfigure(0, weight=1)
     win.rowconfigure(1, weight=1)
+    ui_theme.apply_dialog_style(win)
 
     dest_list: list[dict[str, Any]] = copy.deepcopy(
         destinations.sanitize_destinations(current.get("destinations"))
@@ -518,10 +522,12 @@ def open_destinations_dialog(
         finally:
             close()
 
-    ttk.Button(buttons, text=i18n.t("destinations.cancel"), command=close).grid(
-        row=0, column=0, padx=(0, 8)
-    )
-    ttk.Button(buttons, text=i18n.t("destinations.save"), command=save).grid(row=0, column=1)
+    ttk.Button(
+        buttons, text=i18n.t("destinations.cancel"), style="Ghost.TButton", command=close
+    ).grid(row=0, column=0, padx=(0, 8))
+    ttk.Button(
+        buttons, text=i18n.t("destinations.save"), style="Primary.TButton", command=save
+    ).grid(row=0, column=1)
 
     win.protocol("WM_DELETE_WINDOW", close)
 

@@ -25,6 +25,7 @@ import destinations
 import hotkeys
 import i18n
 import recovery
+import ui_theme
 
 MODELS = ["base", "small", "medium"]
 
@@ -100,8 +101,9 @@ def open_settings_dialog(
     _open_dialog = win
     win.title(i18n.t("settings.title"))
     win.resizable(False, False)
-    win.configure(padx=18, pady=16)
+    win.configure(padx=18, pady=16, background=ui_theme.COLOR_SURFACE)
     win.columnconfigure(0, weight=1)
+    ui_theme.apply_dialog_style(win)
 
     notebook = ttk.Notebook(win)
     notebook.grid(row=0, column=0, sticky="nsew")
@@ -120,7 +122,9 @@ def open_settings_dialog(
 
     def _section_label(parent: Any, text: str) -> None:
         row = tab_rows[parent]
-        ttk.Label(parent, text=text).grid(row=row, column=0, sticky="w", pady=(0, 2))
+        ttk.Label(parent, text=text.upper(), style="Section.TLabel").grid(
+            row=row, column=0, sticky="w", pady=(8, 4)
+        )
         tab_rows[parent] = row + 1
 
     def _next_row(parent: Any) -> int:
@@ -614,10 +618,12 @@ def open_settings_dialog(
         finally:
             close()
 
-    ttk.Button(buttons, text=i18n.t("settings.cancel"), command=close).grid(
+    ttk.Button(buttons, text=i18n.t("settings.cancel"), style="Ghost.TButton", command=close).grid(
         row=0, column=0, padx=(0, 8)
     )
-    ttk.Button(buttons, text=i18n.t("settings.save"), command=save).grid(row=0, column=1)
+    ttk.Button(buttons, text=i18n.t("settings.save"), style="Primary.TButton", command=save).grid(
+        row=0, column=1
+    )
 
     win.protocol("WM_DELETE_WINDOW", close)
 

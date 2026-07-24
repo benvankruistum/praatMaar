@@ -38,12 +38,12 @@ def format_topic_line(topic: Topic) -> str:
 
 def topic_line_color(topic: Topic) -> str:
     if topic.status == TopicStatus.CONFIRMED:
-        return "#6C7C87"
+        return "#8A94A0"
     if is_at_least_sequential(topic.status):
-        return "#3D5A6C"
+        return "#0A4C86"
     if topic.status == TopicStatus.TREATED:
-        return "#1F4E79"
-    return "#15334A"
+        return "#0F6CBD"
+    return "#1B1F24"
 
 
 def pick_emphasis(hints: Sequence[Hint]) -> str | None:
@@ -94,7 +94,7 @@ class MeetingBuddyOverlay:
         self.window.title(i18n.t("modules.meeting_buddy.overlay.title"))
         self.window.resizable(False, False)
         self.window.attributes("-topmost", True)
-        self.window.configure(background="#F4F7FA", padx=12, pady=10)
+        self.window.configure(background="#F7F9FB", padx=12, pady=10)
         self.window.protocol("WM_DELETE_WINDOW", self.minimize)
 
         self._timer = tk.StringVar(value="00:00:00")
@@ -106,12 +106,12 @@ class MeetingBuddyOverlay:
         self._loopback_requested = True
         self._pulse_on = False
 
-        header = tk.Frame(self.window, background="#F4F7FA")
+        header = tk.Frame(self.window, background="#F7F9FB")
         header.pack(fill="x")
         self._listening_dot = tk.Label(
             header,
             text="●",
-            background="#F4F7FA",
+            background="#F7F9FB",
             foreground="#9AA0A6",
             font=("Segoe UI", 12, "bold"),
         )
@@ -119,15 +119,15 @@ class MeetingBuddyOverlay:
         tk.Label(
             header,
             textvariable=self._listening,
-            background="#F4F7FA",
-            foreground="#15334A",
+            background="#F7F9FB",
+            foreground="#1B1F24",
             font=("Segoe UI Semibold", 10),
         ).pack(side="left", padx=(4, 0))
         tk.Label(
             header,
             textvariable=self._timer,
-            background="#F4F7FA",
-            foreground="#15334A",
+            background="#F7F9FB",
+            foreground="#1B1F24",
             font=("Consolas", 11, "bold"),
         ).pack(side="left", padx=(8, 0))
         if self._on_stop is not None:
@@ -153,25 +153,25 @@ class MeetingBuddyOverlay:
         )
         self._recording_label.pack(fill="x")
 
-        self._agenda = tk.Frame(self.window, background="#F4F7FA")
+        self._agenda = tk.Frame(self.window, background="#F7F9FB")
         self._agenda.pack(fill="x", pady=(8, 0))
         self._agenda_heading = tk.Label(
             self._agenda,
             text=i18n.t("modules.meeting_buddy.overlay.agenda"),
             anchor="w",
-            background="#F4F7FA",
-            foreground="#536674",
+            background="#F7F9FB",
+            foreground="#5A6572",
             font=("Segoe UI Semibold", 8),
         )
-        self._agenda_list = tk.Frame(self._agenda, background="#F4F7FA")
+        self._agenda_list = tk.Frame(self._agenda, background="#F7F9FB")
 
-        self._summary_frame = tk.Frame(self.window, background="#F4F7FA")
+        self._summary_frame = tk.Frame(self.window, background="#F7F9FB")
         self._summary_heading = tk.Label(
             self._summary_frame,
             text=i18n.t("modules.meeting_buddy.overlay.summary"),
             anchor="w",
-            background="#F4F7FA",
-            foreground="#536674",
+            background="#F7F9FB",
+            foreground="#5A6572",
             font=("Segoe UI Semibold", 8),
         )
         self._summary_var = tk.StringVar(value="")
@@ -181,30 +181,30 @@ class MeetingBuddyOverlay:
             anchor="nw",
             justify="left",
             wraplength=320,
-            background="#F4F7FA",
-            foreground="#15334A",
+            background="#F7F9FB",
+            foreground="#1B1F24",
             font=("Segoe UI", 9),
         )
 
-        self._questions_frame = tk.Frame(self.window, background="#F4F7FA")
+        self._questions_frame = tk.Frame(self.window, background="#F7F9FB")
         self._questions_heading = tk.Label(
             self._questions_frame,
             text=i18n.t("modules.meeting_buddy.overlay.questions"),
             anchor="w",
-            background="#F4F7FA",
-            foreground="#536674",
+            background="#F7F9FB",
+            foreground="#5A6572",
             font=("Segoe UI Semibold", 8),
         )
-        self._questions_list = tk.Frame(self._questions_frame, background="#F4F7FA")
+        self._questions_list = tk.Frame(self._questions_frame, background="#F7F9FB")
 
-        self._hints = tk.Frame(self.window, background="#F4F7FA")
+        self._hints = tk.Frame(self.window, background="#F7F9FB")
         self._hints.pack(fill="x", pady=(9, 7))
         tk.Label(
             self.window,
             textvariable=self._status,
             anchor="w",
-            background="#F4F7FA",
-            foreground="#536674",
+            background="#F7F9FB",
+            foreground="#5A6572",
             font=("Segoe UI", 8),
         ).pack(fill="x")
         self._reconnect_button = ttk.Button(
@@ -298,7 +298,7 @@ class MeetingBuddyOverlay:
                 self._agenda_list,
                 text=format_topic_line(topic),
                 anchor="w",
-                background="#F4F7FA",
+                background="#F7F9FB",
                 foreground=color,
                 font=("Segoe UI", 9),
             )
@@ -324,7 +324,7 @@ class MeetingBuddyOverlay:
                 anchor="w",
                 justify="left",
                 wraplength=320,
-                background="#F4F7FA",
+                background="#F7F9FB",
                 foreground="#8A4B08",
                 font=("Segoe UI", 9),
             )
@@ -340,7 +340,7 @@ class MeetingBuddyOverlay:
             text = i18n.t("modules.meeting_buddy.overlay.summary_waiting")
             self._summary_body.configure(foreground="#6C7C87")
         else:
-            self._summary_body.configure(foreground="#15334A")
+            self._summary_body.configure(foreground="#1B1F24")
         self._summary_var.set(text)
         if not self._summary_frame.winfo_manager():
             # Place between agenda and hints when possible.
@@ -371,7 +371,7 @@ class MeetingBuddyOverlay:
                 self._hints,
                 text=i18n.t("modules.meeting_buddy.overlay.no_hints"),
                 anchor="w",
-                background="#F4F7FA",
+                background="#F7F9FB",
                 foreground="#6C7C87",
                 font=("Segoe UI", 9),
             )
@@ -426,8 +426,8 @@ class MeetingBuddyOverlay:
 
     def _update_hint_card(self, hint: Hint, *, emphasized: bool) -> None:
         card = self._hint_cards[hint.id]
-        background = "#DCEEFF" if emphasized else "#FFFFFF"
-        border = "#4A90C2" if emphasized else "#CFD9E0"
+        background = "#EAF3FC" if emphasized else "#FFFFFF"
+        border = "#0F6CBD" if emphasized else "#CFD9E0"
         thickness = 2 if emphasized else 1
         card.configure(
             background=background, highlightbackground=border, highlightthickness=thickness

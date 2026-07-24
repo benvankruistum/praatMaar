@@ -99,13 +99,14 @@ def preset_indicator_xy(
 # Max. tekens voor sticky bestemmingsnaam in de pill (voorkomt knippen).
 MAX_DESTINATION_DISPLAY_CHARS = 24
 
-PILL_BG = "#202124"
+PILL_BG = "#1C1F23"
 TEXT_COLOR = "#f1f3f4"
 MUTED_COLOR = "#9aa0a6"
 COLOR_RECORDING = "#ff4d4d"
 COLOR_TRANSCRIBING = "#ffb020"
 COLOR_CANCELLED = "#9aa0a6"
 COLOR_ERROR = "#ff5252"
+COLOR_MEETING_TAG = "#0F6CBD"
 
 STATE_LABEL_KEYS = {
     RecordingState.RECORDING: "state.recording",
