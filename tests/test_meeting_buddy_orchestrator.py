@@ -398,8 +398,12 @@ def test_module_dispatches_orchestrator_updates_to_overlay(
             start=True,
         ),
     )
-    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.message.info", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.message.error", lambda *_args, **_kwargs: None
+    )
     module = MeetingBuddyModule()
     module.on_app_start(
         ModuleContext(

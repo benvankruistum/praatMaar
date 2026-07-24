@@ -40,6 +40,28 @@ def test_pick_emphasis_returns_none_without_active_hints() -> None:
     assert pick_emphasis([_hint("h1", 1, status=HintStatus.DISMISSED)]) is None
 
 
+def test_overlay_is_a_non_activating_qt_hud() -> None:
+    from PySide6.QtCore import Qt
+
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
+    from ui.app import ensure_app
+
+    ensure_app([])
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0,
+        on_dismiss=lambda _hint_id: None,
+        on_confirm=lambda _hint_id: None,
+        on_reconnect=lambda: None,
+    )
+    try:
+        flags = overlay.window.windowFlags()
+        assert flags & Qt.WindowType.Tool
+        assert flags & Qt.WindowType.WindowStaysOnTopHint
+        assert flags & Qt.WindowType.WindowDoesNotAcceptFocus
+    finally:
+        overlay.close()
+
+
 def test_listening_text_when_capture_active() -> None:
     import i18n
     from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay

@@ -76,8 +76,12 @@ def test_meeting_start_forces_meeting_pill_mode_via_begin_meeting(
         notified.append((state, mode))
 
     monkeypatch.setattr("modules._builtin.meeting_buddy.module.notify_state", _notify)
-    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *_a, **_k: None)
-    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.message.error", lambda *_a, **_k: None
+    )
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.message.info", lambda *_a, **_k: None
+    )
     monkeypatch.setattr(
         "modules._builtin.meeting_buddy.module.MeetingBuddyModule._show_overlay_update",
         lambda *a, **k: None,
@@ -127,8 +131,12 @@ def test_meeting_capture_active_shows_recording_pill(
         notified.append((state, mode))
 
     monkeypatch.setattr("modules._builtin.meeting_buddy.module.notify_state", _notify)
-    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *_a, **_k: None)
-    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.message.error", lambda *_a, **_k: None
+    )
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.message.info", lambda *_a, **_k: None
+    )
     monkeypatch.setattr(
         "modules._builtin.meeting_buddy.module.MeetingBuddyModule._show_overlay_update",
         lambda *a, **k: None,
@@ -171,8 +179,12 @@ def test_meeting_capture_error_shows_error_pill(tmp_path, monkeypatch: pytest.Mo
         notified.append((state, mode))
 
     monkeypatch.setattr("modules._builtin.meeting_buddy.module.notify_state", _notify)
-    monkeypatch.setattr("tkinter.messagebox.showerror", lambda *_a, **_k: None)
-    monkeypatch.setattr("tkinter.messagebox.showinfo", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.message.error", lambda *_a, **_k: None
+    )
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.module.message.info", lambda *_a, **_k: None
+    )
     monkeypatch.setattr(
         "modules._builtin.meeting_buddy.module.MeetingBuddyModule._show_overlay_update",
         lambda *a, **k: None,

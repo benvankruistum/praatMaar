@@ -122,49 +122,16 @@ def test_journal_create_uses_override_directory(tmp_path: Path) -> None:
 
 
 def test_show_properties_dialog_cancel_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    import tkinter as tk
-
-    try:
-        root = tk.Tk()
-    except tk.TclError as exc:
-        pytest.skip(f"Tk unavailable: {exc}")
-    root.withdraw()
+    from PySide6.QtWidgets import QDialog
 
     monkeypatch.setattr(
         "modules._builtin.meeting_buddy.properties_dialog.list_loopback_output_devices",
         lambda: [("Default", None)],
     )
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
 
-    original_topllevel = tk.Toplevel
-
-    def patched_topllevel(*args, **kwargs):
-        dlg = original_topllevel(*args, **kwargs)
-        cancel_handler = None
-        original_protocol = dlg.protocol
-
-        def protocol(name, handler):
-            nonlocal cancel_handler
-            if name == "WM_DELETE_WINDOW":
-                cancel_handler = handler
-            return original_protocol(name, handler)
-
-        dlg.protocol = protocol
-
-        def wait_window():
-            if cancel_handler is not None:
-                cancel_handler()
-
-        dlg.wait_window = wait_window
-        return dlg
-
-    monkeypatch.setattr(tk, "Toplevel", patched_topllevel)
-
-    try:
-        result = show_properties_dialog(
-            enable_loopback=True,
-            loopback_device=None,
-            parent=root,
-        )
-    finally:
-        root.destroy()
+    result = show_properties_dialog(
+        enable_loopback=True,
+        loopback_device=None,
+    )
     assert result is None
