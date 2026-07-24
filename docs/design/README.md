@@ -23,10 +23,12 @@ Open lokaal in een browser (HTML + `support.js`):
 
 ## Implementatie
 
-- [implementation-plan.md](implementation-plan.md) — gefaseerde nabouw in de app
+- [fidelity-pass.md](fidelity-pass.md) — **actieve opdracht:** canvas exact (checklists + acceptatie)
+- [implementation-plan.md](implementation-plan.md) — PySide6-migratieplan (verwijst door)
+- [toolkit-pyside6.md](toolkit-pyside6.md) — wat Qt wel/niet mag
 
 **Merkfamilie:** Segoe UI / Windows 11-licht, accent `#0F6CBD`, gedeelde
 radius/knoppen/iconografie; verschillende vormfactoren (capsule / dialoog /
 overlay).
 
-**Platform:** Windows primair; macOS waar relevant. UI-talen: nl / en / de.
+**Platform:** Windows · macOS · Linux. UI-talen: nl / en / de.
