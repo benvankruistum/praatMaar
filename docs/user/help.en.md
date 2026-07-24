@@ -98,11 +98,26 @@ tray also has **Meeting Buddy ▸** with the same actions.
 - **Start meeting…** opens the agenda (library with Recent + all `.md` agendas).
 - **Start meeting (quick)** starts with the current agenda without a dialog.
 - **Edit agenda** to save/load agendas without starting.
-- **Properties** for meeting audio (Windows loopback) and output device.
+- **Properties** for meeting audio (Windows loopback), output device, and
+  optionally a different transcript folder.
 
 During a meeting the transcript grows as a `.md` file under
-`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (final text only). On stop you
-get a notification with the path.
+`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (final text only; changeable
+in Properties). On stop you get a notification with the path.
+
+### Local LLM, live summary, and agenda review
+
+Optional (off by default): enable **Local LLM** under **Modules**. It uses
+[Ollama](https://ollama.com/) with a local Qwen model. Module actions let you
+check status, open install help, and download the model. Without a ready Local
+LLM, Meeting Buddy stays on heuristic hints.
+
+With Local LLM ready, turn on live summary and agenda review in Meeting Buddy
+**Properties** (off by default):
+
+- **Live summary** in the overlay (time / new-text thresholds).
+- **Agenda review**: status ladder per agenda item and “questions from others”
+  (experimental; depends on speaker detection).
 
 On Windows, Meeting Buddy can also capture **meeting audio** from the chosen
 Windows output device via loopback, mixed with your microphone.

@@ -12,8 +12,8 @@ Windows-builds: [release-windows.md](release-windows.md).
 ## Versie
 
 Gebruik dezelfde versiestring als Windows (`pyproject.toml`, CHANGELOG, git-tag).
-Huidige gepubliceerde tag: **v0.1.0**. Volgende geplande: **v0.2.0** (nog
-Unreleased — macOS-port zit in die lijn).
+Huidige gepubliceerde tag: **v0.1.0**. Cut op deze lijn: **v0.2.0**
+(CHANGELOG-sectie; macOS-port zit in die release).
 
 Zip-naamvoorbeeld:
 

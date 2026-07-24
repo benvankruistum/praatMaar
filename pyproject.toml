@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "praatMaar"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lokale dicteertool (Faster-Whisper; Windows + macOS; UI/spraak nl/en/de)"
 readme = "README.md"
 license = { file = "LICENSE" }

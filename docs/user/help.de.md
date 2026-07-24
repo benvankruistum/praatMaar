@@ -103,11 +103,27 @@ Aktionen.
 - **Besprechung starten…** öffnet die Agenda (Bibliothek mit Zuletzt + alle `.md`-Agenden).
 - **Besprechung starten (schnell)** startet mit der aktuellen Agenda ohne Dialog.
 - **Agenda bearbeiten** zum Speichern/Laden ohne Start.
-- **Eigenschaften** für Meeting-Audio (Windows-Loopback) und Ausgabegerät.
+- **Eigenschaften** für Meeting-Audio (Windows-Loopback), Ausgabegerät und
+  optional einen anderen Transkriptordner.
 
 Während eines Meetings wächst das Transkript als `.md` unter
-`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (nur finale Texte). Beim Stoppen
-erscheint eine Meldung mit dem Pfad.
+`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (nur finale Texte; änderbar
+unter Eigenschaften). Beim Stoppen erscheint eine Meldung mit dem Pfad.
+
+### Local LLM, Live-Zusammenfassung und Agenda-Review
+
+Optional (standardmäßig aus): aktivieren Sie **Local LLM** unter **Module**.
+Das Modul nutzt [Ollama](https://ollama.com/) mit einem lokalen Qwen-Modell.
+Über Modulaktionen prüfen Sie den Status, öffnen Installationshilfe und laden
+das Modell herunter. Ohne bereites Local LLM bleibt Meeting Buddy bei
+heuristischen Hinweisen.
+
+Mit bereitem Local LLM schalten Sie Live-Zusammenfassung und Agenda-Review unter
+Meeting-Buddy-**Eigenschaften** ein (standardmäßig aus):
+
+- **Live-Zusammenfassung** im Overlay (Schwellen für Zeit/neuen Text).
+- **Agenda-Review**: Statusleiter pro Agendapunkt und „Fragen von anderen“
+  (experimentell; hängt von Sprechererkennung ab).
 
 Unter Windows kann Meeting Buddy neben dem Mikrofon optional **Meeting-Audio** vom
 gewählten Windows-Ausgabegerät per Loopback aufnehmen.

@@ -24,7 +24,7 @@ Laatst bijgewerkt: 2026-07-23.
 - **Modules:** in-process uitbreidingen + event-journal (`modules/`, tray **Modules**);
   inbox-spiegel; optionele incrementele transcriptie tijdens opname
   ([ADR-0003](adr/0003-hybrid-module-system.md))
-- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.1.0`)
+- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.1.0`; volgende `v0.2.0`)
 
 ## Experimentele modules
 
@@ -32,19 +32,21 @@ Laatst bijgewerkt: 2026-07-23.
   optioneel meetinggeluid via WASAPI-loopback mixen (experimenteel)
 - `speech-to-text`: incrementele lokale transcriptie via het gedeelde
   Faster-Whisper-model
-- `meeting-buddy`: meetingstate, heuristische hints, transcript-stream en
-  optionele live-samenvatting via capability `ai.semantic_analysis`
+- `meeting-buddy`: meetingstate, heuristische hints, transcript-stream,
+  optionele live-samenvatting, agenda-review (statusladder + vragen van
+  anderen) via capability `ai.semantic_analysis`
 - `local-llm`: Ollama + Qwen 2.5 als provider van `ai.semantic_analysis`
-  (standaard uit; setup via Modules)
+  (standaard uit; Modules: statuscontrole, installatiehulp, model-download)
 
 Deze Meeting Buddy-MVP is experimenteel. Op Windows neemt Meeting Buddy naast
 de microfoon optioneel meetinggeluid op via WASAPI-loopback (standaard aan).
-De overlay toont of loopback actief is. Device-keuze voor loopback staat in de
-prep-dialoog bij meeting start. Optionele lokale LLM (module `local-llm` +
-Meeting Buddy agenda-review) is ontworpen maar nog niet gebouwd — zie
+De overlay toont of loopback actief is; device-keuze en transcriptmap staan in
+**Eigenschappen**. Live samenvatting en agenda-review vereisen module
+`local-llm` met een klaar Ollama-model (standaard uit; experimenteel) — zie
 [ADR-0004](adr/0004-local-first-inference.md) en
 [local-llm design](superpowers/specs/2026-07-23-local-llm-module-design.md).
-Zie ook het [MVP-design](superpowers/specs/2026-07-19-meeting-buddy-mvp-design.md) en
+Zonder Local LLM blijft Meeting Buddy bij heuristische hints. Zie ook het
+[MVP-design](superpowers/specs/2026-07-19-meeting-buddy-mvp-design.md) en
 [handoff loopback/Teams](HANDOFF-meeting-buddy-teams-loopback.md).
 
 ## macOS
@@ -75,13 +77,12 @@ Gatekeeper (zie roadmap).
 
 ## Open / roadmap
 
-1. Release **v0.2.0**: versie sync + CHANGELOG-cut + Windows-tag (Setup/zip);
+1. Tag **v0.2.0** na merge van `release/v0.2.0` (Windows Setup/zip via Actions);
    macOS `.app` handmatig of later via CI (signing later).
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
 2. macOS: eventuele Gatekeeper/signing-check op een schone Mac zonder TCC-dev-host.
-3. Module **Local LLM** + Meeting Buddy **fase 1** (live samenvatting op
-   configureerbare chunks) — daarna coverage per agendapunt en vragenlijst.
-   Zie [design](superpowers/specs/2026-07-23-local-llm-module-design.md).
+3. Experimentele Local LLM + Meeting Buddy agenda-review: gebruikersvalidatie
+   en polish. Zie [design](superpowers/specs/2026-07-23-local-llm-module-design.md).
 
 ## Historische handoffs
 

@@ -18,8 +18,8 @@ Houd deze plekken **gelijk** (zonder `v`-prefix, behalve de git-tag):
 | Git-tag | `v0.2.0` |
 | `CHANGELOG.md` | sectie `[0.2.0] - YYYY-MM-DD`, `[Unreleased]` leegmaken |
 
-Huidige **gepubliceerde** release: **v0.1.0**. Werk op `main` voor **v0.2.0** staat in
-CHANGELOG onder `[Unreleased]`.
+Huidige **gepubliceerde** release: **v0.1.0**. Deze branch cut **v0.2.0**
+(CHANGELOG-sectie `[0.2.0]`); tag na merge + bevestiging.
 
 ### Checklist vóór een tag
 

@@ -55,7 +55,6 @@ python -m pip install -r requirements.txt
 ### Vanuit broncode (macOS)
 
 ```bash
-brew install portaudio
 git clone https://github.com/benvankruistum/praatMaar.git
 cd praatMaar
 python3 -m venv .venv
@@ -97,12 +96,15 @@ via **Instellingen** in het systeemvak-menu. **Bestemmingen** beheren sticky
 opslagmappen (naam + pad; wisselen met stem via exacte naam). **Modules**
 schakelt uitbreidingen in/uit en incrementele transcriptie; alle dicteercycli
 worden ook gelogd in `events/events.jsonl` voor externe tools. **Help** opent
-lokale gebruikersdocumentatie (nl/en/de).
+lokale gebruikersdocumentatie (nl/en/de). Experimenteel op Windows: **Meeting
+Buddy** (meetingoverlay + transcript) en optioneel **Local LLM** (Ollama/Qwen
+lokaal; standaard uit) voor live samenvatting en agenda-review.
 
 ## Privacy
 
 - Transcriptie gebeurt **lokaal** op je CPU; audio gaat niet naar een
-  cloud-API.
+  cloud-API. Optionele Local LLM-analyse (Meeting Buddy) draait eveneens
+  lokaal via Ollama — geen cloud-API.
 - Bij de **eerste** (of bij modelwissel) wordt het Whisper-model gedownload van
   Hugging Face.
 - De app gebruikt een **globale sneltoets** (pynput) en kan tekst op het
@@ -125,7 +127,7 @@ Zie ook [SECURITY.md](SECURITY.md).
 
 - Windows: [docs/release-windows.md](docs/release-windows.md) (versie-checklist + tag)
 - macOS: [docs/release-macos.md](docs/release-macos.md)
-- Changelog: [CHANGELOG.md](CHANGELOG.md) — gepubliceerd `v0.1.0`; volgende lijn `v0.2.0` onder Unreleased
+- Changelog: [CHANGELOG.md](CHANGELOG.md) — cut `v0.2.0`; nieuw werk onder Unreleased
 
 ```text
 pyinstaller praatMaar.spec --clean

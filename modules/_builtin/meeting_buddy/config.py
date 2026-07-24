@@ -156,7 +156,7 @@ def load_live_summary_prefs(app_dir: Path) -> dict[str, Any]:
     except (TypeError, ValueError):
         min_chars_i = 120
     return {
-        "live_summary_enabled": bool(data.get("live_summary_enabled", True)),
+        "live_summary_enabled": bool(data.get("live_summary_enabled", False)),
         "llm_chunk_interval_s": max(15.0, interval_f),
         "llm_chunk_min_new_chars": max(50, min_chars_i),
     }

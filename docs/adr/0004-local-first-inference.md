@@ -45,8 +45,8 @@ patroon als SharedWhisper / capability registry.
 - Prompts, JSON-schema’s en Meeting Buddy-review-UX — feature-spec.
 - Of analyse live of bij stop draait — productkeuze in de feature-spec.
 - Bundelen van Ollama/Qwen in de Windows-installer — later.
-- Exacte uitbreiding van het `SemanticAnalysisCapability`-Protocol voorbij de
-  huidige MVP-stub — feature-spec + contracttests.
+- Exacte uitbreiding van het `SemanticAnalysisCapability`-Protocol voorbij
+  contract v2 (running-summary + agenda-review) — feature-spec + contracttests.
 
 ## Alternatieven overwogen
 

@@ -17,7 +17,7 @@ class PropertiesResult:
     enable_loopback: bool
     loopback_device: int | None
     transcripts_directory: str | None
-    live_summary_enabled: bool = True
+    live_summary_enabled: bool = False
     llm_chunk_interval_s: float = 45.0
     llm_chunk_min_new_chars: int = 120
 
@@ -41,7 +41,7 @@ def build_properties_result(
     device_value_by_label: dict[str, int | None],
     fallback_device: int | None,
     transcripts_directory: str | None,
-    live_summary_enabled: bool = True,
+    live_summary_enabled: bool = False,
     llm_chunk_interval_s: float = 45.0,
     llm_chunk_min_new_chars: int = 120,
 ) -> PropertiesResult:
@@ -62,7 +62,7 @@ def show_properties_dialog(
     enable_loopback: bool,
     loopback_device: int | None,
     transcripts_directory: str | None = None,
-    live_summary_enabled: bool = True,
+    live_summary_enabled: bool = False,
     llm_chunk_interval_s: float = 45.0,
     llm_chunk_min_new_chars: int = 120,
     app_dir: Path | None = None,
