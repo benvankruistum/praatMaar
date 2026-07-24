@@ -1,9 +1,14 @@
 # Implementatieplan — praatMaar UI-canvas
 
+> **Superseded for toolkit work:** de PySide6-migratie staat in
+> [docs/superpowers/plans/2026-07-24-pyside6-ui.md](../superpowers/plans/2026-07-24-pyside6-ui.md)
+> (wayfinder: `.scratch/pyside6-migration/`). Onderstaande Tk-fasen zijn historisch
+> / interim tot de Qt-flip.
+
 - **Datum:** 2026-07-24
 - **Bron:** [canvas/praatMaar-ui.dc.html](canvas/praatMaar-ui.dc.html) + briefs in
   deze map
-- **Doel:** de goedgekeurde vormgeving gefaseerd nabouwen in de bestaande
+- **Doel (oud):** de goedgekeurde vormgeving gefaseerd nabouwen in de bestaande
   Tk/ttk-UI (geen rewrite naar webview)
 
 ## Uitgangspunten
