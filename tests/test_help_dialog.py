@@ -55,7 +55,7 @@ Een **vet** woord en `code`.
 
 def test_load_help_text_fallback_when_missing(monkeypatch) -> None:
     monkeypatch.setattr(
-        "help_dialog.help_file_path",
+        "ui.dialogs.help.help_file_path",
         lambda language=None: user_docs_dir() / "help.missing.md",
     )
     text = load_help_text()

@@ -220,6 +220,56 @@ def tk_event_modifier_tokens(state: int) -> set[str]:
     return mods
 
 
+def qt_key_to_token(key: Any, text: str = "") -> str | None:
+    """Convert a Qt key code and optional event text to a persistent hotkey token."""
+    from PySide6.QtCore import Qt
+
+    special_keys = {
+        Qt.Key.Key_Control: "ctrl",
+        Qt.Key.Key_Shift: "shift",
+        Qt.Key.Key_Alt: "alt",
+        Qt.Key.Key_Meta: "cmd",
+        Qt.Key.Key_Space: "space",
+        Qt.Key.Key_Return: "enter",
+        Qt.Key.Key_Enter: "num_enter",
+        Qt.Key.Key_Tab: "tab",
+        Qt.Key.Key_Escape: "esc",
+        Qt.Key.Key_Backspace: "backspace",
+        Qt.Key.Key_Delete: "delete",
+        Qt.Key.Key_Insert: "insert",
+        Qt.Key.Key_Home: "home",
+        Qt.Key.Key_End: "end",
+        Qt.Key.Key_PageUp: "page_up",
+        Qt.Key.Key_PageDown: "page_down",
+        Qt.Key.Key_Left: "left",
+        Qt.Key.Key_Right: "right",
+        Qt.Key.Key_Up: "up",
+        Qt.Key.Key_Down: "down",
+        Qt.Key.Key_BracketLeft: "[",
+        Qt.Key.Key_BracketRight: "]",
+        Qt.Key.Key_Backslash: "\\",
+        Qt.Key.Key_Semicolon: ";",
+        Qt.Key.Key_Apostrophe: "'",
+        Qt.Key.Key_Comma: ",",
+        Qt.Key.Key_Period: ".",
+        Qt.Key.Key_Slash: "/",
+        Qt.Key.Key_Minus: "-",
+        Qt.Key.Key_Equal: "=",
+        Qt.Key.Key_QuoteLeft: "`",
+    }
+    if key in special_keys:
+        return special_keys[key]
+    if Qt.Key.Key_A <= key <= Qt.Key.Key_Z:
+        return chr(int(key) - int(Qt.Key.Key_A) + ord("a"))
+    if Qt.Key.Key_0 <= key <= Qt.Key.Key_9:
+        return chr(int(key) - int(Qt.Key.Key_0) + ord("0"))
+    if Qt.Key.Key_F1 <= key <= Qt.Key.Key_F35:
+        return f"f{int(key) - int(Qt.Key.Key_F1) + 1}"
+    if len(text) == 1 and not text.isspace():
+        return text.lower()
+    return None
+
+
 def normalize(tokens: Iterable[str]) -> list[str]:
     """Ontdubbelt en sorteert (modifiers eerst) voor een stabiele opslag/weergave."""
 

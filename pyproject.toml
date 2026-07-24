@@ -80,6 +80,7 @@ packages = [
     "modules._builtin.meeting_buddy",
     "modules.capabilities",
     "ui",
+    "ui.dialogs",
 ]
 
 [tool.setuptools.package-data]
