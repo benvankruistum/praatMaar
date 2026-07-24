@@ -101,16 +101,48 @@ def build_qss(tokens: dict[str, str] | None = None) -> str:
         border-radius: {t["radius_card"]};
     }}
     QFrame#dialogFooter {{
-        background: {t["surface_footer"]}; border-top: 1px solid {t["border"]};
+        background: {t["surface_footer"]}; border-top: 1px solid {t["border_subtle"]};
+    }}
+    QFrame#settingsSection {{
+        border: none; border-top: 1px solid #F0F2F5;
+    }}
+    QLabel#fieldLabel {{
+        color: {t["text_secondary"]}; font-size: 12.5px;
+    }}
+    QLabel#hintLabel {{
+        color: {t["muted_soft"]}; font-size: 11.5px;
+    }}
+    QLabel#keycap {{
+        min-width: 34px; min-height: 26px; padding: 0 8px;
+        border: 1px solid {t["border_strong"]}; border-bottom-width: 2px;
+        border-radius: 4px; background: {t["page"]};
+        color: {t["text_secondary"]}; font-size: 11.5px; font-weight: 600;
+    }}
+    QLabel#keycapPlus {{
+        color: #A9B2BD; font-size: 11px; padding: 0 2px;
     }}
     QCheckBox::indicator {{
-        width: 34px; height: 19px;
-    }}
-    QCheckBox::indicator:unchecked {{
-        border-radius: 10px; background: {t["border_strong"]};
+        width: 16px; height: 16px; border-radius: 3px;
+        border: 1.5px solid #A9B2BD; background: {t["surface"]};
     }}
     QCheckBox::indicator:checked {{
+        border: 1.5px solid {t["accent"]}; background: {t["accent"]};
+    }}
+    QCheckBox#switch::indicator {{
+        width: 34px; height: 19px; border: none;
+    }}
+    QCheckBox#switch::indicator:unchecked {{
+        border-radius: 10px; background: {t["border_strong"]};
+    }}
+    QCheckBox#switch::indicator:checked {{
         border-radius: 10px; background: {t["accent"]};
+    }}
+    QRadioButton::indicator {{
+        width: 16px; height: 16px; border-radius: 8px;
+        border: 1.5px solid #A9B2BD; background: {t["surface"]};
+    }}
+    QRadioButton::indicator:checked {{
+        border: 5px solid {t["accent"]}; background: {t["surface"]};
     }}
     """
 

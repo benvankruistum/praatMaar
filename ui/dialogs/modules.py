@@ -102,6 +102,7 @@ class ModulesDialog(QDialog):
         inc_layout.setContentsMargins(12, 10, 12, 10)
         inc_layout.setSpacing(9)
         self._incremental = QCheckBox()
+        self._incremental.setObjectName("switch")
         self._incremental.setChecked(bool(current.get("incremental_transcription", False)))
         self._incremental.toggled.connect(self._sync_incremental_style)
         inc_text = QVBoxLayout()
@@ -203,6 +204,7 @@ class ModulesDialog(QDialog):
         top.addLayout(left, 1)
 
         check = QCheckBox()
+        check.setObjectName("switch")
         check.setAccessibleName(i18n.t(module.display_name_key()))
         check.setChecked(enabled)
         check.toggled.connect(lambda _checked, mid=module.id: self._on_toggle(mid))

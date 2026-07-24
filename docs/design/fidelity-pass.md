@@ -49,9 +49,16 @@ Kopieer naar de PR/commit-body en vink af:
 - [x] Na Opslaan: statusregel + dialoog blijft open; acties verschijnen
 - [ ] Live screenshot / side-by-side met canvas M1/M2 goedgekeurd door gebruiker
 
-## Checklist — overige surfaces
+## Checklist — Instellingen `#4a`
 
-Zie betreffende brief + canvas-anker; zelfde acceptatieregels. Vul checklist in vóór implementatie van die surface (geen “ongeveer”).
+- [x] Sectiekopjes MICROFOON / INDICATOR / BEDIENING / OPTIES
+- [x] Labelkolom ~150px; control rechts
+- [x] Warm-houden onder microfoon met aparte hintregel
+- [x] Modus als radio’s (niet dropdown)
+- [x] Sneltoets als keycaps + knop Opnemen…
+- [x] Opties: normale checkboxes + hint onder automatisch plakken
+- [x] Footer: Annuleren ghost + Opslaan primary
+- [ ] Live side-by-side met canvas S1 goedgekeurd door gebruiker
 
 ## Agent-prompt (plakken)
 

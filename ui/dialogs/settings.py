@@ -1,4 +1,4 @@
-"""Qt implementation of praatMaar's settings dialog."""
+"""Qt Settings dialog — canvas frame #4a fidelity."""
 
 from __future__ import annotations
 
@@ -9,16 +9,18 @@ from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
-    QDialogButtonBox,
-    QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QMessageBox,
     QPushButton,
+    QRadioButton,
+    QScrollArea,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -30,9 +32,9 @@ import i18n
 import recovery
 from ui.app import ensure_app
 from ui.marshal import ui_dispatch
-from ui.theme import TOKENS
 
 MODELS = ["base", "small", "medium"]
+_LABEL_WIDTH = 150
 _open_dialog: QDialog | None = None
 
 
@@ -42,10 +44,6 @@ def _positions() -> list[tuple[str, str]]:
         (i18n.t("settings.position.bottom"), "onder-midden"),
         (i18n.t("settings.position.last"), "laatst-geplaatst"),
     ]
-
-
-def _modes() -> list[tuple[str, str]]:
-    return [(i18n.t("settings.mode.toggle"), "toggle"), (i18n.t("settings.mode.ptt"), "ptt")]
 
 
 def _language_choices() -> list[tuple[str, str]]:
@@ -79,8 +77,57 @@ def _combo(items: list[tuple[str, Any]], selected: Any) -> QComboBox:
     return combo
 
 
+def _section_title(text: str) -> QLabel:
+    label = QLabel(text.upper())
+    label.setObjectName("sectionLabel")
+    return label
+
+
+def _field_label(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setObjectName("fieldLabel")
+    label.setFixedWidth(_LABEL_WIDTH)
+    return label
+
+
+def _hint(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setObjectName("hintLabel")
+    label.setWordWrap(True)
+    return label
+
+
+def _labeled_row(label: str, widget: QWidget) -> QWidget:
+    row = QWidget()
+    layout = QHBoxLayout(row)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(14)
+    layout.addWidget(_field_label(label))
+    layout.addWidget(widget, 1)
+    return row
+
+
+def _checkbox_with_hint(title: str, hint: str | None = None) -> tuple[QCheckBox, QWidget]:
+    box = QWidget()
+    layout = QHBoxLayout(box)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(9)
+    check = QCheckBox()
+    layout.addWidget(check, 0, Qt.AlignmentFlag.AlignTop)
+    text_col = QVBoxLayout()
+    text_col.setSpacing(2)
+    text_col.setContentsMargins(0, 0, 0, 0)
+    title_label = QLabel(title)
+    title_label.setStyleSheet("font-size: 12.5px;")
+    text_col.addWidget(title_label)
+    if hint:
+        text_col.addWidget(_hint(hint))
+    layout.addLayout(text_col, 1)
+    return check, box
+
+
 class SettingsDialog(QDialog):
-    """Settings dialog with general, language, and recovery-audio tabs."""
+    """Settings dialog aligned to canvas #4a."""
 
     def __init__(
         self,
@@ -93,7 +140,8 @@ class SettingsDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(i18n.t("settings.title"))
-        self.setMinimumWidth(540)
+        self.setMinimumSize(620, 560)
+        self.resize(620, 640)
         self._current = current
         self._on_apply = on_apply
         self._set_capture = set_capture
@@ -105,55 +153,165 @@ class SettingsDialog(QDialog):
         self._hotkey_tokens = list(current.get("hotkey") or hotkeys.DEFAULT_HOTKEY)
         self._recovery_paths: list[Path] = []
 
-        layout = QVBoxLayout(self)
-        tabs = QTabWidget()
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        self._tabs = QTabWidget()
         self._general_tab = QWidget()
         self._language_tab = QWidget()
         self._advanced_tab = QWidget()
-        tabs.addTab(self._general_tab, i18n.t("settings.tab.general"))
-        tabs.addTab(self._language_tab, i18n.t("settings.tab.language"))
-        tabs.addTab(self._advanced_tab, i18n.t("settings.tab.advanced"))
+        self._tabs.addTab(self._general_tab, i18n.t("settings.tab.general"))
+        self._tabs.addTab(self._language_tab, i18n.t("settings.tab.language"))
+        self._tabs.addTab(self._advanced_tab, i18n.t("settings.tab.advanced"))
         self._build_general()
         self._build_language()
         self._build_advanced()
-        layout.addWidget(tabs)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
-        save = buttons.addButton(i18n.t("settings.save"), QDialogButtonBox.ButtonRole.AcceptRole)
+        outer.addWidget(self._tabs, 1)
+
+        footer = QFrame()
+        footer.setObjectName("dialogFooter")
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(18, 12, 18, 12)
+        footer_layout.addStretch(1)
+        cancel = QPushButton(i18n.t("settings.cancel"))
+        cancel.setObjectName("ghost")
+        save = QPushButton(i18n.t("settings.save"))
         save.setObjectName("primary")
-        buttons.rejected.connect(self.reject)
-        buttons.accepted.connect(self._save)
-        layout.addWidget(buttons)
+        cancel.clicked.connect(self.reject)
+        save.clicked.connect(self._save)
+        footer_layout.addWidget(cancel)
+        footer_layout.addWidget(save)
+        outer.addWidget(footer)
 
     def _build_general(self) -> None:
-        form = QFormLayout(self._general_tab)
+        scroll = QScrollArea(self._general_tab)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        layout.setContentsMargins(18, 18, 18, 20)
+        layout.setSpacing(0)
+
+        # MICROFOON
+        mic_section = QVBoxLayout()
+        mic_section.setSpacing(10)
+        mic_section.addWidget(_section_title(i18n.t("settings.section.microphone")))
         devices = _input_devices()
         self._devices = devices
         self.mic = _combo(devices, self._current.get("microphone_device"))
+        mic_section.addWidget(_labeled_row(i18n.t("settings.mic.device"), self.mic))
+        self.warm_microphone, warm_row = _checkbox_with_hint(
+            i18n.t("settings.warm_microphone"),
+            i18n.t("settings.warm_microphone.hint"),
+        )
+        self.warm_microphone.setChecked(bool(self._current.get("warm_microphone", False)))
+        warm_indent = QHBoxLayout()
+        warm_indent.addSpacing(_LABEL_WIDTH + 14)
+        warm_indent.addWidget(warm_row, 1)
+        mic_section.addLayout(warm_indent)
+        layout.addLayout(mic_section)
+
+        # INDICATOR
+        ind = QFrame()
+        ind.setObjectName("settingsSection")
+        ind_layout = QVBoxLayout(ind)
+        ind_layout.setContentsMargins(0, 18, 0, 0)
+        ind_layout.setSpacing(10)
+        ind_layout.addWidget(_section_title(i18n.t("settings.section.indicator")))
         self.position = _combo(_positions(), self._current.get("indicator_position"))
-        self.mode = _combo(_modes(), self._current.get("mode"))
-        form.addRow(i18n.t("settings.microphone"), self.mic)
-        form.addRow(i18n.t("settings.indicator_position"), self.position)
-        form.addRow(i18n.t("settings.mode"), self.mode)
-        self.hotkey_label = QLabel(hotkeys.format_hotkey(self._hotkey_tokens))
-        self.hotkey_label.setStyleSheet(f"border: 1px solid {TOKENS['border']}; padding: 6px;")
-        self.capture_button = QPushButton(i18n.t("settings.hotkey.record"))
-        self.capture_button.clicked.connect(self._toggle_capture)
+        ind_layout.addWidget(_labeled_row(i18n.t("settings.indicator.position"), self.position))
+        hint_row = QHBoxLayout()
+        hint_row.addSpacing(_LABEL_WIDTH + 14)
+        hint_row.addWidget(_hint(i18n.t("settings.indicator.position.hint")), 1)
+        ind_layout.addLayout(hint_row)
+        layout.addWidget(ind)
+
+        # BEDIENING
+        control = QFrame()
+        control.setObjectName("settingsSection")
+        control_layout = QVBoxLayout(control)
+        control_layout.setContentsMargins(0, 18, 0, 0)
+        control_layout.setSpacing(10)
+        control_layout.addWidget(_section_title(i18n.t("settings.section.control")))
+
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(14)
+        mode_row.addWidget(
+            _field_label(i18n.t("settings.mode.label")), 0, Qt.AlignmentFlag.AlignTop
+        )
+        mode_col = QVBoxLayout()
+        mode_col.setSpacing(9)
+        self._mode_group = QButtonGroup(self)
+        self.mode_toggle = QRadioButton(i18n.t("settings.mode.toggle"))
+        self.mode_ptt = QRadioButton(i18n.t("settings.mode.ptt"))
+        self._mode_group.addButton(self.mode_toggle)
+        self._mode_group.addButton(self.mode_ptt)
+        if self._current.get("mode") == "ptt":
+            self.mode_ptt.setChecked(True)
+        else:
+            self.mode_toggle.setChecked(True)
+        mode_col.addWidget(self.mode_toggle)
+        mode_col.addWidget(self.mode_ptt)
+        mode_row.addLayout(mode_col, 1)
+        control_layout.addLayout(mode_row)
+
         hotkey_row = QHBoxLayout()
-        hotkey_row.addWidget(self.hotkey_label, 1)
-        hotkey_row.addWidget(self.capture_button)
-        form.addRow(i18n.t("settings.hotkey"), hotkey_row)
-        self.autostart = QCheckBox(i18n.t("settings.autostart"))
-        self.auto_paste = QCheckBox(i18n.t("settings.auto_paste"))
-        self.warm_microphone = QCheckBox(i18n.t("settings.warm_microphone"))
+        hotkey_row.setSpacing(14)
+        hotkey_row.addWidget(_field_label(i18n.t("settings.hotkey")))
+        hotkey_host = QWidget()
+        hotkey_layout = QHBoxLayout(hotkey_host)
+        hotkey_layout.setContentsMargins(0, 0, 0, 0)
+        hotkey_layout.setSpacing(10)
+        self._keycaps = QWidget()
+        self._keycaps_layout = QHBoxLayout(self._keycaps)
+        self._keycaps_layout.setContentsMargins(0, 0, 0, 0)
+        self._keycaps_layout.setSpacing(5)
+        self.capture_button = QPushButton(i18n.t("settings.hotkey.record"))
+        self.capture_button.setObjectName("secondary")
+        self.capture_button.clicked.connect(self._toggle_capture)
+        hotkey_layout.addWidget(self._keycaps)
+        hotkey_layout.addWidget(self.capture_button)
+        hotkey_layout.addStretch(1)
+        hotkey_row.addWidget(hotkey_host, 1)
+        control_layout.addLayout(hotkey_row)
+        self._listening_hint = _hint("")
+        self._listening_hint.hide()
+        listen_row = QHBoxLayout()
+        listen_row.addSpacing(_LABEL_WIDTH + 14)
+        listen_row.addWidget(self._listening_hint, 1)
+        control_layout.addLayout(listen_row)
+        layout.addWidget(control)
+        self._refresh_keycaps(self._hotkey_tokens)
+
+        # OPTIES
+        options = QFrame()
+        options.setObjectName("settingsSection")
+        options_layout = QVBoxLayout(options)
+        options_layout.setContentsMargins(0, 18, 0, 0)
+        options_layout.setSpacing(11)
+        options_layout.addWidget(_section_title(i18n.t("settings.section.options")))
+        self.autostart, autostart_row = _checkbox_with_hint(i18n.t("settings.autostart"))
+        self.auto_paste, paste_row = _checkbox_with_hint(
+            i18n.t("settings.auto_paste"),
+            i18n.t("settings.auto_paste.hint"),
+        )
         self.autostart.setChecked(bool(self._current.get("autostart", False)))
         self.auto_paste.setChecked(bool(self._current.get("auto_paste", True)))
-        self.warm_microphone.setChecked(bool(self._current.get("warm_microphone", False)))
-        form.addRow("", self.autostart)
-        form.addRow("", self.auto_paste)
-        form.addRow("", self.warm_microphone)
+        options_layout.addWidget(autostart_row)
+        options_layout.addWidget(paste_row)
+        layout.addWidget(options)
+
+        layout.addStretch(1)
+        scroll.setWidget(host)
+        tab_layout = QVBoxLayout(self._general_tab)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+        tab_layout.addWidget(scroll)
 
     def _build_language(self) -> None:
-        form = QFormLayout(self._language_tab)
+        layout = QVBoxLayout(self._language_tab)
+        layout.setContentsMargins(18, 18, 18, 20)
+        layout.setSpacing(18)
         choices = _language_choices()
         speech = i18n.normalize_language(
             self._current.get("speech_language"), allowed=i18n.SUPPORTED_SPEECH_LANGUAGES
@@ -161,44 +319,100 @@ class SettingsDialog(QDialog):
         ui = i18n.normalize_language(
             self._current.get("ui_language"), allowed=i18n.SUPPORTED_UI_LANGUAGES
         )
+        speech_box = QVBoxLayout()
+        speech_box.setSpacing(10)
+        speech_box.addWidget(_section_title(i18n.t("settings.speech_language")))
         self.speech_language = _combo(choices, speech)
+        speech_box.addWidget(_labeled_row(i18n.t("settings.speech_language"), self.speech_language))
+        layout.addLayout(speech_box)
+
+        ui_box = QFrame()
+        ui_box.setObjectName("settingsSection")
+        ui_layout = QVBoxLayout(ui_box)
+        ui_layout.setContentsMargins(0, 16, 0, 0)
+        ui_layout.setSpacing(10)
+        ui_layout.addWidget(_section_title(i18n.t("settings.ui_language")))
         self.ui_language = _combo(choices, ui)
-        form.addRow(i18n.t("settings.speech_language"), self.speech_language)
-        form.addRow(i18n.t("settings.ui_language"), self.ui_language)
+        ui_layout.addWidget(_labeled_row(i18n.t("settings.ui_language"), self.ui_language))
+        layout.addWidget(ui_box)
+        layout.addStretch(1)
 
     def _build_advanced(self) -> None:
         layout = QVBoxLayout(self._advanced_tab)
-        form = QFormLayout()
+        layout.setContentsMargins(18, 18, 18, 20)
+        layout.setSpacing(12)
+        layout.addWidget(_section_title(i18n.t("settings.model")))
         self.model = _combo(
             [(model, model) for model in MODELS], str(self._current.get("model", "small"))
         )
-        form.addRow(i18n.t("settings.model"), self.model)
-        layout.addLayout(form)
-        restart = QLabel(i18n.t("settings.model.restart"))
-        restart.setStyleSheet(f"color: {TOKENS['muted']};")
-        layout.addWidget(restart)
-        layout.addWidget(QLabel(i18n.t("recovery.section").upper()))
+        layout.addWidget(_labeled_row(i18n.t("settings.model"), self.model))
+        layout.addWidget(_hint(i18n.t("settings.model.restart")))
+
+        recovery_box = QFrame()
+        recovery_box.setObjectName("settingsSection")
+        recovery_layout = QVBoxLayout(recovery_box)
+        recovery_layout.setContentsMargins(0, 18, 0, 0)
+        recovery_layout.setSpacing(10)
+        recovery_layout.addWidget(_section_title(i18n.t("recovery.section")))
         self.recovery_list = QListWidget()
         self.recovery_list.setMinimumHeight(120)
-        layout.addWidget(self.recovery_list)
-        self.recovery_empty = QLabel()
-        self.recovery_empty.setStyleSheet(f"color: {TOKENS['muted']};")
-        layout.addWidget(self.recovery_empty)
+        recovery_layout.addWidget(self.recovery_list)
+        self.recovery_empty = _hint("")
+        recovery_layout.addWidget(self.recovery_empty)
         self.recovery_status = QLabel()
-        layout.addWidget(self.recovery_status)
+        recovery_layout.addWidget(self.recovery_status)
         actions = QHBoxLayout()
         open_folder = QPushButton(i18n.t("recovery.open_folder"))
         delete = QPushButton(i18n.t("recovery.delete"))
         delete_all = QPushButton(i18n.t("recovery.delete_all"))
         retranscribe = QPushButton(i18n.t("recovery.retranscribe"))
+        open_folder.setObjectName("secondary")
+        delete.setObjectName("secondary")
+        delete_all.setObjectName("secondary")
+        retranscribe.setObjectName("secondary")
         open_folder.clicked.connect(self._open_recovery_folder)
         delete.clicked.connect(self._delete_selected)
         delete_all.clicked.connect(self._delete_all)
         retranscribe.clicked.connect(self._retranscribe_selected)
         for button in (open_folder, delete, delete_all, retranscribe):
             actions.addWidget(button)
-        layout.addLayout(actions)
+        actions.addStretch(1)
+        recovery_layout.addLayout(actions)
+        layout.addWidget(recovery_box)
+        layout.addStretch(1)
         self._refresh_recovery()
+
+    def _token_caption(self, token: str) -> str:
+        special = {
+            "ctrl": "Ctrl",
+            "shift": "Shift",
+            "alt": "Alt",
+            "cmd": "Cmd",
+            "space": "Space",
+            "esc": "Esc",
+        }
+        return special.get(token.lower(), token.upper() if len(token) == 1 else token.title())
+
+    def _refresh_keycaps(self, tokens: list[str] | set[str]) -> None:
+        while self._keycaps_layout.count():
+            item = self._keycaps_layout.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        ordered = list(tokens) if isinstance(tokens, list) else hotkeys.normalize(tokens)
+        if not ordered:
+            placeholder = QLabel("—")
+            placeholder.setObjectName("hintLabel")
+            self._keycaps_layout.addWidget(placeholder)
+            return
+        for index, token in enumerate(ordered):
+            if index:
+                plus = QLabel("+")
+                plus.setObjectName("keycapPlus")
+                self._keycaps_layout.addWidget(plus)
+            cap = QLabel(self._token_caption(token))
+            cap.setObjectName("keycap")
+            cap.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._keycaps_layout.addWidget(cap)
 
     def _toggle_capture(self) -> None:
         if self._capture_active:
@@ -207,9 +421,11 @@ class SettingsDialog(QDialog):
         self._capture_active = True
         self._capture_pressed.clear()
         self._capture_best.clear()
-        self.hotkey_label.setText(i18n.t("settings.hotkey.press"))
+        self._listening_hint.setText(i18n.t("settings.hotkey.press"))
+        self._listening_hint.show()
         self.capture_button.setText(i18n.t("settings.hotkey.use"))
-        self._set_capture(self._capture_callback)
+        if self._set_capture is not None:
+            self._set_capture(self._capture_callback)
         self.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
 
     def _capture_callback(self, event: str, key: Any) -> None:
@@ -226,7 +442,7 @@ class SettingsDialog(QDialog):
             self._capture_pressed.discard(token)
         visible = self._capture_best or self._capture_pressed
         if visible:
-            self.hotkey_label.setText(hotkeys.format_hotkey(visible))
+            self._refresh_keycaps(visible)
 
     def keyPressEvent(self, event: Any) -> None:
         if self._capture_active:
@@ -265,7 +481,8 @@ class SettingsDialog(QDialog):
             normalized = hotkeys.normalize(self._capture_best)
             if any(token not in hotkeys.MODIFIER_TOKENS for token in normalized):
                 self._hotkey_tokens = normalized
-        self.hotkey_label.setText(hotkeys.format_hotkey(self._hotkey_tokens))
+        self._refresh_keycaps(self._hotkey_tokens)
+        self._listening_hint.hide()
         self.capture_button.setText(i18n.t("settings.hotkey.record"))
 
     def _refresh_recovery(self) -> None:
@@ -367,7 +584,7 @@ class SettingsDialog(QDialog):
             {
                 "microphone_device": self.mic.currentData(),
                 "indicator_position": self.position.currentData(),
-                "mode": self.mode.currentData(),
+                "mode": "ptt" if self.mode_ptt.isChecked() else "toggle",
                 "hotkey": list(self._hotkey_tokens),
                 "autostart": self.autostart.isChecked(),
                 "auto_paste": self.auto_paste.isChecked(),
