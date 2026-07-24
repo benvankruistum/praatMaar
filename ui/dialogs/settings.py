@@ -391,12 +391,10 @@ def open_settings_dialog(
     set_capture: Callable[[Any | None], None] | None = None,
     *,
     wait: bool = False,
-    use_tk_capture: bool = False,
     on_retranscribe: Callable[[Path], str] | None = None,
     on_parent_retranscribe: Callable[[Path], None] | None = None,
 ) -> None:
-    """Open the singleton settings dialog; Tk-only capture is intentionally ignored."""
-    del use_tk_capture
+    """Open the singleton settings dialog."""
     global _open_dialog
     ensure_app()
     if _open_dialog is not None:
