@@ -29,7 +29,7 @@ OnReview = Callable[[MeetingState], None]
 
 @dataclass
 class AgendaReviewSettings:
-    enabled: bool = True
+    enabled: bool = False
     interval_s: float = 45.0
     min_new_chars: int = 120
     language: str = "nl"
@@ -89,6 +89,13 @@ class AgendaReviewCoordinator:
         if hasattr(provider, "is_ready") and not provider.is_ready():
             return False
         return True
+
+    def uses_llm_review(self) -> bool:
+        """True when agenda-review is enabled and a ready Local LLM is available."""
+
+        with self._lock:
+            enabled = self._settings.enabled
+        return enabled and self.provider_is_ready()
 
     def on_final(
         self,
@@ -175,11 +182,13 @@ class AgendaReviewCoordinator:
                 )
             )
             data = result.data if isinstance(result.data, dict) else {}
-            roles = [part.speaker_role for part in labeled_parts]
             questions = [str(q) for q in (data.get("questions") or [])]
             data = {
                 **data,
-                "questions": filter_questions_for_speaker_roles(questions, source_roles=roles),
+                "questions": filter_questions_for_speaker_roles(
+                    questions,
+                    labeled_parts=labeled_parts,
+                ),
             }
             updated = self.apply_review_result(state, data, now_s=time.time())
             with self._lock:
@@ -299,15 +308,57 @@ def _has_similar_open_question(state: MeetingState, text: str) -> bool:
 def filter_questions_for_speaker_roles(
     questions: list[str],
     *,
-    source_roles: list[SpeakerRole],
+    source_roles: list[SpeakerRole] | None = None,
+    labeled_parts: list[LabeledFinal] | None = None,
 ) -> list[str]:
-    """Drop questions if the only recent speakers were ME (defensive prefilter)."""
+    """Keep questions from OTHER/UNKNOWN; drop ME-only and ME-matched questions.
 
-    if not source_roles:
-        return questions
-    if all(role == SpeakerRole.ME for role in source_roles):
+    Spec: vragen uitsluit ``SpeakerRole.ME``; ``OTHER`` + ``UNKNOWN`` ok.
+    Without labeled parts, fall back to role list: drop everything when no
+    accepted speaker contributed.
+    """
+
+    roles = source_roles
+    if roles is None and labeled_parts is not None:
+        roles = [part.speaker_role for part in labeled_parts]
+    if roles is not None and not any(should_accept_question_role(role) for role in roles):
         return []
-    return questions
+    if not labeled_parts:
+        return questions
+
+    me_blobs = [
+        part.text.casefold()
+        for part in labeled_parts
+        if part.speaker_role == SpeakerRole.ME and part.text.strip()
+    ]
+    other_blobs = [
+        part.text.casefold()
+        for part in labeled_parts
+        if should_accept_question_role(part.speaker_role) and part.text.strip()
+    ]
+    kept: list[str] = []
+    for question in questions:
+        needle = question.casefold().strip()
+        if not needle:
+            continue
+        in_me = any(_question_matches_utterance(needle, blob) for blob in me_blobs)
+        in_other = any(_question_matches_utterance(needle, blob) for blob in other_blobs)
+        if in_me and not in_other:
+            continue
+        kept.append(question)
+    return kept
+
+
+def _question_matches_utterance(question: str, utterance: str) -> bool:
+    """True when the question text or its content words appear in an utterance."""
+
+    if question in utterance:
+        return True
+    words = [w for w in question.replace("?", " ").split() if len(w) > 2]
+    if len(words) < 2:
+        return False
+    hits = sum(1 for w in words if w in utterance)
+    return hits >= max(2, (len(words) + 1) // 2)
 
 
 def should_accept_question_role(role: SpeakerRole) -> bool:

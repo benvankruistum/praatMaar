@@ -101,11 +101,26 @@ acties.
 - **Meeting starten…** opent de agenda (bibliotheek met Recent + alle `.md`-agenda’s).
 - **Meeting starten (snel)** start met de huidige agenda zonder dialoog.
 - **Agenda bewerken** om agenda’s op te slaan/laden zonder te starten.
-- **Eigenschappen** voor meetinggeluid (Windows loopback) en uitvoerapparaat.
+- **Eigenschappen** voor meetinggeluid (Windows loopback), uitvoerapparaat en
+  optioneel een andere transcriptmap.
 
 Tijdens een meeting groeit het transcript als `.md` onder
-`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (alleen definitieve tekst). Bij
-stoppen volgt een melding met het pad.
+`%APPDATA%\praatMaar\meeting-buddy\transcripts\` (alleen definitieve tekst;
+aanpasbaar via Eigenschappen). Bij stoppen volgt een melding met het pad.
+
+### Local LLM, live samenvatting en agenda-review
+
+Optioneel (standaard uit): schakel **Local LLM** in via **Modules**. Die module
+gebruikt [Ollama](https://ollama.com/) met een lokaal Qwen-model. Via de
+Modules-acties kun je status controleren, installatiehulp openen en het model
+downloaden. Zonder klaar Local LLM blijft Meeting Buddy bij heuristische hints.
+
+Met Local LLM klaar kun je in Meeting Buddy-**Eigenschappen** live samenvatting
+en agenda-review aanzetten (standaard uit):
+
+- **Live samenvatting** in de overlay (drempels voor tijd/nieuwe tekst).
+- **Agenda-review**: statusladder per agendapunt en “vragen van anderen”
+  (experimenteel; hangt af van speakerdetectie).
 
 Op Windows kan Meeting Buddy naast je microfoon ook **meetinggeluid** opnemen van
 het gekozen Windows-uitvoerapparaat via loopback.

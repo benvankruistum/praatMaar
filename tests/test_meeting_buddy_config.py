@@ -2,6 +2,7 @@ from pathlib import Path
 
 from modules._builtin.meeting_buddy.config import (
     MeetingBuddyConfig,
+    load_live_summary_prefs,
     load_meeting_buddy_config,
     save_meeting_buddy_preferences,
 )
@@ -66,6 +67,13 @@ def test_save_meeting_buddy_preferences_persists_loopback_fields(tmp_path: Path)
 
     assert cfg.loopback_device == 3
     assert cfg.enable_loopback is True
+
+
+def test_live_summary_prefs_default_disabled(tmp_path: Path) -> None:
+    prefs = load_live_summary_prefs(tmp_path)
+    assert prefs["live_summary_enabled"] is False
+    assert prefs["llm_chunk_interval_s"] == 45.0
+    assert prefs["llm_chunk_min_new_chars"] == 120
 
 
 def test_invalid_user_yaml_falls_back_to_defaults(tmp_path: Path) -> None:

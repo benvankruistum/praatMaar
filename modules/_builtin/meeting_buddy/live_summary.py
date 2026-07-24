@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class LiveSummarySettings:
-    enabled: bool = True
+    enabled: bool = False
     interval_s: float = 45.0
     min_new_chars: int = 120
     language: str = "nl"

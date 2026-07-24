@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 from modules._builtin.meeting_buddy.agenda_review import (
     AgendaReviewCoordinator,
     AgendaReviewSettings,
+    LabeledFinal,
     filter_questions_for_speaker_roles,
     should_accept_question_role,
 )
@@ -39,6 +40,26 @@ def test_filter_questions_drops_when_only_me() -> None:
         filter_questions_for_speaker_roles(qs, source_roles=[SpeakerRole.OTHER, SpeakerRole.ME])
         == qs
     )
+
+
+def test_filter_questions_drops_me_matched_in_mixed_chunk() -> None:
+    qs = ["Wat is de deadline?", "Wie levert de cijfers?"]
+    parts = [
+        LabeledFinal(text="Wat is de deadline voor ons?", speaker_role=SpeakerRole.ME),
+        LabeledFinal(text="Wie levert de cijfers voor budget?", speaker_role=SpeakerRole.OTHER),
+    ]
+    assert filter_questions_for_speaker_roles(qs, labeled_parts=parts) == ["Wie levert de cijfers?"]
+
+
+def test_uses_llm_review_requires_enabled_and_ready() -> None:
+    caps = CapabilityRegistry()
+    coord = AgendaReviewCoordinator(
+        capabilities=caps,
+        settings=AgendaReviewSettings(enabled=False),
+    )
+    assert coord.uses_llm_review() is False
+    coord.update_settings(AgendaReviewSettings(enabled=True))
+    assert coord.uses_llm_review() is False
 
 
 def test_apply_review_treated_then_catch_up_and_questions() -> None:

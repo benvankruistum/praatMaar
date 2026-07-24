@@ -7,14 +7,26 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ## [Unreleased]
 
-Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
-[docs/release-windows.md](docs/release-windows.md) / [docs/release-macos.md](docs/release-macos.md)).
+### Added
+
+### Changed
+
+### Fixed
+
+## [0.2.0] - 2026-07-24
 
 ### Added
 
-- Meeting Buddy (Windows): loopback-status zichtbaar in overlay; prep-dialoog om
-  meetinggeluid-uitvoer te kiezen; automatische loopback-reconnect bij device-wissel;
-  configureerbare mix-gewichten; overlay voor bewuste mic-only modus
+- **Meeting Buddy (experimenteel, Windows):** tray-cascade (starten/stoppen),
+  agenda-bibliotheek met recente Markdown-agenda’s, eigenschappen voor
+  loopback/uitvoerapparaat/transcriptmap; loopback-status in overlay;
+  automatische reconnect bij device-wissel; configureerbare mix-gewichten
+- Streaming Markdown-meetingjournal (definitieve transcriptdelen + checklist)
+  met padmelding bij stoppen
+- **Local LLM**-module (standaard uit): lokale Ollama/Qwen-provider voor
+  `ai.semantic_analysis`, met statuscontrole, installatiehulp en model-download
+- Live samenvatting, agenda-review (statusladder) en vragen van anderen in de
+  Meeting Buddy-overlay (vereist Local LLM; standaard uit in Eigenschappen)
 - Optionele warme microfoon (`warm_microphone`, default uit)
 - **Bestemmingen:** sticky transcriptdoelen (naam→map), stemwissel via exacte
   match, actieve naam in de pill, beheer via tray-dialoog
@@ -30,11 +42,11 @@ Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
 - **SharedWhisper:** modules delen het geladen Faster-Whisper-model (+ lock) via
   `ModuleContext.whisper` — geen tweede model-load naast dicteren
 - **Capability registry:** modules bieden services aan via stabiele ID’s
-  (`ctx.capabilities`); eerste provider: Speaker Detection (`audio.speaker_detection`)
-- **Meeting Buddy MVP (experimenteel):** Windows mic-only continue capture,
-  incrementele lokale transcriptie, immutable meetingstate en maximaal drie
-  heuristische hints in een compacte overlay; `meeting-buddy` staat standaard uit
-
+  (`ctx.capabilities`); providers o.a. Speaker Detection en Local LLM
+  (`ai.semantic_analysis`)
+- **Meeting Buddy MVP (experimenteel):** continue capture, incrementele lokale
+  transcriptie, immutable meetingstate en heuristische hints; `meeting-buddy`
+  staat standaard uit
 - Per bestemming optioneel automatisch plakken (`auto_paste`, default uit)
 - macOS-port: native NSPanel-indicator (`indicator._mac`, ADR-0002), tray op
   main thread, `host._mac`, TCC- en release-docs, PyObjC-dependency op Darwin
@@ -42,16 +54,26 @@ Nog geen vaste release-datum. Geplande volgende tag: **v0.2.0** (zie
 - Cursor project-skills: `/update-documentation` en `/prepare-release`
   (`.cursor/skills/`; zie `CLAUDE.md`)
 
+### Changed
+
+- Tray toont module-acties (Meeting Buddy, Local LLM) als root-cascades
+- Incrementele transcriptie toont voortgang; bij stoppen wordt de laatste
+  partial als eindtekst gebruikt wanneer beschikbaar
+- Instellingen, bestemmingen en status-pill verbeterd (tabs, meetingmodus)
+- Indicator gesplitst naar package `indicator/` (contract + `_win` / `_mac`)
+- Live samenvatting / agenda-review volgen de UI-taal (nl/en/de)
+
 ### Fixed
 
-- Warme microfoonstream heropent na Bluetooth disconnect/reconnect (geen stille lege opnames meer)
+- Store-Python/AppData-paden correct opgelost voor Explorer en gebruikersdata
+- Meeting Buddy blijft responsief tijdens doorlopende transcriptie;
+  stop-/capture-races robuuster
+- Agenda-review filtert vragen van de host (`SpeakerRole.ME`) strenger
+- Heuristische topic-hints blijven actief als Local LLM-review uit staat
+- Warme microfoonstream heropent na Bluetooth disconnect/reconnect
 - Hotkey-/settings-/splash-labels platform-aware (Mac: Control/Option/Command)
 - Diverse macOS-stabiliteitsfixes (settings/Bestemmingen in apart Tk-proces,
   NSEvent-hotkeys, menubalk-mic, Windows-CI fcntl-skip)
-
-### Changed
-
-- Indicator gesplitst naar package `indicator/` (contract + `_win` / `_mac`)
 
 ## [0.1.0] - 2026-07-18
 
@@ -73,5 +95,6 @@ Eerste publieke Windows-release (tag `v0.1.0`).
 - Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
 - `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`
 
-[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/benvankruistum/praatMaar/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/benvankruistum/praatMaar/releases/tag/v0.1.0

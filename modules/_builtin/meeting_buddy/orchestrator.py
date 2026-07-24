@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import RLock
 
+import i18n
 from modules.capabilities.continuous_capture import CaptureStatus
 from modules.capabilities.registry import CapabilityRegistry, CapabilityUnavailableError
 from modules.capabilities.speaker_detection import (
@@ -245,7 +246,7 @@ class MeetingOrchestrator:
                 version_before = self._state.version
                 hints_before = self._state.emitted_hints
                 now_s = self._elapsed_s()
-                use_topic_heuristics = not self._agenda_review.provider_is_ready()
+                use_topic_heuristics = not self._agenda_review.uses_llm_review()
                 self._state = self._transcripts.process_delta(
                     event,
                     binding=binding,
@@ -356,7 +357,7 @@ class MeetingOrchestrator:
             enabled=bool(prefs["live_summary_enabled"]),
             interval_s=float(prefs["llm_chunk_interval_s"]),
             min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
-            language="nl",
+            language=i18n.ui_language(),
         )
 
     def _agenda_review_settings(self) -> AgendaReviewSettings:
@@ -365,7 +366,7 @@ class MeetingOrchestrator:
             enabled=bool(prefs["live_summary_enabled"]),
             interval_s=float(prefs["llm_chunk_interval_s"]),
             min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
-            language="nl",
+            language=i18n.ui_language(),
         )
 
     def _label_final(self, text: str, meeting_session_id: str) -> LabeledFinal:
