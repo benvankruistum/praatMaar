@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from PySide6.QtCore import QTimer
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtCore import QRectF, Qt, QTimer
+from PySide6.QtGui import QCloseEvent, QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -17,8 +17,16 @@ from PySide6.QtWidgets import (
 )
 
 import i18n
+from indicator._contract import (
+    COLOR_MEETING_TEXT,
+    COLOR_RECORDING,
+    PILL_BG,
+    SUBTLE_COLOR,
+    TEXT_COLOR,
+)
 from ui.app import ensure_app
 from ui.overlay_flags import apply_hud_window_flags
+from ui.theme import TOKENS
 
 from .hints import HintType
 from .state import Hint, HintStatus, MeetingState, Question, QuestionStatus, Topic, TopicStatus
@@ -66,10 +74,107 @@ def pick_emphasis(hints: Sequence[Hint]) -> str | None:
     )
 
 
+def _topics_done(topics: Sequence[Topic]) -> int:
+    return sum(1 for t in topics if t.status in (TopicStatus.SEQUENTIAL, TopicStatus.CONFIRMED))
+
+
+class _StatusDot(QWidget):
+    """Agenda-ladder mark: shape carries meaning (ring/half/full/check)."""
+
+    def __init__(self, status: TopicStatus) -> None:
+        super().__init__()
+        self._status = status
+        self.setFixedSize(14, 14)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+    def paintEvent(self, _event: Any) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(0.75, 0.75, 12.5, 12.5)
+        accent = QColor(TOKENS["accent"])
+        if self._status == TopicStatus.CONFIRMED:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(TOKENS["ok"]))
+            painter.drawEllipse(rect)
+            painter.setPen(QColor("white"))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "✓")
+        elif self._status == TopicStatus.SEQUENTIAL:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(accent)
+            painter.drawEllipse(rect)
+        elif self._status == TopicStatus.TREATED:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(accent)
+            painter.drawPie(rect, 90 * 16, 180 * 16)
+            pen = QPen(accent)
+            pen.setWidthF(1.5)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(rect)
+        else:
+            pen = QPen(QColor(TOKENS["icon_muted"]))
+            pen.setWidthF(1.5)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(rect)
+
+
 class _HudWindow(QWidget):
     def closeEvent(self, event: QCloseEvent) -> None:
         self.hide()
         event.ignore()
+
+
+class _MiniPill(QWidget):
+    """Minimized overlay: dark capsule (family of the dicteer-pill #2a)."""
+
+    def __init__(self, on_expand: Callable[[], None]) -> None:
+        super().__init__()
+        apply_hud_window_flags(self)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(230, 44)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(12, 0, 6, 0)
+        row.setSpacing(7)
+        self._dot = QLabel("●")
+        self._dot.setStyleSheet(f"color: {COLOR_RECORDING}; font-size: 10px;")
+        self._timer = QLabel("00:00:00")
+        self._timer.setStyleSheet(
+            f"color: {TEXT_COLOR}; font-size: 12px; font-family: {TOKENS['mono']};"
+        )
+        self._count = QLabel("")
+        self._count.setStyleSheet(
+            f"color: {SUBTLE_COLOR}; font-size: 12px; font-family: {TOKENS['mono']};"
+        )
+        expand = QPushButton("▴")
+        expand.setCursor(Qt.CursorShape.PointingHandCursor)
+        expand.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none; color: {SUBTLE_COLOR};"
+            " font-size: 11px; min-width: 20px; }"
+        )
+        expand.clicked.connect(on_expand)
+        row.addWidget(self._dot)
+        row.addWidget(self._timer)
+        row.addWidget(self._count)
+        row.addStretch(1)
+        self._tag = QLabel(i18n.t("state.tag.meeting"))
+        self._tag.setStyleSheet(
+            f"color: {COLOR_MEETING_TEXT}; background: rgba(92,147,199,0.20);"
+            " border-radius: 10px; padding: 2px 7px; font-size: 10px; font-weight: 600;"
+        )
+        row.addWidget(self._tag)
+        row.addWidget(expand)
+
+    def set_state(self, timer: str, count: str) -> None:
+        self._timer.setText(timer)
+        self._count.setText(count)
+
+    def paintEvent(self, _event: Any) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(PILL_BG))
+        painter.drawRoundedRect(QRectF(0, 0, self.width(), self.height()), 22, 22)
 
 
 class MeetingBuddyOverlay:
@@ -94,59 +199,110 @@ class MeetingBuddyOverlay:
         self._capture_status: object = None
         self._pulse_on = False
         self._hint_cards: dict[str, QFrame] = {}
+        self._topic_total = 0
+        self._topic_done = 0
+        self._mini: _MiniPill | None = None
 
         self.window = _HudWindow(parent if isinstance(parent, QWidget) else None)
         apply_hud_window_flags(self.window)
+        self.window.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.window.setWindowTitle(i18n.t("modules.meeting_buddy.overlay.title"))
-        self.window.setStyleSheet("QWidget { background: #F7F9FB; }")
         self.window.setMinimumWidth(360)
 
-        outer = QVBoxLayout(self.window)
-        outer.setContentsMargins(12, 10, 12, 10)
-        outer.setSpacing(6)
-        header = QHBoxLayout()
-        self._listening_dot = QLabel("●")
-        self._listening_dot.setStyleSheet("color: #9AA0A6; font-weight: bold;")
-        self._listening = QLabel()
-        self._timer_label = QLabel("00:00:00")
-        self._timer_label.setStyleSheet("font-family: Consolas; font-weight: bold;")
-        header.addWidget(self._listening_dot)
-        header.addWidget(self._listening)
-        header.addWidget(self._timer_label)
-        header.addStretch()
-        if on_stop is not None:
-            stop = QPushButton(i18n.t("modules.meeting_buddy.overlay.stop"))
-            stop.clicked.connect(on_stop)
-            header.addWidget(stop)
-        minimize = QPushButton(i18n.t("modules.meeting_buddy.overlay.minimize"))
-        minimize.clicked.connect(self.minimize)
-        header.addWidget(minimize)
-        outer.addLayout(header)
+        shell = QVBoxLayout(self.window)
+        shell.setContentsMargins(0, 0, 0, 0)
+        card = QFrame()
+        card.setObjectName("mbCard")
+        card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        shell.addWidget(card)
+        outer = QVBoxLayout(card)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-        self._recording_label = QLabel()
-        self._recording_label.setWordWrap(True)
-        self._recording_label.setStyleSheet(
-            "background: #FFEBEE; color: #B71C1C; font-weight: 600; padding: 6px;"
+        # --- header bar ---
+        header = QFrame()
+        header.setObjectName("mbHeader")
+        header.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        head = QHBoxLayout(header)
+        head.setContentsMargins(12, 9, 10, 9)
+        head.setSpacing(8)
+        title = QLabel(i18n.t("modules.meeting_buddy.overlay.title"))
+        title.setObjectName("mbHeaderTitle")
+        head.addWidget(title)
+        head.addStretch(1)
+        minimize = QPushButton("—")
+        minimize.setCursor(Qt.CursorShape.PointingHandCursor)
+        minimize.setStyleSheet(self._icon_btn_qss(TOKENS["muted"]))
+        minimize.clicked.connect(self.minimize)
+        head.addWidget(minimize)
+        if on_stop is not None:
+            stop = QPushButton("■")
+            stop.setCursor(Qt.CursorShape.PointingHandCursor)
+            stop.setStyleSheet(self._icon_btn_qss(TOKENS["danger"], size=9))
+            stop.clicked.connect(on_stop)
+            head.addWidget(stop)
+        outer.addWidget(header)
+
+        # --- status row ---
+        status_row = QHBoxLayout()
+        status_row.setContentsMargins(12, 10, 12, 10)
+        status_row.setSpacing(9)
+        self._listening_dot = QLabel("●")
+        self._listening_dot.setStyleSheet(f"color: {TOKENS['muted_soft']}; font-size: 11px;")
+        self._listening = QLabel()
+        self._listening.setObjectName("overlayStatus")
+        self._timer_label = QLabel("00:00:00")
+        self._timer_label.setObjectName("overlayTimer")
+        status_row.addWidget(self._listening_dot)
+        status_row.addWidget(self._listening)
+        status_row.addStretch(1)
+        status_row.addWidget(self._timer_label)
+        outer.addLayout(status_row)
+
+        # --- banner host ---
+        self._banner_host = QWidget()
+        banner_layout = QVBoxLayout(self._banner_host)
+        banner_layout.setContentsMargins(12, 0, 12, 10)
+        banner_layout.setSpacing(0)
+        outer.addWidget(self._banner_host)
+
+        body = QWidget()
+        self._body = QVBoxLayout(body)
+        self._body.setContentsMargins(0, 0, 0, 0)
+        self._body.setSpacing(0)
+        outer.addWidget(body)
+
+        self._topics, self._topics_body, self._topics_count = self._section(
+            "modules.meeting_buddy.overlay.agenda"
         )
-        self._recording_label.hide()
-        outer.addWidget(self._recording_label)
-        self._topics = self._section(outer, "modules.meeting_buddy.overlay.agenda")
-        self._summary = self._section(outer, "modules.meeting_buddy.overlay.summary")
+        self._summary, self._summary_content, self._summary_count = self._section(
+            "modules.meeting_buddy.overlay.summary"
+        )
         self._summary_body = QLabel()
         self._summary_body.setWordWrap(True)
-        self._summary.layout().addWidget(self._summary_body)
-        self._questions = self._section(outer, "modules.meeting_buddy.overlay.questions")
-        self._hints = QWidget()
-        self._hints.setLayout(QVBoxLayout())
-        self._hints.layout().setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(self._hints)
-        self._status = QLabel()
-        self._status.setStyleSheet("color: #5A6572;")
-        outer.addWidget(self._status)
-        self._reconnect = QPushButton(i18n.t("modules.meeting_buddy.overlay.reconnect"))
-        self._reconnect.clicked.connect(on_reconnect)
-        self._reconnect.hide()
-        outer.addWidget(self._reconnect)
+        self._summary_content.addWidget(self._summary_body)
+        self._questions, self._questions_body, self._questions_count = self._section(
+            "modules.meeting_buddy.overlay.questions"
+        )
+        self._hints, self._hints_body, self._hints_count = self._section(
+            "modules.meeting_buddy.overlay.hints"
+        )
+
+        # --- footer ---
+        footer = QFrame()
+        footer.setObjectName("mbFooter")
+        footer.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        foot = QHBoxLayout(footer)
+        foot.setContentsMargins(12, 7, 12, 7)
+        foot.setSpacing(8)
+        self._footer_label = QLabel()
+        self._footer_label.setObjectName("overlayFooterText")
+        foot.addWidget(self._footer_label)
+        foot.addStretch(1)
+        local = QLabel(i18n.t("modules.meeting_buddy.overlay.local"))
+        local.setObjectName("overlayFooterText")
+        foot.addWidget(local)
+        outer.addWidget(footer)
 
         self._timer = QTimer(self.window)
         self._timer.timeout.connect(self._tick)
@@ -154,17 +310,34 @@ class MeetingBuddyOverlay:
         self._tick()
 
     @staticmethod
-    def _section(outer: QVBoxLayout, key: str) -> QWidget:
+    def _icon_btn_qss(color: str, *, size: int = 13) -> str:
+        return (
+            f"QPushButton {{ background: transparent; border: none; color: {color};"
+            f" font-size: {size}px; min-width: 24px; min-height: 24px; border-radius: 4px; }}"
+            f" QPushButton:hover {{ background: {TOKENS['hover']}; }}"
+        )
+
+    def _section(self, key: str) -> tuple[QWidget, QVBoxLayout, QLabel]:
         section = QWidget()
         layout = QVBoxLayout(section)
-        layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(2)
-        heading = QLabel(i18n.t(key))
-        heading.setStyleSheet("color: #5A6572; font-size: 11px; font-weight: 600;")
-        layout.addWidget(heading)
-        outer.addWidget(section)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(7)
+        head = QHBoxLayout()
+        head.setSpacing(8)
+        heading = QLabel(i18n.t(key).upper())
+        heading.setObjectName("overlaySection")
+        count = QLabel("")
+        count.setObjectName("overlayFooterText")
+        head.addWidget(heading)
+        head.addStretch(1)
+        head.addWidget(count)
+        layout.addLayout(head)
+        body_layout = QVBoxLayout()
+        body_layout.setSpacing(6)
+        layout.addLayout(body_layout)
+        self._body.addWidget(section)
         section.hide()
-        return section
+        return section, body_layout, count
 
     def update(
         self,
@@ -186,13 +359,16 @@ class MeetingBuddyOverlay:
         self._render_questions(state.questions)
         self._render_hints(visible, pick_emphasis(visible))
         self._capture_status = capture_status
+        interrupted = _enum_value(capture_status) == "error"
         self._listening.setText(
-            self._listening_text(
-                capture_status,
-                transcription_status,
-                loopback_active=loopback_active,
-                loopback_requested=loopback_requested,
+            i18n.t(
+                "modules.meeting_buddy.overlay.headline.interrupted"
+                if interrupted
+                else "modules.meeting_buddy.overlay.headline.listening"
             )
+        )
+        self._listening.setStyleSheet(
+            f"color: {TOKENS['danger_text']};" if interrupted else ""
         )
         self._update_recording_banner(
             capture_status,
@@ -201,7 +377,7 @@ class MeetingBuddyOverlay:
             loopback_requested=loopback_requested,
         )
         self._update_listening_dot(capture_status, transcription_status)
-        self._status.setText(
+        self._footer_label.setText(
             "  ·  ".join(
                 (
                     self._status_text("capture", capture_status),
@@ -209,7 +385,6 @@ class MeetingBuddyOverlay:
                 )
             )
         )
-        self._reconnect.setVisible(_enum_value(capture_status) == "error")
         self.window.show()
         if not self._shown_once:
             self._shown_once = True
@@ -217,9 +392,25 @@ class MeetingBuddyOverlay:
 
     def minimize(self) -> None:
         self.window.hide()
+        if self._mini is None:
+            self._mini = _MiniPill(self._expand)
+        self._mini.set_state(
+            format_elapsed(self._elapsed_seconds()), f"{self._topic_done}/{self._topic_total}"
+        )
+        geometry = self.window.geometry()
+        self._mini.move(geometry.right() - self._mini.width(), geometry.top())
+        self._mini.show()
+
+    def _expand(self) -> None:
+        if self._mini is not None:
+            self._mini.hide()
+        self.window.show()
 
     def close(self) -> None:
         self._timer.stop()
+        if self._mini is not None:
+            self._mini.close()
+            self._mini.deleteLater()
         self.window.close()
         self.window.deleteLater()
 
@@ -231,33 +422,47 @@ class MeetingBuddyOverlay:
                 item.widget().deleteLater()
 
     def _render_topics(self, topics: Sequence[Topic]) -> None:
-        layout = self._topics.layout()
-        assert isinstance(layout, QVBoxLayout)
-        self._clear_layout(layout)
+        self._clear_layout(self._topics_body)
+        self._topic_total = len(topics)
+        self._topic_done = _topics_done(topics)
         if not topics:
             self._topics.hide()
             return
+        self._topics_count.setText(f"{self._topic_done}/{self._topic_total}")
         for topic in topics:
-            label = QLabel(format_topic_line(topic))
-            label.setStyleSheet(f"color: {topic_line_color(topic)};")
-            layout.addWidget(label)
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            row.addWidget(_StatusDot(topic.status), 0, Qt.AlignmentFlag.AlignVCenter)
+            label = QLabel(topic.title)
+            label.setWordWrap(True)
+            weight = "600" if is_at_least_sequential(topic.status) else "400"
+            label.setStyleSheet(
+                f"color: {topic_line_color(topic)}; font-size: 13px; font-weight: {weight};"
+            )
+            row.addWidget(label, 1)
+            self._topics_body.addLayout(row)
         self._topics.show()
 
     def _render_questions(self, questions: Sequence[Question]) -> None:
-        layout = self._questions.layout()
-        assert isinstance(layout, QVBoxLayout)
-        self._clear_layout(layout)
+        self._clear_layout(self._questions_body)
         open_questions = [
             question for question in questions if question.status == QuestionStatus.OPEN
         ][:5]
         if not open_questions:
             self._questions.hide()
             return
+        self._questions_count.setText(str(len(open_questions)))
         for question in open_questions:
-            label = QLabel(f"? {question.text}")
-            label.setWordWrap(True)
-            label.setStyleSheet("color: #8A4B08;")
-            layout.addWidget(label)
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            mark = QLabel("?")
+            mark.setObjectName("overlayQ")
+            text = QLabel(question.text)
+            text.setObjectName("overlayQText")
+            text.setWordWrap(True)
+            row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
+            row.addWidget(text, 1)
+            self._questions_body.addLayout(row)
         self._questions.show()
 
     def _render_summary(self, summary: str, *, enabled: bool = False) -> None:
@@ -267,60 +472,69 @@ class MeetingBuddyOverlay:
         text = (summary or "").strip() or i18n.t("modules.meeting_buddy.overlay.summary_waiting")
         self._summary_body.setText(text)
         self._summary_body.setStyleSheet(
-            "color: #1B1F24;" if summary.strip() else "color: #6C7C87;"
+            f"color: {TOKENS['text_secondary']}; font-size: 12px;"
+            if summary.strip()
+            else f"color: {TOKENS['muted_soft']}; font-size: 12px;"
         )
         self._summary.show()
 
     def _render_hints(self, hints: Sequence[Hint], emphasis_id: str | None) -> None:
-        layout = self._hints.layout()
-        assert isinstance(layout, QVBoxLayout)
-        self._clear_layout(layout)
+        self._clear_layout(self._hints_body)
         self._hint_cards.clear()
         if not hints:
-            empty = QLabel(i18n.t("modules.meeting_buddy.overlay.no_hints"))
-            empty.setStyleSheet("color: #6C7C87;")
-            layout.addWidget(empty)
+            self._hints_count.setText("")
+            self._hints.hide()
             return
+        self._hints_count.setText(str(len(hints)))
         for hint in hints:
-            card = QFrame()
             emphasized = hint.id == emphasis_id
-            background = "#EAF3FC" if emphasized else "#FFFFFF"
-            border_width = 2 if emphasized else 1
-            border_color = "#0F6CBD" if emphasized else "#CFD9E0"
-            card.setStyleSheet(
-                f"QFrame {{ background: {background}; border: {border_width}px solid"
-                f" {border_color}; border-radius: 4px; }}"
-            )
+            card = QFrame()
+            card.setObjectName("hintEmph" if emphasized else "hintCard")
+            card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(10, 9, 10, 9)
+            card_layout.setSpacing(7)
+            if emphasized:
+                label = QLabel(i18n.t("modules.meeting_buddy.overlay.hint_important").upper())
+                label.setObjectName("hintImportant")
+                card_layout.addWidget(label)
             message = QLabel(hint.message)
             message.setWordWrap(True)
-            if emphasized:
-                message.setStyleSheet("font-weight: 600;")
+            message.setStyleSheet(
+                f"color: {TOKENS['text']}; font-size: 12.5px;"
+                + (" font-weight: 600;" if emphasized else "")
+            )
             card_layout.addWidget(message)
             controls = QHBoxLayout()
-            controls.addStretch()
+            controls.setSpacing(6)
             if _enum_value(hint.type) == HintType.CANDIDATE_ACTION_WITHOUT_OWNER.value:
                 confirm = QPushButton(i18n.t("modules.meeting_buddy.overlay.confirm"))
+                confirm.setObjectName("primary")
                 confirm.clicked.connect(
                     lambda _checked=False, hint_id=hint.id: self._on_confirm(hint_id)
                 )
                 controls.addWidget(confirm)
             dismiss = QPushButton(i18n.t("modules.meeting_buddy.overlay.dismiss"))
+            dismiss.setObjectName("ghost")
             dismiss.clicked.connect(
                 lambda _checked=False, hint_id=hint.id: self._on_dismiss(hint_id)
             )
             controls.addWidget(dismiss)
+            controls.addStretch(1)
             card_layout.addLayout(controls)
-            layout.addWidget(card)
+            self._hints_body.addWidget(card)
             self._hint_cards[hint.id] = card
+        self._hints.show()
 
     def _tick(self) -> None:
-        self._timer_label.setText(format_elapsed(self._elapsed_seconds()))
+        timer = format_elapsed(self._elapsed_seconds())
+        self._timer_label.setText(timer)
+        if self._mini is not None and self._mini.isVisible():
+            self._mini.set_state(timer, f"{self._topic_done}/{self._topic_total}")
         if _enum_value(self._capture_status) == "active":
             self._pulse_on = not self._pulse_on
-            self._listening_dot.setStyleSheet(
-                f"color: {'#E53935' if self._pulse_on else '#FF8A80'}; font-weight: bold;"
-            )
+            color = COLOR_RECORDING if self._pulse_on else "#FF9E9B"
+            self._listening_dot.setStyleSheet(f"color: {color}; font-size: 11px;")
 
     def _update_recording_banner(
         self,
@@ -330,27 +544,76 @@ class MeetingBuddyOverlay:
         loopback_active: bool | None,
         loopback_requested: bool,
     ) -> None:
+        layout = self._banner_host.layout()
+        assert isinstance(layout, QVBoxLayout)
+        self._clear_layout(layout)
         capture = _enum_value(capture_status)
-        if capture == "active":
+        delayed = _enum_value(transcription_status) == "delayed"
+        if capture not in {"active", "starting", "reconnecting", "error"}:
+            self._banner_host.hide()
+            return
+
+        if capture == "error":
+            kind, icon, icon_color = "bannerError", "!", TOKENS["danger"]
+            text = i18n.t("modules.meeting_buddy.overlay.recording.error")
+        elif capture in {"starting", "reconnecting"}:
+            kind, icon, icon_color = "bannerMuted", "●", TOKENS["muted"]
+            text = i18n.t("modules.meeting_buddy.overlay.recording.starting")
+        elif delayed:
+            kind, icon, icon_color = "bannerWarn", "!", TOKENS["amber_icon"]
             text = self._active_recording_text(
-                delayed=_enum_value(transcription_status) == "delayed",
+                delayed=True, loopback_active=loopback_active, loopback_requested=loopback_requested
+            )
+        elif loopback_active is True:
+            kind, icon, icon_color = "bannerInfo", "♪", TOKENS["accent"]
+            text = self._active_recording_text(
+                delayed=False, loopback_active=True, loopback_requested=loopback_requested
+            )
+        elif loopback_requested and loopback_active is False:
+            kind, icon, icon_color = "bannerWarn", "!", TOKENS["amber_icon"]
+            text = self._active_recording_text(
+                delayed=False, loopback_active=False, loopback_requested=True
+            )
+        else:
+            kind, icon, icon_color = "bannerMuted", "●", TOKENS["muted"]
+            text = self._active_recording_text(
+                delayed=False,
                 loopback_active=loopback_active,
                 loopback_requested=loopback_requested,
             )
-        elif capture in {"starting", "reconnecting"}:
-            text = i18n.t("modules.meeting_buddy.overlay.recording.starting")
-        elif capture == "error":
-            text = i18n.t("modules.meeting_buddy.overlay.recording.error")
-        else:
-            self._recording_label.hide()
-            return
-        self._recording_label.setText(text)
-        self._recording_label.show()
+
+        banner = QFrame()
+        banner.setObjectName(kind)
+        banner.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        box = QVBoxLayout(banner)
+        box.setContentsMargins(10, 8, 10, 8)
+        box.setSpacing(7)
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        glyph = QLabel(icon)
+        glyph.setStyleSheet(f"color: {icon_color}; font-weight: 700;")
+        message = QLabel(text)
+        message.setWordWrap(True)
+        message.setStyleSheet(f"color: {TOKENS['text_secondary']}; font-size: 12px;")
+        top.addWidget(glyph, 0, Qt.AlignmentFlag.AlignTop)
+        top.addWidget(message, 1)
+        box.addLayout(top)
+        if capture == "error":
+            reconnect = QPushButton(i18n.t("modules.meeting_buddy.overlay.reconnect"))
+            reconnect.setObjectName("primary")
+            reconnect.clicked.connect(self._on_reconnect)
+            actions = QHBoxLayout()
+            actions.addWidget(reconnect)
+            actions.addStretch(1)
+            box.addLayout(actions)
+        layout.addWidget(banner)
+        self._banner_host.show()
 
     def _update_listening_dot(self, capture_status: object, transcription_status: object) -> None:
         if _enum_value(capture_status) != "active":
             self._listening_dot.setStyleSheet(
-                f"color: {self._listening_color(capture_status, transcription_status)}; font-weight: bold;"
+                f"color: {self._listening_color(capture_status, transcription_status)};"
+                " font-size: 11px;"
             )
 
     def _place_top_right(self) -> None:

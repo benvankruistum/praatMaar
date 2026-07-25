@@ -374,6 +374,36 @@ def build_qss(
     }}
     QLabel#libTitle {{ font-size: 12.5px; color: {t["text"]}; }}
     QLabel#libDate {{ font-size: 10.5px; color: {t["muted_soft"]}; }}
+
+    /* --- Meeting Buddy #1a overlay --- */
+    QFrame#mbCard {{
+        background: {t["surface"]}; border: 1px solid #DDE2E8; border-radius: 8px;
+    }}
+    QFrame#mbHeader {{ background: {t["col_header_bg"]}; border: none;
+        border-bottom: 1px solid {t["border_subtle"]}; }}
+    QFrame#mbFooter {{ background: {t["col_header_bg"]}; border: none;
+        border-top: 1px solid {t["border_subtle"]}; }}
+    QLabel#mbHeaderTitle {{ font-size: 12px; font-weight: 600; color: {t["text"]}; }}
+    QLabel#overlayStatus {{ font-size: 13px; font-weight: 600; color: {t["text"]}; }}
+    QLabel#overlayTimer {{ font-size: 12.5px; color: {t["muted"]}; font-family: {t["mono"]}; }}
+    QLabel#overlaySection {{ color: {t["muted_label"]}; font-size: 11px; font-weight: 600;
+        letter-spacing: 0.08em; }}
+    QLabel#overlayFooterText {{ color: {t["muted_soft"]}; font-size: 10.5px; }}
+    QLabel#overlayQ {{ color: {t["accent"]}; font-size: 12px; font-weight: 700; }}
+    QLabel#overlayQText {{ color: {t["text_secondary"]}; font-size: 12.5px; }}
+    QFrame#bannerInfo {{ background: {t["accent_soft"]}; border: 1px solid {t["accent_border_strong"]};
+        border-radius: {t["radius_button"]}; }}
+    QFrame#bannerWarn {{ background: {t["amber_bg"]}; border: 1px solid {t["amber_border"]};
+        border-radius: {t["radius_button"]}; }}
+    QFrame#bannerError {{ background: {t["danger_hover"]}; border: 1px solid #F3C2BC;
+        border-radius: {t["radius_button"]}; }}
+    QFrame#bannerMuted {{ background: #F2F5F8; border: 1px solid #E2E7ED;
+        border-radius: {t["radius_button"]}; }}
+    QFrame#hintEmph {{ background: #F4F9FE; border: 1px solid {t["accent_border_strong"]};
+        border-left: 2px solid {t["accent"]}; border-radius: 6px; }}
+    QFrame#hintCard {{ background: #F9FAFC; border: 1px solid #E6EAEF; border-radius: 6px; }}
+    QLabel#hintImportant {{ color: #0A4C86; font-size: 10px; font-weight: 700;
+        letter-spacing: 0.06em; }}
     """
 
 

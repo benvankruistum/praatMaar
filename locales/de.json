@@ -348,5 +348,10 @@
   "modules.meeting_buddy.dialog.topics_label": "Themen",
   "modules.meeting_buddy.dialog.one_per_line": "eins pro Zeile",
   "modules.meeting_buddy.dialog.saved_as": "gespeichert als {name}",
-  "modules.meeting_buddy.dialog.local_saved": "Lokal gespeichert · keine Cloud"
+  "modules.meeting_buddy.dialog.local_saved": "Lokal gespeichert · keine Cloud",
+  "modules.meeting_buddy.overlay.hint_important": "Wichtig",
+  "modules.meeting_buddy.overlay.local": "lokal",
+  "modules.meeting_buddy.overlay.hints": "Hinweise",
+  "modules.meeting_buddy.overlay.headline.listening": "Hört zu",
+  "modules.meeting_buddy.overlay.headline.interrupted": "Aufnahme unterbrochen"
 }

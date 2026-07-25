@@ -348,5 +348,10 @@
   "modules.meeting_buddy.dialog.topics_label": "Onderwerpen",
   "modules.meeting_buddy.dialog.one_per_line": "één per regel",
   "modules.meeting_buddy.dialog.saved_as": "opgeslagen als {name}",
-  "modules.meeting_buddy.dialog.local_saved": "Lokaal opgeslagen · geen cloud"
+  "modules.meeting_buddy.dialog.local_saved": "Lokaal opgeslagen · geen cloud",
+  "modules.meeting_buddy.overlay.hint_important": "Belangrijk",
+  "modules.meeting_buddy.overlay.local": "lokaal",
+  "modules.meeting_buddy.overlay.hints": "Hints",
+  "modules.meeting_buddy.overlay.headline.listening": "Luistert",
+  "modules.meeting_buddy.overlay.headline.interrupted": "Opname onderbroken"
 }

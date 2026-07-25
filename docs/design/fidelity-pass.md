@@ -125,7 +125,14 @@ Subdialoog:
 
 ### 01–07 Overlay (`overlay.py`)
 
-- [ ] Nog te doen
+- [x] Card-shell: header-bar (titel + minimize/stop), witte kaart, footer-band
+- [x] Status-rij: pulse-dot + "Luistert"/"Opname onderbroken" + tabulaire timer
+- [x] Bron-banner per state: mic (grijs) · mic+loopback (blauw) · fout (rood + herverbinden) · achterstand (amber)
+- [x] Agenda-statusladder: getekende vormen (ring/half/vol/✓) + count
+- [x] Samenvatting + Vragen (accent "?") + Hints (max 3, één uitgelicht met strook + BELANGRIJK)
+- [x] Footer: Opname · Transcriptie · lokaal
+- [x] Geminimaliseerd: donkere mini-pill 230×44 (familie #2a) met timer + count + meeting-tag + expand
+- [x] Live side-by-side goedgekeurd door gebruiker
 
 ## Agent-prompt (plakken)
 
