@@ -124,6 +124,9 @@ class ModulesDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        # Clamp content to the viewport width so long descriptions wrap instead
+        # of being clipped when the vertical scrollbar appears.
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet(f"QScrollArea {{ background: {TOKENS['surface']}; border: none; }}")
         cards = QWidget()
         cards.setStyleSheet(f"background: {TOKENS['surface']};")
