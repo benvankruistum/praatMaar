@@ -1,4 +1,4 @@
-"""Meeting Buddy properties dialog: loopback output and transcript folder."""
+"""Qt Meeting Buddy properties dialog: loopback output and transcript folder."""
 
 from __future__ import annotations
 
@@ -6,7 +6,24 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
 import i18n
+from ui.app import ensure_app
+from ui.theme import TOKENS
+from ui.widgets import ToggleSwitch
 
 from .devices import list_loopback_output_devices
 from .transcript_journal import transcripts_dir
@@ -23,15 +40,17 @@ class PropertiesResult:
 
 
 def device_selection_maps(
-    devices: list[tuple[str, int | None]],
-    loopback_device: int | None,
+    devices: list[tuple[str, int | None]], loopback_device: int | None
 ) -> tuple[list[str], dict[str, int | None], dict[int | None, str], str]:
-    device_labels = [label for label, _ in devices]
-    device_value_by_label = {label: value for label, value in devices}
-    device_label_by_value = {value: label for label, value in devices}
-    default_label = device_labels[0] if device_labels else ""
-    current_device_label = device_label_by_value.get(loopback_device, default_label)
-    return device_labels, device_value_by_label, device_label_by_value, current_device_label
+    labels = [label for label, _ in devices]
+    values = {label: value for label, value in devices}
+    labels_by_value = {value: label for label, value in devices}
+    return (
+        labels,
+        values,
+        labels_by_value,
+        labels_by_value.get(loopback_device, labels[0] if labels else ""),
+    )
 
 
 def build_properties_result(
@@ -45,16 +64,250 @@ def build_properties_result(
     llm_chunk_interval_s: float = 45.0,
     llm_chunk_min_new_chars: int = 120,
 ) -> PropertiesResult:
-    selected_device = device_value_by_label.get(selected_device_label, fallback_device)
-    folder = transcripts_directory.strip() if transcripts_directory else None
     return PropertiesResult(
         enable_loopback=enable_loopback,
-        loopback_device=selected_device if enable_loopback else None,
-        transcripts_directory=folder or None,
+        loopback_device=device_value_by_label.get(selected_device_label, fallback_device)
+        if enable_loopback
+        else None,
+        transcripts_directory=transcripts_directory.strip()
+        if transcripts_directory and transcripts_directory.strip()
+        else None,
         live_summary_enabled=bool(live_summary_enabled),
         llm_chunk_interval_s=max(15.0, float(llm_chunk_interval_s)),
         llm_chunk_min_new_chars=max(50, int(llm_chunk_min_new_chars)),
     )
+
+
+class _PropertiesDialog(QDialog):
+    def __init__(
+        self,
+        *,
+        enable_loopback: bool,
+        loopback_device: int | None,
+        transcripts_directory: str | None,
+        live_summary_enabled: bool,
+        llm_chunk_interval_s: float,
+        llm_chunk_min_new_chars: int,
+        app_dir: Path | None,
+        parent: QWidget | None,
+    ) -> None:
+        super().__init__(parent)
+        self._loopback_device = loopback_device
+        devices = list_loopback_output_devices()
+        labels, self._device_values, _, current = device_selection_maps(devices, loopback_device)
+        self._result: PropertiesResult | None = None
+        self.setWindowTitle(i18n.t("modules.meeting_buddy.dialog.properties_title"))
+        self.setMinimumWidth(620)
+        self.setStyleSheet(
+            f"QDialog {{ background: {TOKENS['surface']}; "
+            f"border: 1px solid {TOKENS['border_dialog']}; }}"
+        )
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        body = QWidget()
+        col = QVBoxLayout(body)
+        col.setContentsMargins(18, 16, 18, 18)
+        col.setSpacing(0)
+
+        # --- Audio ---
+        col.addWidget(self._section(i18n.t("modules.meeting_buddy.settings.section.audio")))
+        self._loopback = ToggleSwitch()
+        self._loopback.setChecked(enable_loopback)
+        col.addLayout(
+            self._toggle_row(
+                i18n.t("modules.meeting_buddy.settings.loopback_title"),
+                i18n.t("modules.meeting_buddy.settings.loopback_desc"),
+                self._loopback,
+            )
+        )
+        self._device = QComboBox()
+        self._device.addItems(labels)
+        self._device.setCurrentText(current)
+        col.addLayout(
+            self._field_row(i18n.t("modules.meeting_buddy.settings.output_device"), self._device)
+        )
+
+        # --- Opslag ---
+        col.addWidget(
+            self._section(i18n.t("modules.meeting_buddy.settings.section.storage"), top=True)
+        )
+        self._folder = QLineEdit(transcripts_directory or "")
+        browse = QPushButton(i18n.t("modules.meeting_buddy.settings.transcripts_browse"))
+        browse.setObjectName("secondary")
+        browse.clicked.connect(lambda: self._browse_folder(app_dir))
+        col.addLayout(
+            self._field_row(
+                i18n.t("modules.meeting_buddy.settings.transcript_label"),
+                self._folder,
+                trailing=browse,
+            )
+        )
+
+        # --- Samenvatting ---
+        col.addWidget(
+            self._section(i18n.t("modules.meeting_buddy.settings.section.summary"), top=True)
+        )
+        self._summary = ToggleSwitch()
+        self._summary.setChecked(live_summary_enabled)
+        col.addLayout(
+            self._toggle_row(
+                i18n.t("modules.meeting_buddy.settings.live_summary_enabled"),
+                i18n.t("modules.meeting_buddy.settings.live_summary_hint"),
+                self._summary,
+            )
+        )
+        self._interval = QLineEdit(str(int(llm_chunk_interval_s)))
+        self._interval.setFixedWidth(72)
+        self._chars = QLineEdit(str(int(llm_chunk_min_new_chars)))
+        self._chars.setFixedWidth(88)
+        col.addLayout(self._interval_row())
+
+        # --- Privacy-banner ---
+        banner = QFrame()
+        banner.setObjectName("successBanner")
+        banner_row = QHBoxLayout(banner)
+        banner_row.setContentsMargins(11, 9, 11, 9)
+        banner_row.setSpacing(9)
+        check = QLabel("✓")
+        check.setStyleSheet(
+            f"background: {TOKENS['ok']}; color: white; font-size: 9px; font-weight: 700;"
+            " border-radius: 7px; min-width: 14px; max-width: 14px; min-height: 14px;"
+            " max-height: 14px;"
+        )
+        check.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        note = QLabel(i18n.t("modules.meeting_buddy.settings.privacy_note"))
+        note.setObjectName("successText")
+        note.setWordWrap(True)
+        banner_row.addWidget(check, 0, Qt.AlignmentFlag.AlignTop)
+        banner_row.addWidget(note, 1)
+        col.addSpacing(14)
+        col.addWidget(banner)
+
+        outer.addWidget(body, 1)
+
+        footer = QFrame()
+        footer.setObjectName("dialogFooter")
+        footer_row = QHBoxLayout(footer)
+        footer_row.setContentsMargins(18, 12, 18, 12)
+        footer_row.addStretch(1)
+        cancel = QPushButton(i18n.t("modules.meeting_buddy.dialog.cancel"))
+        cancel.setObjectName("ghost")
+        cancel.clicked.connect(self.reject)
+        save = QPushButton(i18n.t("modules.meeting_buddy.dialog.save"))
+        save.setObjectName("primary")
+        save.clicked.connect(self._confirm)
+        footer_row.addWidget(cancel)
+        footer_row.addWidget(save)
+        outer.addWidget(footer)
+
+        self._loopback.toggled.connect(self._device.setEnabled)
+        self._device.setEnabled(enable_loopback)
+
+    # -- shell helpers ---------------------------------------------------
+    def _section(self, text: str, *, top: bool = False) -> QWidget:
+        wrap = QWidget()
+        box = QVBoxLayout(wrap)
+        box.setContentsMargins(0, 16 if top else 0, 0, 4)
+        box.setSpacing(0)
+        if top:
+            divider = QFrame()
+            divider.setObjectName("destDivider")
+            divider.setFixedHeight(1)
+            box.addWidget(divider)
+            box.addSpacing(12)
+        label = QLabel(text.upper())
+        label.setObjectName("sectionLabel")
+        box.addWidget(label)
+        return wrap
+
+    def _toggle_row(self, title: str, desc: str, toggle: ToggleSwitch) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 10, 0, 12)
+        row.setSpacing(16)
+        text = QVBoxLayout()
+        text.setSpacing(3)
+        title_label = QLabel(title)
+        title_label.setObjectName("mbTitle")
+        desc_label = QLabel(desc)
+        desc_label.setObjectName("mbDesc")
+        desc_label.setWordWrap(True)
+        text.addWidget(title_label)
+        text.addWidget(desc_label)
+        row.addLayout(text, 1)
+        row.addWidget(toggle, 0, Qt.AlignmentFlag.AlignTop)
+        return row
+
+    def _field_row(
+        self, label_text: str, field: QWidget, *, trailing: QWidget | None = None
+    ) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 12)
+        row.setSpacing(16)
+        label = QLabel(label_text)
+        label.setObjectName("fieldLabel")
+        label.setFixedWidth(150)
+        row.addWidget(label)
+        row.addWidget(field, 1)
+        if trailing is not None:
+            row.addWidget(trailing)
+        return row
+
+    def _interval_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(24)
+        spacer = QLabel()
+        spacer.setFixedWidth(150)
+        row.addWidget(spacer)
+        every = QHBoxLayout()
+        every.setSpacing(10)
+        every.addWidget(QLabel(i18n.t("modules.meeting_buddy.settings.summary_every")))
+        every.addWidget(self._interval)
+        every.addWidget(QLabel(i18n.t("modules.meeting_buddy.settings.summary_seconds")))
+        after = QHBoxLayout()
+        after.setSpacing(10)
+        after.addWidget(QLabel(i18n.t("modules.meeting_buddy.settings.summary_or_after")))
+        after.addWidget(self._chars)
+        after.addWidget(QLabel(i18n.t("modules.meeting_buddy.settings.summary_chars")))
+        row.addLayout(every)
+        row.addLayout(after)
+        row.addStretch(1)
+        return row
+
+    @property
+    def result(self) -> PropertiesResult | None:
+        return self._result
+
+    def _browse_folder(self, app_dir: Path | None) -> None:
+        initial = self._folder.text().strip() or (str(transcripts_dir(app_dir)) if app_dir else "")
+        chosen = QFileDialog.getExistingDirectory(
+            self, i18n.t("modules.meeting_buddy.settings.transcripts_browse"), initial
+        )
+        if chosen:
+            self._folder.setText(chosen)
+
+    def _confirm(self) -> None:
+        try:
+            interval = float(self._interval.text().strip() or "60")
+        except ValueError:
+            interval = 60.0
+        try:
+            chars = int(self._chars.text().strip() or "200")
+        except ValueError:
+            chars = 200
+        self._result = build_properties_result(
+            enable_loopback=self._loopback.isChecked(),
+            selected_device_label=self._device.currentText(),
+            device_value_by_label=self._device_values,
+            fallback_device=self._loopback_device,
+            transcripts_directory=self._folder.text(),
+            live_summary_enabled=self._summary.isChecked(),
+            llm_chunk_interval_s=interval,
+            llm_chunk_min_new_chars=chars,
+        )
+        self.accept()
 
 
 def show_properties_dialog(
@@ -69,184 +322,16 @@ def show_properties_dialog(
     parent: Any = None,
 ) -> PropertiesResult | None:
     """Show loopback + transcript folder settings; return ``None`` on cancel."""
-
-    import tkinter as tk
-    from tkinter import ttk
-
-    devices = list_loopback_output_devices()
-    device_labels, device_value_by_label, _, current_device_label = device_selection_maps(
-        devices,
-        loopback_device,
+    ensure_app()
+    dialog = _PropertiesDialog(
+        enable_loopback=enable_loopback,
+        loopback_device=loopback_device,
+        transcripts_directory=transcripts_directory,
+        live_summary_enabled=live_summary_enabled,
+        llm_chunk_interval_s=llm_chunk_interval_s,
+        llm_chunk_min_new_chars=llm_chunk_min_new_chars,
+        app_dir=app_dir,
+        parent=parent if isinstance(parent, QWidget) else None,
     )
-    default_transcripts = str(transcripts_dir(app_dir)) if app_dir is not None else ""
-
-    from ui_icon import apply_window_icon
-
-    dlg = tk.Toplevel(parent)
-    dlg.withdraw()
-    dlg.title(i18n.t("modules.meeting_buddy.dialog.title"))
-    apply_window_icon(dlg)
-    dlg.resizable(False, False)
-    dlg.columnconfigure(0, weight=1)
-
-    frame = ttk.Frame(dlg, padding=12)
-    frame.grid(row=0, column=0, sticky="nsew")
-    frame.columnconfigure(0, weight=1)
-
-    loopback_var = tk.BooleanVar(value=enable_loopback)
-    ttk.Checkbutton(
-        frame,
-        text=i18n.t("modules.meeting_buddy.settings.enable_loopback"),
-        variable=loopback_var,
-    ).grid(row=0, column=0, sticky="w", pady=(0, 4))
-
-    ttk.Label(
-        frame,
-        text=i18n.t("modules.meeting_buddy.settings.loopback_output"),
-    ).grid(row=1, column=0, sticky="w", pady=(0, 2))
-
-    device_var = tk.StringVar(value=current_device_label)
-    device_combo = ttk.Combobox(
-        frame,
-        textvariable=device_var,
-        values=device_labels,
-        state="readonly",
-        width=48,
-    )
-    device_combo.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-
-    ttk.Label(
-        frame,
-        text=i18n.t("modules.meeting_buddy.settings.transcripts_directory"),
-    ).grid(row=3, column=0, sticky="w", pady=(0, 2))
-    folder_row = ttk.Frame(frame)
-    folder_row.grid(row=4, column=0, sticky="ew", pady=(0, 4))
-    folder_row.columnconfigure(0, weight=1)
-    folder_var = tk.StringVar(value=transcripts_directory or "")
-    folder_entry = ttk.Entry(folder_row, textvariable=folder_var, width=44)
-    folder_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
-
-    def browse_folder() -> None:
-        from tkinter import filedialog
-
-        initial = folder_var.get().strip() or default_transcripts or None
-        chosen = filedialog.askdirectory(
-            parent=dlg,
-            title=i18n.t("modules.meeting_buddy.settings.transcripts_browse"),
-            initialdir=initial or None,
-        )
-        if chosen:
-            folder_var.set(chosen)
-
-    ttk.Button(
-        folder_row,
-        text=i18n.t("modules.meeting_buddy.settings.transcripts_browse"),
-        command=browse_folder,
-    ).grid(row=0, column=1)
-
-    ttk.Label(
-        frame,
-        text=i18n.t(
-            "modules.meeting_buddy.settings.transcripts_directory_hint",
-            path=default_transcripts or "…/meeting-buddy/transcripts",
-        ),
-        wraplength=420,
-        foreground="#5f6368",
-    ).grid(row=5, column=0, sticky="w", pady=(0, 10))
-
-    summary_var = tk.BooleanVar(value=live_summary_enabled)
-    ttk.Checkbutton(
-        frame,
-        text=i18n.t("modules.meeting_buddy.settings.live_summary_enabled"),
-        variable=summary_var,
-    ).grid(row=6, column=0, sticky="w", pady=(0, 4))
-    ttk.Label(
-        frame,
-        text=i18n.t("modules.meeting_buddy.settings.live_summary_hint"),
-        wraplength=420,
-        foreground="#5f6368",
-    ).grid(row=7, column=0, sticky="w", pady=(0, 8))
-
-    chunk_row = ttk.Frame(frame)
-    chunk_row.grid(row=8, column=0, sticky="ew", pady=(0, 10))
-    ttk.Label(
-        chunk_row,
-        text=i18n.t("modules.meeting_buddy.settings.llm_chunk_interval_s"),
-    ).grid(row=0, column=0, sticky="w")
-    interval_var = tk.StringVar(value=str(int(llm_chunk_interval_s)))
-    ttk.Entry(chunk_row, textvariable=interval_var, width=8).grid(
-        row=0, column=1, sticky="w", padx=(8, 16)
-    )
-    ttk.Label(
-        chunk_row,
-        text=i18n.t("modules.meeting_buddy.settings.llm_chunk_min_new_chars"),
-    ).grid(row=0, column=2, sticky="w")
-    chars_var = tk.StringVar(value=str(int(llm_chunk_min_new_chars)))
-    ttk.Entry(chunk_row, textvariable=chars_var, width=8).grid(
-        row=0, column=3, sticky="w", padx=(8, 0)
-    )
-
-    def _sync_loopback_controls() -> None:
-        state = "readonly" if loopback_var.get() else "disabled"
-        device_combo.configure(state=state)
-
-    loopback_var.trace_add("write", lambda *_args: _sync_loopback_controls())
-    _sync_loopback_controls()
-
-    result: PropertiesResult | None = None
-
-    def confirm() -> None:
-        nonlocal result
-        try:
-            interval = float(interval_var.get().strip() or "60")
-        except ValueError:
-            interval = 60.0
-        try:
-            min_chars = int(chars_var.get().strip() or "200")
-        except ValueError:
-            min_chars = 200
-        result = build_properties_result(
-            enable_loopback=bool(loopback_var.get()),
-            selected_device_label=device_var.get(),
-            device_value_by_label=device_value_by_label,
-            fallback_device=loopback_device,
-            transcripts_directory=folder_var.get(),
-            live_summary_enabled=bool(summary_var.get()),
-            llm_chunk_interval_s=interval,
-            llm_chunk_min_new_chars=min_chars,
-        )
-        dlg.destroy()
-
-    def cancel() -> None:
-        dlg.destroy()
-
-    buttons = ttk.Frame(frame)
-    buttons.grid(row=9, column=0, sticky="e")
-    ttk.Button(buttons, text=i18n.t("modules.meeting_buddy.dialog.cancel"), command=cancel).grid(
-        row=0, column=0, padx=(0, 8)
-    )
-    ttk.Button(
-        buttons,
-        text=i18n.t("modules.meeting_buddy.dialog.save"),
-        command=confirm,
-    ).grid(row=0, column=1)
-
-    dlg.protocol("WM_DELETE_WINDOW", cancel)
-    dlg.bind("<Escape>", lambda _event: cancel())
-    dlg.bind("<Control-Return>", lambda _event: confirm())
-
-    dlg.update_idletasks()
-    width = max(dlg.winfo_reqwidth(), 480)
-    height = max(dlg.winfo_reqheight(), 320)
-    x = (dlg.winfo_screenwidth() - width) // 2
-    y = (dlg.winfo_screenheight() - height) // 3
-    dlg.geometry(f"{width}x{height}+{x}+{y}")
-    dlg.deiconify()
-    dlg.lift()
-    dlg.attributes("-topmost", True)
-    dlg.after(300, lambda: dlg.attributes("-topmost", False))
-    dlg.grab_set()
-    dlg.focus_force()
-    device_combo.focus_set()
-    dlg.wait_window()
-    return result
+    dialog.exec()
+    return dialog.result

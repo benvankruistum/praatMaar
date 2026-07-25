@@ -59,41 +59,14 @@ def test_library_sections_all_only_when_no_recent() -> None:
 
 
 def test_show_agenda_dialog_cancel_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    import tkinter as tk
+    from PySide6.QtWidgets import QDialog
 
-    root = tk.Tk()
-    root.withdraw()
-
-    original_topllevel = tk.Toplevel
-
-    def patched_topllevel(*args, **kwargs):
-        dlg = original_topllevel(*args, **kwargs)
-        cancel_handler = None
-        original_protocol = dlg.protocol
-
-        def protocol(name, handler):
-            nonlocal cancel_handler
-            if name == "WM_DELETE_WINDOW":
-                cancel_handler = handler
-            return original_protocol(name, handler)
-
-        dlg.protocol = protocol
-
-        def wait_window():
-            if cancel_handler is not None:
-                cancel_handler()
-
-        dlg.wait_window = wait_window
-        return dlg
-
-    monkeypatch.setattr(tk, "Toplevel", patched_topllevel)
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
 
     result = show_agenda_dialog(
         agenda_text="",
         path=None,
         app_dir=Path("/tmp/app"),
         mode="start",
-        parent=root,
     )
-    root.destroy()
     assert result is None

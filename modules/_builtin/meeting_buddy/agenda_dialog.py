@@ -1,12 +1,29 @@
-"""Meeting Buddy agenda dialog: library, recents, and start/edit flows."""
+"""Qt Meeting Buddy agenda dialog: library, recents, and start/edit flows."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
+from PySide6.QtCore import QRect, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QPainter
+from PySide6.QtWidgets import (
+    QDialog,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPlainTextEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
 import i18n
+from ui.app import ensure_app
+from ui.theme import TOKENS
 
 from .agenda_store import (
     default_new_path,
@@ -29,22 +46,342 @@ class AgendaDialogResult:
 
 def can_start_meeting(body: str) -> bool:
     """Return whether the agenda body has at least one topic."""
-
     return bool(parse_agenda(body))
 
 
 def library_sections(
-    *,
-    recent: list[Path],
-    all_agendas: list[Path],
+    *, recent: list[Path], all_agendas: list[Path]
 ) -> list[tuple[str, list[Path]]]:
     """Group library paths into Recent (optional) then All sections."""
+    return ([("recent", recent)] if recent else []) + [("all", all_agendas)]
 
-    sections: list[tuple[str, list[Path]]] = []
-    if recent:
-        sections.append(("recent", recent))
-    sections.append(("all", all_agendas))
-    return sections
+
+class _LineGutter(QWidget):
+    """Line-number margin painted by its owning editor."""
+
+    def __init__(self, editor: _LineNumberedEdit) -> None:
+        super().__init__(editor)
+        self._editor = editor
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self._editor.gutter_width(), 0)
+
+    def paintEvent(self, event: Any) -> None:  # noqa: N802
+        self._editor.paint_gutter(event)
+
+
+class _LineNumberedEdit(QPlainTextEdit):
+    """Plain-text editor with a numbered gutter (canvas "één per regel")."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._gutter = _LineGutter(self)
+        self.blockCountChanged.connect(lambda _count: self._update_margins())
+        self.updateRequest.connect(self._on_update)
+        self._update_margins()
+
+    def gutter_width(self) -> int:
+        digits = max(2, len(str(max(1, self.blockCount()))))
+        return 14 + self.fontMetrics().horizontalAdvance("9") * digits
+
+    def _update_margins(self) -> None:
+        self.setViewportMargins(self.gutter_width(), 0, 0, 0)
+
+    def _on_update(self, rect: Any, dy: int) -> None:
+        if dy:
+            self._gutter.scroll(0, dy)
+        else:
+            self._gutter.update(0, rect.y(), self._gutter.width(), rect.height())
+        if rect.contains(self.viewport().rect()):
+            self._update_margins()
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        cr = self.contentsRect()
+        self._gutter.setGeometry(QRect(cr.left(), cr.top(), self.gutter_width(), cr.height()))
+
+    def paint_gutter(self, event: Any) -> None:
+        painter = QPainter(self._gutter)
+        block = self.firstVisibleBlock()
+        number = block.blockNumber()
+        top = self.blockBoundingGeometry(block).translated(self.contentOffset()).top()
+        bottom = top + self.blockBoundingRect(block).height()
+        painter.setPen(QColor(TOKENS["muted_soft"]))
+        painter.setFont(self.font())
+        line_h = self.fontMetrics().height()
+        while block.isValid() and top <= event.rect().bottom():
+            if block.isVisible() and bottom >= event.rect().top():
+                painter.drawText(
+                    0,
+                    int(top),
+                    self._gutter.width() - 8,
+                    line_h,
+                    Qt.AlignmentFlag.AlignRight,
+                    str(number + 1),
+                )
+            block = block.next()
+            top = bottom
+            bottom = top + self.blockBoundingRect(block).height()
+            number += 1
+
+
+class _LibRow(QFrame):
+    """Clickable library entry: title with an optional date subtitle."""
+
+    clicked = Signal(object)
+
+    def __init__(self, path: Path, *, subtitle: str | None = None, active: bool = False) -> None:
+        super().__init__()
+        self.setObjectName("libRow")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setProperty("active", "true" if active else "false")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._path = path
+        box = QVBoxLayout(self)
+        box.setContentsMargins(8, 6, 8, 6)
+        box.setSpacing(1)
+        title = QLabel(display_title(path))
+        title.setObjectName("libTitle")
+        box.addWidget(title)
+        if subtitle:
+            date = QLabel(subtitle)
+            date.setObjectName("libDate")
+            box.addWidget(date)
+
+    def mousePressEvent(self, _event: Any) -> None:  # noqa: N802
+        self.clicked.emit(self._path)
+
+
+class _AgendaDialog(QDialog):
+    def __init__(
+        self,
+        *,
+        agenda_text: str,
+        path: Path | None,
+        app_dir: Path,
+        mode: Literal["start", "edit"],
+        parent: QWidget | None,
+    ) -> None:
+        super().__init__(parent)
+        self._app_dir, self._current_path, self._mode = app_dir, path, mode
+        self._result: AgendaDialogResult | None = None
+        self.setWindowTitle(i18n.t("modules.meeting_buddy.dialog.agenda_title"))
+        self.setMinimumSize(620, 440)
+        self.resize(620, 500)
+        self.setStyleSheet(
+            f"QDialog {{ background: {TOKENS['surface']}; "
+            f"border: 1px solid {TOKENS['border_dialog']}; }}"
+        )
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        body = QWidget()
+        grid = QHBoxLayout(body)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(0)
+
+        # --- topics (left) ---
+        left = QWidget()
+        col = QVBoxLayout(left)
+        col.setContentsMargins(18, 14, 18, 16)
+        col.setSpacing(8)
+        head = QHBoxLayout()
+        topics_label = QLabel(i18n.t("modules.meeting_buddy.dialog.topics_label").upper())
+        topics_label.setObjectName("sectionLabel")
+        one_per_line = QLabel(i18n.t("modules.meeting_buddy.dialog.one_per_line"))
+        one_per_line.setObjectName("hintLabel")
+        head.addWidget(topics_label)
+        head.addStretch(1)
+        head.addWidget(one_per_line)
+        col.addLayout(head)
+        self._agenda = _LineNumberedEdit()
+        self._agenda.setObjectName("agendaEditor")
+        self._agenda.setMinimumHeight(230)
+        self._agenda.setPlainText(agenda_text)
+        self._agenda.textChanged.connect(self._refresh_topic_count)
+        col.addWidget(self._agenda, 1)
+        self._topic_count = QLabel()
+        self._topic_count.setObjectName("hintLabel")
+        col.addWidget(self._topic_count)
+        grid.addWidget(left, 1)
+
+        # --- library (right) ---
+        self._library_pane = QFrame()
+        self._library_pane.setObjectName("agendaLibrary")
+        self._library_pane.setFixedWidth(216)
+        self._lib_layout = QVBoxLayout(self._library_pane)
+        self._lib_layout.setContentsMargins(14, 14, 14, 16)
+        self._lib_layout.setSpacing(8)
+        grid.addWidget(self._library_pane)
+        outer.addWidget(body, 1)
+
+        # --- footer ---
+        footer = QFrame()
+        footer.setObjectName("dialogFooter")
+        row = QHBoxLayout(footer)
+        row.setContentsMargins(18, 12, 18, 12)
+        row.setSpacing(8)
+        for key, callback in (
+            ("modules.meeting_buddy.dialog.open_file", self._open_file),
+            ("modules.meeting_buddy.dialog.save", self._save),
+            ("modules.meeting_buddy.dialog.save_as", self._save_as),
+        ):
+            button = QPushButton(i18n.t(key))
+            button.setObjectName("secondary")
+            button.clicked.connect(callback)
+            row.addWidget(button)
+        row.addStretch(1)
+        if mode == "start":
+            cancel = QPushButton(i18n.t("modules.meeting_buddy.dialog.cancel"))
+            cancel.setObjectName("ghost")
+            cancel.clicked.connect(self.reject)
+            start = QPushButton(i18n.t("modules.meeting_buddy.dialog.start"))
+            start.setObjectName("primary")
+            start.clicked.connect(self._start)
+            row.addWidget(cancel)
+            row.addWidget(start)
+        else:
+            close = QPushButton(i18n.t("modules.meeting_buddy.dialog.close"))
+            close.setObjectName("primary")
+            close.clicked.connect(self._close_edit)
+            row.addWidget(close)
+        outer.addWidget(footer)
+
+        self._populate_library()
+        self._refresh_topic_count()
+
+    @property
+    def result(self) -> AgendaDialogResult | None:
+        return self._result
+
+    def _body(self) -> str:
+        return self._agenda.toPlainText().strip()
+
+    def _refresh_topic_count(self) -> None:
+        count = i18n.t(
+            "modules.meeting_buddy.dialog.topic_count", count=len(parse_agenda(self._body()))
+        )
+        if self._current_path is not None:
+            count = f"{count}  ·  " + i18n.t(
+                "modules.meeting_buddy.dialog.saved_as", name=self._current_path.name
+            )
+        self._topic_count.setText(count)
+
+    @staticmethod
+    def _date_label(path: Path) -> str | None:
+        try:
+            return datetime.fromtimestamp(path.stat().st_mtime).strftime("%d-%m-%Y")
+        except OSError:
+            return None
+
+    def _populate_library(self) -> None:
+        while self._lib_layout.count():
+            item = self._lib_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        heading_keys = {"recent": "recent", "all": "all_agendas"}
+        for section_id, paths in library_sections(
+            recent=list_recent(self._app_dir), all_agendas=list_agendas(self._app_dir)
+        ):
+            heading = QLabel(
+                i18n.t(f"modules.meeting_buddy.dialog.{heading_keys[section_id]}").upper()
+            )
+            heading.setObjectName("sectionLabel")
+            self._lib_layout.addWidget(heading)
+            for item_path in paths:
+                row = _LibRow(
+                    item_path,
+                    subtitle=self._date_label(item_path) if section_id == "recent" else None,
+                    active=item_path == self._current_path,
+                )
+                row.clicked.connect(self._open_path)
+                self._lib_layout.addWidget(row)
+        self._lib_layout.addStretch(1)
+        note = QHBoxLayout()
+        note.setSpacing(6)
+        check = QLabel("✓")
+        check.setStyleSheet(
+            f"background: {TOKENS['ok']}; color: white; font-size: 8px; font-weight: 700;"
+            " border-radius: 6px; min-width: 13px; max-width: 13px; min-height: 13px;"
+            " max-height: 13px;"
+        )
+        check.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        text = QLabel(i18n.t("modules.meeting_buddy.dialog.local_saved"))
+        text.setObjectName("libDate")
+        text.setWordWrap(True)
+        note.addWidget(check, 0, Qt.AlignmentFlag.AlignTop)
+        note.addWidget(text, 1)
+        self._lib_layout.addLayout(note)
+
+    def _open_path(self, item_path: Path) -> None:
+        if not isinstance(item_path, Path):
+            return
+        _title, body = load_agenda(item_path)
+        self._agenda.setPlainText(body)
+        self._current_path = item_path
+        touch_recent(self._app_dir, item_path)
+        self._populate_library()
+        self._refresh_topic_count()
+
+    def _require_topics(self) -> bool:
+        if can_start_meeting(self._body()):
+            return True
+        from ui.dialogs.message import warning
+
+        warning(
+            i18n.t("modules.meeting_buddy.dialog.agenda_title"),
+            i18n.t("modules.meeting_buddy.dialog.empty_agenda"),
+            parent=self,
+        )
+        self._agenda.setFocus()
+        return False
+
+    def _save_to(self, target: Path) -> bool:
+        if not self._require_topics():
+            return False
+        save_agenda(target, self._body())
+        self._current_path = target
+        touch_recent(self._app_dir, target)
+        self._populate_library()
+        self._refresh_topic_count()
+        return True
+
+    def _save(self) -> None:
+        self._save_to(self._current_path or default_new_path(self._app_dir, self._body()))
+
+    def _save_as(self) -> None:
+        initial = self._current_path or default_new_path(self._app_dir, self._body())
+        chosen, _filter = QFileDialog.getSaveFileName(
+            self,
+            i18n.t("modules.meeting_buddy.dialog.save_as"),
+            str(initial),
+            "Markdown (*.md);;All files (*)",
+        )
+        if chosen:
+            self._save_to(Path(chosen))
+
+    def _open_file(self) -> None:
+        chosen, _filter = QFileDialog.getOpenFileName(
+            self,
+            i18n.t("modules.meeting_buddy.dialog.open_file"),
+            "",
+            "Markdown (*.md);;All files (*)",
+        )
+        if chosen:
+            self._open_path(Path(chosen))
+
+    def _start(self) -> None:
+        if self._require_topics():
+            if self._current_path is not None:
+                touch_recent(self._app_dir, self._current_path)
+            self._result = AgendaDialogResult(self._body(), self._current_path, True)
+            self.accept()
+
+    def _close_edit(self) -> None:
+        self._result = AgendaDialogResult(self._body(), self._current_path, False)
+        self.accept()
 
 
 def show_agenda_dialog(
@@ -56,253 +393,14 @@ def show_agenda_dialog(
     parent: Any = None,
 ) -> AgendaDialogResult | None:
     """Show agenda UI; return ``None`` on cancel (start mode only)."""
-
-    import tkinter as tk
-    from tkinter import messagebox, scrolledtext, ttk
-
-    from ui_icon import apply_window_icon
-
-    dlg = tk.Toplevel(parent)
-    dlg.withdraw()
-    dlg.title(i18n.t("modules.meeting_buddy.dialog.title"))
-    apply_window_icon(dlg)
-    dlg.resizable(True, True)
-    dlg.columnconfigure(0, weight=1)
-    dlg.rowconfigure(0, weight=1)
-
-    frame = ttk.Frame(dlg, padding=12)
-    frame.grid(row=0, column=0, sticky="nsew")
-    frame.columnconfigure(1, weight=1)
-    frame.rowconfigure(0, weight=1)
-
-    current_path: Path | None = path
-
-    library_frame = ttk.Frame(frame)
-    library_frame.grid(row=0, column=0, sticky="ns", padx=(0, 8))
-    library = tk.Listbox(library_frame, width=28, height=12, exportselection=False)
-    library.pack(side="left", fill="y")
-    library_scroll = ttk.Scrollbar(library_frame, orient="vertical", command=library.yview)
-    library_scroll.pack(side="right", fill="y")
-    library.configure(yscrollcommand=library_scroll.set)
-
-    editor = ttk.Frame(frame)
-    editor.grid(row=0, column=1, sticky="nsew")
-    editor.columnconfigure(0, weight=1)
-    editor.rowconfigure(1, weight=1)
-    ttk.Label(editor, text=i18n.t("modules.meeting_buddy.dialog.agenda_prompt")).grid(
-        row=0, column=0, sticky="w", pady=(0, 4)
+    ensure_app()
+    dialog = _AgendaDialog(
+        agenda_text=agenda_text,
+        path=path,
+        app_dir=app_dir,
+        mode=mode,
+        parent=parent if isinstance(parent, QWidget) else None,
     )
-    agenda = scrolledtext.ScrolledText(editor, width=40, height=12, wrap="word")
-    agenda.grid(row=1, column=0, sticky="nsew")
-    if agenda_text:
-        agenda.insert("1.0", agenda_text)
-
-    topic_count = tk.StringVar()
-    ttk.Label(frame, textvariable=topic_count).grid(
-        row=1, column=0, columnspan=2, sticky="w", pady=(8, 0)
-    )
-
-    entry_paths: list[Path | None] = []
-
-    def refresh_topic_count() -> None:
-        count = len(parse_agenda(agenda.get("1.0", "end")))
-        topic_count.set(i18n.t("modules.meeting_buddy.dialog.topic_count", count=count))
-
-    def current_body() -> str:
-        return agenda.get("1.0", "end").strip()
-
-    def populate_library() -> None:
-        nonlocal entry_paths
-        library.delete(0, "end")
-        entry_paths = []
-        recent = list_recent(app_dir)
-        all_items = list_agendas(app_dir)
-        for section_id, paths in library_sections(recent=recent, all_agendas=all_items):
-            section_label = i18n.t(f"modules.meeting_buddy.dialog.{section_id}")
-            library.insert("end", section_label)
-            entry_paths.append(None)
-            for item_path in paths:
-                library.insert("end", f"  {display_title(item_path)}")
-                entry_paths.append(item_path)
-
-    def load_path(item_path: Path) -> None:
-        nonlocal current_path
-        _title, body = load_agenda(item_path)
-        agenda.delete("1.0", "end")
-        agenda.insert("1.0", body)
-        current_path = item_path
-        refresh_topic_count()
-        touch_recent(app_dir, item_path)
-
-    def on_library_select(_event: object = None) -> None:
-        selection = library.curselection()
-        if not selection:
-            return
-        index = int(selection[0])
-        if index < 0 or index >= len(entry_paths):
-            return
-        item_path = entry_paths[index]
-        if item_path is not None:
-            load_path(item_path)
-
-    def require_topics() -> bool:
-        if can_start_meeting(current_body()):
-            return True
-        messagebox.showwarning(
-            i18n.t("modules.meeting_buddy.dialog.title"),
-            i18n.t("modules.meeting_buddy.dialog.empty_agenda"),
-            parent=dlg,
-        )
-        agenda.focus_set()
-        return False
-
-    def do_save(*, ask_path: bool) -> bool:
-        from tkinter import filedialog
-
-        nonlocal current_path
-        if not require_topics():
-            return False
-        body = current_body()
-        target = current_path
-        if ask_path or target is None:
-            initial = default_new_path(app_dir, body) if target is None else target
-            chosen = filedialog.asksaveasfilename(
-                parent=dlg,
-                title=i18n.t("modules.meeting_buddy.dialog.save_as"),
-                defaultextension=".md",
-                filetypes=[
-                    (i18n.t("modules.meeting_buddy.dialog.markdown_filter"), "*.md"),
-                    ("All files", "*.*"),
-                ],
-                initialdir=str(initial.parent),
-                initialfile=initial.name,
-            )
-            if not chosen:
-                return False
-            target = Path(chosen)
-        save_agenda(target, body)
-        current_path = target
-        touch_recent(app_dir, target)
-        populate_library()
-        return True
-
-    def open_file() -> None:
-        from tkinter import filedialog
-
-        chosen = filedialog.askopenfilename(
-            parent=dlg,
-            title=i18n.t("modules.meeting_buddy.dialog.open_file"),
-            filetypes=[
-                (i18n.t("modules.meeting_buddy.dialog.markdown_filter"), "*.md"),
-                ("All files", "*.*"),
-            ],
-        )
-        if not chosen:
-            return
-        load_path(Path(chosen))
-
-    result: AgendaDialogResult | None = None
-
-    def finish(*, start: bool) -> None:
-        nonlocal result
-        result = AgendaDialogResult(
-            agenda_text=current_body(),
-            path=current_path,
-            start=start,
-        )
-        dlg.destroy()
-
-    def save() -> None:
-        nonlocal current_path
-        if not require_topics():
-            return
-        body = current_body()
-        if current_path is None:
-            target = default_new_path(app_dir, body)
-            save_agenda(target, body)
-            current_path = target
-            touch_recent(app_dir, target)
-            populate_library()
-            return
-        save_agenda(current_path, body)
-        touch_recent(app_dir, current_path)
-
-    def save_as() -> None:
-        do_save(ask_path=True)
-
-    def start_meeting() -> None:
-        if not require_topics():
-            return
-        if current_path is not None:
-            touch_recent(app_dir, current_path)
-        finish(start=True)
-
-    def close_edit() -> None:
-        finish(start=False)
-
-    def cancel() -> None:
-        dlg.destroy()
-
-    agenda.bind("<KeyRelease>", lambda _event: refresh_topic_count())
-    library.bind("<<ListboxSelect>>", on_library_select)
-    library.bind("<Double-Button-1>", on_library_select)
-    refresh_topic_count()
-    populate_library()
-
-    file_buttons = ttk.Frame(frame)
-    file_buttons.grid(row=3, column=0, columnspan=2, sticky="w", pady=(10, 0))
-    ttk.Button(
-        file_buttons,
-        text=i18n.t("modules.meeting_buddy.dialog.open_file"),
-        command=open_file,
-    ).grid(row=0, column=0, padx=(0, 8))
-    ttk.Button(
-        file_buttons,
-        text=i18n.t("modules.meeting_buddy.dialog.save"),
-        command=save,
-    ).grid(row=0, column=1, padx=(0, 8))
-    ttk.Button(
-        file_buttons,
-        text=i18n.t("modules.meeting_buddy.dialog.save_as"),
-        command=save_as,
-    ).grid(row=0, column=2)
-
-    action_buttons = ttk.Frame(frame)
-    action_buttons.grid(row=4, column=0, columnspan=2, sticky="e", pady=(10, 0))
-    if mode == "start":
-        ttk.Button(
-            action_buttons,
-            text=i18n.t("modules.meeting_buddy.dialog.cancel"),
-            command=cancel,
-        ).grid(row=0, column=0, padx=(0, 8))
-        ttk.Button(
-            action_buttons,
-            text=i18n.t("modules.meeting_buddy.dialog.start"),
-            command=start_meeting,
-        ).grid(row=0, column=1)
-        dlg.protocol("WM_DELETE_WINDOW", cancel)
-        dlg.bind("<Escape>", lambda _event: cancel())
-    else:
-        ttk.Button(
-            action_buttons,
-            text=i18n.t("modules.meeting_buddy.dialog.close"),
-            command=close_edit,
-        ).grid(row=0, column=0)
-        dlg.protocol("WM_DELETE_WINDOW", close_edit)
-        dlg.bind("<Escape>", lambda _event: close_edit())
-
-    dlg.update_idletasks()
-    width = max(dlg.winfo_reqwidth(), 680)
-    height = max(dlg.winfo_reqheight(), 420)
-    x = (dlg.winfo_screenwidth() - width) // 2
-    y = (dlg.winfo_screenheight() - height) // 3
-    dlg.geometry(f"{width}x{height}+{x}+{y}")
-    dlg.deiconify()
-    dlg.lift()
-    dlg.attributes("-topmost", True)
-    dlg.after(300, lambda: dlg.attributes("-topmost", False))
-    dlg.grab_set()
-    dlg.focus_force()
-    agenda.focus_set()
-    dlg.wait_window()
-    return result
+    dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+    dialog.exec()
+    return dialog.result

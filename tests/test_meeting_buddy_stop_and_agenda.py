@@ -2,9 +2,30 @@
 
 from __future__ import annotations
 
+from indicator import RecordingState
+from modules._builtin.meeting_buddy import module as mb_module
 from modules._builtin.meeting_buddy.overlay import format_topic_line
 from modules._builtin.meeting_buddy.state import Topic, TopicSource, TopicStatus
 from modules._builtin.meeting_buddy.stop_routing import stop_active_meeting
+from modules.capabilities.continuous_capture import CaptureStatus
+
+
+def test_sync_recording_pill_releases_when_session_stopped(monkeypatch) -> None:
+    # After a meeting stops (no binding), a late capture=ACTIVE update must not
+    # re-arm the pill to RECORDING; it should stay released.
+    calls: list[tuple[object, str]] = []
+    monkeypatch.setattr(
+        mb_module, "notify_state", lambda state, mode="toggle": calls.append((state, mode))
+    )
+    module = mb_module.MeetingBuddyModule()
+    module._pill_capture_status = CaptureStatus.ACTIVE  # meeting had the pill recording
+    assert module.is_session_active is False  # session already stopped
+
+    module._sync_recording_pill(CaptureStatus.ACTIVE)
+
+    assert (RecordingState.RECORDING, "meeting") not in calls
+    assert (RecordingState.IDLE, "meeting") in calls
+    assert module._pill_capture_status is None
 
 
 class _FakeMeeting:

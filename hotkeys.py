@@ -65,57 +65,6 @@ _DISPLAY_NAMES_MAC = {
     "cmd_r": "Command (Win)",
 }
 
-# Tk keysym → token (Instellingen-opname op macOS; PC-/Windows-boards).
-_TK_KEYSYM_TOKENS: dict[str, str] = {
-    "Control_L": "ctrl",
-    "Control_R": "ctrl",
-    "Shift_L": "shift",
-    "Shift_R": "shift",
-    "Alt_L": "alt",
-    "Alt_R": "alt",
-    "Option_L": "alt",
-    "Option_R": "alt",
-    "Meta_L": "cmd",
-    "Meta_R": "cmd",
-    "Super_L": "cmd",
-    "Super_R": "cmd",
-    "Command": "cmd",
-    "Command_L": "cmd",
-    "Command_R": "cmd",
-    "Win_L": "cmd",
-    "Win_R": "cmd",
-    "space": "space",
-    "Return": "enter",
-    "KP_Enter": "num_enter",
-    "Tab": "tab",
-    "Escape": "esc",
-    "BackSpace": "backspace",
-    "Delete": "delete",
-    "Insert": "insert",
-    "Home": "home",
-    "End": "end",
-    "Prior": "page_up",
-    "Next": "page_down",
-    "Left": "left",
-    "Right": "right",
-    "Up": "up",
-    "Down": "down",
-    "plus": "=",
-    "minus": "-",
-    "equal": "=",
-    "comma": ",",
-    "period": ".",
-    "slash": "/",
-    "backslash": "\\",
-    "bracketleft": "[",
-    "bracketright": "]",
-    "semicolon": ";",
-    "apostrophe": "'",
-    "grave": "`",
-    "less": "section",
-    "greater": "section",
-}
-
 
 def _display_names() -> dict[str, str]:
     if sys.platform == "darwin":
@@ -183,41 +132,54 @@ def key_to_token(key: Any) -> str | None:
     return None
 
 
-def tk_keysym_to_token(keysym: str) -> str | None:
-    """Zet een Tk ``event.keysym`` om naar een hotkey-token."""
+def qt_key_to_token(key: Any, text: str = "") -> str | None:
+    """Convert a Qt key code and optional event text to a persistent hotkey token."""
+    from PySide6.QtCore import Qt
 
-    if not keysym:
-        return None
-    mapped = _TK_KEYSYM_TOKENS.get(keysym)
-    if mapped is not None:
-        return mapped
-    if len(keysym) == 1:
-        return keysym.lower()
-    if keysym.startswith("F") and keysym[1:].isdigit():
-        return keysym.lower()  # F1 → f1
-    if keysym.startswith("KP_") and len(keysym) == 4 and keysym[3].isdigit():
-        return f"num{keysym[3]}"
-    # Onbekende keysym: toch vastleggen zodat PC-boards niet stil falen.
-    safe = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in keysym)
-    return f"tk_{safe.lower()}" if safe else None
-
-
-def tk_event_modifier_tokens(state: int) -> set[str]:
-    """Modifiers uit Tk ``event.state`` (bitmasks; platformonafhankelijk genoeg)."""
-
-    mods: set[str] = set()
-    # Tk: Shift=0x0001, Control=0x0004, Mod1/Alt=0x0008, Mod4/Super=0x0040,
-    # Mod2 vaak NumLock; Meta/Command op macOS vaak 0x0010 (Mod2) of 0x0080.
-    if state & 0x0001:
-        mods.add("shift")
-    if state & 0x0004:
-        mods.add("ctrl")
-    if state & 0x0008:
-        mods.add("alt")
-    if state & (0x0010 | 0x0040 | 0x0080):
-        # Meta / Super / Command — Win-toets op PC-board onder macOS.
-        mods.add("cmd")
-    return mods
+    special_keys = {
+        Qt.Key.Key_Control: "ctrl",
+        Qt.Key.Key_Shift: "shift",
+        Qt.Key.Key_Alt: "alt",
+        Qt.Key.Key_Meta: "cmd",
+        Qt.Key.Key_Space: "space",
+        Qt.Key.Key_Return: "enter",
+        Qt.Key.Key_Enter: "num_enter",
+        Qt.Key.Key_Tab: "tab",
+        Qt.Key.Key_Escape: "esc",
+        Qt.Key.Key_Backspace: "backspace",
+        Qt.Key.Key_Delete: "delete",
+        Qt.Key.Key_Insert: "insert",
+        Qt.Key.Key_Home: "home",
+        Qt.Key.Key_End: "end",
+        Qt.Key.Key_PageUp: "page_up",
+        Qt.Key.Key_PageDown: "page_down",
+        Qt.Key.Key_Left: "left",
+        Qt.Key.Key_Right: "right",
+        Qt.Key.Key_Up: "up",
+        Qt.Key.Key_Down: "down",
+        Qt.Key.Key_BracketLeft: "[",
+        Qt.Key.Key_BracketRight: "]",
+        Qt.Key.Key_Backslash: "\\",
+        Qt.Key.Key_Semicolon: ";",
+        Qt.Key.Key_Apostrophe: "'",
+        Qt.Key.Key_Comma: ",",
+        Qt.Key.Key_Period: ".",
+        Qt.Key.Key_Slash: "/",
+        Qt.Key.Key_Minus: "-",
+        Qt.Key.Key_Equal: "=",
+        Qt.Key.Key_QuoteLeft: "`",
+    }
+    if key in special_keys:
+        return special_keys[key]
+    if Qt.Key.Key_A <= key <= Qt.Key.Key_Z:
+        return chr(int(key) - int(Qt.Key.Key_A) + ord("a"))
+    if Qt.Key.Key_0 <= key <= Qt.Key.Key_9:
+        return chr(int(key) - int(Qt.Key.Key_0) + ord("0"))
+    if Qt.Key.Key_F1 <= key <= Qt.Key.Key_F35:
+        return f"f{int(key) - int(Qt.Key.Key_F1) + 1}"
+    if len(text) == 1 and not text.isspace():
+        return text.lower()
+    return None
 
 
 def normalize(tokens: Iterable[str]) -> list[str]:

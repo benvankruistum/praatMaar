@@ -67,6 +67,10 @@ Het Whisper-model zit **niet** in de bundle; eerste start downloadt het.
 Output: `release\` (zip + setup) en `dist\praatMaar\`.
 Het build-script geeft `/DMyAppVersion=…` door aan Inno.
 
+De Qt/PySide6-runtime maakt de bundle merkbaar groter dan de vroegere
+Tk-gebaseerde UI. Er geldt geen harde groottelimiet; controleer alleen dat de
+release-artefacten volledig zijn en functioneel starten.
+
 ## GitHub Release
 
 Push een versie-tag; Actions bouwt op `windows-latest` en zet Setup.exe + zip

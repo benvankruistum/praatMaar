@@ -8,6 +8,7 @@ import i18n
 from indicator import RecordingState, notify_state, reset_levels
 from modules._contract import CycleEvent, ModuleAction, ModuleContext
 from modules.capabilities.continuous_capture import CaptureStatus
+from ui.dialogs import message
 
 from .agenda_dialog import can_start_meeting, show_agenda_dialog
 from .agenda_store import touch_recent
@@ -120,10 +121,8 @@ class MeetingBuddyModule:
             if self._ui_dispatch is not None:
                 self._ui_dispatch(lambda: self._notify_transcript_saved(message))
 
-    def _notify_transcript_saved(self, message: str) -> None:
-        from tkinter import messagebox
-
-        messagebox.showinfo(i18n.t("modules.meeting_buddy.dialog.title"), message)
+    def _notify_transcript_saved(self, text: str) -> None:
+        message.info(i18n.t("modules.meeting_buddy.dialog.title"), text)
 
     def prepare_agenda(self) -> None:
         if self._ui_dispatch is None:
@@ -145,11 +144,9 @@ class MeetingBuddyModule:
         self._agenda_path = None
 
     def _meeting_already_running(self) -> bool:
-        from tkinter import messagebox
-
         if self._require_orchestrator().binding is None:
             return False
-        messagebox.showinfo(
+        message.info(
             i18n.t("modules.meeting_buddy.dialog.title"),
             i18n.t("modules.meeting_buddy.dialog.already_running"),
         )
@@ -161,13 +158,11 @@ class MeetingBuddyModule:
         self._show_agenda_dialog(mode="start")
 
     def _start_meeting_quick_flow(self) -> None:
-        from tkinter import messagebox
-
         if self._meeting_already_running():
             return
         orchestrator = self._require_orchestrator()
         if not can_start_meeting(orchestrator.agenda_text):
-            messagebox.showinfo(
+            message.info(
                 i18n.t("modules.meeting_buddy.dialog.title"),
                 i18n.t("modules.meeting_buddy.dialog.empty_agenda"),
             )
@@ -176,8 +171,6 @@ class MeetingBuddyModule:
         self._begin_meeting()
 
     def _show_agenda_dialog(self, *, mode: str) -> None:
-        from tkinter import messagebox
-
         orchestrator = self._require_orchestrator()
         app_dir = self._require_app_dir()
         result = show_agenda_dialog(
@@ -197,7 +190,7 @@ class MeetingBuddyModule:
         if not result.start:
             return
         if not can_start_meeting(result.agenda_text):
-            messagebox.showinfo(
+            message.info(
                 i18n.t("modules.meeting_buddy.dialog.title"),
                 i18n.t("modules.meeting_buddy.dialog.empty_agenda"),
             )
@@ -231,8 +224,6 @@ class MeetingBuddyModule:
         orchestrator.reload_config()
 
     def _begin_meeting(self) -> None:
-        from tkinter import messagebox
-
         from .agenda_store import display_title
 
         orchestrator = self._require_orchestrator()
@@ -245,7 +236,7 @@ class MeetingBuddyModule:
         try:
             orchestrator.start()
         except RuntimeError as exc:
-            messagebox.showerror(i18n.t("modules.meeting_buddy.dialog.title"), str(exc))
+            message.error(i18n.t("modules.meeting_buddy.dialog.title"), str(exc))
             return
         # Forceer meeting-modus op de pill (capture-events vóór subscribe gaan verloren).
         self._sync_recording_pill(orchestrator.capture_status)
@@ -319,6 +310,12 @@ class MeetingBuddyModule:
 
     def _sync_recording_pill(self, capture_status: CaptureStatus) -> None:
         """Toon de opname-pill zolang Meeting Buddy microfooncapture actief is."""
+
+        # Na stoppen (geen binding) mag een late capture-event de pill niet
+        # opnieuw op 'meeting'-opname zetten; laat 'm dan los.
+        if not self.is_session_active:
+            self._release_recording_pill()
+            return
 
         recording_states = {
             CaptureStatus.ACTIVE,

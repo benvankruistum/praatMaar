@@ -35,8 +35,10 @@ _COLLECT = [
     "tokenizers",
     "sounddevice",
     "pynput",
-    "pystray",
     "huggingface_hub",
+    "PySide6",
+    "ui",
+    "ui.dialogs",
 ]
 
 if sys.platform == "darwin":
@@ -62,16 +64,22 @@ hiddenimports += [
     "help_dialog",
     "recovery",
     "settings",
-    "settings_process",
     "splash",
     "tray",
+    "ui.app",
+    "ui.dialogs.destinations",
+    "ui.dialogs.help",
+    "ui.dialogs.message",
+    "ui.dialogs.modules",
+    "ui.dialogs.settings",
+    "ui.marshal",
+    "ui.splash",
+    "ui.tray",
     "indicator",
     "indicator._contract",
-    "indicator._win",
-    "indicator._mac",
+    "indicator._qt",
     "hotkeys",
     "opnamesessie",
-    "mac_input",
     "win_identity",
     "i18n",
     "modules",
@@ -84,6 +92,7 @@ hiddenimports += [
     "host",
     "host._win",
     "host._mac",
+    "host._linux",
 ]
 
 

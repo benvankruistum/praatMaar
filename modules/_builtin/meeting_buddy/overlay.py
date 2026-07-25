@@ -1,11 +1,32 @@
-"""Compact Meeting Buddy overlay; deliberately contains no transcript view."""
+"""Compact Qt Meeting Buddy heads-up display; deliberately has no transcript view."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from PySide6.QtCore import QRectF, Qt, QTimer
+from PySide6.QtGui import QCloseEvent, QColor, QPainter, QPen
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
 import i18n
+from indicator._contract import (
+    COLOR_MEETING_TEXT,
+    COLOR_RECORDING,
+    PILL_BG,
+    SUBTLE_COLOR,
+    TEXT_COLOR,
+)
+from ui.app import ensure_app
+from ui.overlay_flags import apply_hud_window_flags
+from ui.theme import TOKENS
 
 from .hints import HintType
 from .state import Hint, HintStatus, MeetingState, Question, QuestionStatus, Topic, TopicStatus
@@ -14,7 +35,6 @@ from .topic_ladder import is_at_least_sequential
 
 def format_elapsed(seconds: float) -> str:
     """Format elapsed seconds as a stable ``HH:MM:SS`` timer."""
-
     total = max(0, int(seconds))
     hours, remainder = divmod(total, 3600)
     minutes, seconds = divmod(remainder, 60)
@@ -31,36 +51,134 @@ _TOPIC_MARK = {
 
 def format_topic_line(topic: Topic) -> str:
     """Compact agenda line with ladder mark plus title."""
-
-    mark = _TOPIC_MARK.get(topic.status, "○")
-    return f"{mark} {topic.title}"
+    return f"{_TOPIC_MARK.get(topic.status, '○')} {topic.title}"
 
 
 def topic_line_color(topic: Topic) -> str:
     if topic.status == TopicStatus.CONFIRMED:
-        return "#6C7C87"
+        return "#8A94A0"
     if is_at_least_sequential(topic.status):
-        return "#3D5A6C"
+        return "#0A4C86"
     if topic.status == TopicStatus.TREATED:
-        return "#1F4E79"
-    return "#15334A"
+        return "#0F6CBD"
+    return "#1B1F24"
 
 
 def pick_emphasis(hints: Sequence[Hint]) -> str | None:
     """Return the id of the highest-priority active hint."""
-
     active = [hint for hint in hints if hint.status == HintStatus.ACTIVE]
-    if not active:
-        return None
-    return max(active, key=lambda hint: (hint.priority, hint.confidence, hint.id)).id
+    return (
+        max(active, key=lambda hint: (hint.priority, hint.confidence, hint.id)).id
+        if active
+        else None
+    )
+
+
+def _topics_done(topics: Sequence[Topic]) -> int:
+    return sum(1 for t in topics if t.status in (TopicStatus.SEQUENTIAL, TopicStatus.CONFIRMED))
+
+
+class _StatusDot(QWidget):
+    """Agenda-ladder mark: shape carries meaning (ring/half/full/check)."""
+
+    def __init__(self, status: TopicStatus) -> None:
+        super().__init__()
+        self._status = status
+        self.setFixedSize(14, 14)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+    def paintEvent(self, _event: Any) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(0.75, 0.75, 12.5, 12.5)
+        accent = QColor(TOKENS["accent"])
+        if self._status == TopicStatus.CONFIRMED:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(TOKENS["ok"]))
+            painter.drawEllipse(rect)
+            painter.setPen(QColor("white"))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "✓")
+        elif self._status == TopicStatus.SEQUENTIAL:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(accent)
+            painter.drawEllipse(rect)
+        elif self._status == TopicStatus.TREATED:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(accent)
+            painter.drawPie(rect, 90 * 16, 180 * 16)
+            pen = QPen(accent)
+            pen.setWidthF(1.5)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(rect)
+        else:
+            pen = QPen(QColor(TOKENS["icon_muted"]))
+            pen.setWidthF(1.5)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(rect)
+
+
+class _HudWindow(QWidget):
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self.hide()
+        event.ignore()
+
+
+class _MiniPill(QWidget):
+    """Minimized overlay: dark capsule (family of the dicteer-pill #2a)."""
+
+    def __init__(self, on_expand: Callable[[], None]) -> None:
+        super().__init__()
+        apply_hud_window_flags(self)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(230, 44)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(12, 0, 6, 0)
+        row.setSpacing(7)
+        self._dot = QLabel("●")
+        self._dot.setStyleSheet(f"color: {COLOR_RECORDING}; font-size: 10px;")
+        self._timer = QLabel("00:00:00")
+        self._timer.setStyleSheet(
+            f"color: {TEXT_COLOR}; font-size: 12px; font-family: {TOKENS['mono']};"
+        )
+        self._count = QLabel("")
+        self._count.setStyleSheet(
+            f"color: {SUBTLE_COLOR}; font-size: 12px; font-family: {TOKENS['mono']};"
+        )
+        expand = QPushButton("▴")
+        expand.setCursor(Qt.CursorShape.PointingHandCursor)
+        expand.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none; color: {SUBTLE_COLOR};"
+            " font-size: 11px; min-width: 20px; }"
+        )
+        expand.clicked.connect(on_expand)
+        row.addWidget(self._dot)
+        row.addWidget(self._timer)
+        row.addWidget(self._count)
+        row.addStretch(1)
+        self._tag = QLabel(i18n.t("state.tag.meeting"))
+        self._tag.setStyleSheet(
+            f"color: {COLOR_MEETING_TEXT}; background: rgba(92,147,199,0.20);"
+            " border-radius: 10px; padding: 2px 7px; font-size: 10px; font-weight: 600;"
+        )
+        row.addWidget(self._tag)
+        row.addWidget(expand)
+
+    def set_state(self, timer: str, count: str) -> None:
+        self._timer.setText(timer)
+        self._count.setText(count)
+
+    def paintEvent(self, _event: Any) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(PILL_BG))
+        painter.drawRoundedRect(QRectF(0, 0, self.width(), self.height()), 22, 22)
 
 
 class MeetingBuddyOverlay:
-    """Small always-on-top status and hints window for supported desktop UIs.
-
-    On macOS the Modules dialog does not expose action buttons, so tray actions
-    remain the leading controls.
-    """
+    """Small always-on-top status and hints window."""
 
     def __init__(
         self,
@@ -72,148 +190,154 @@ class MeetingBuddyOverlay:
         on_stop: Callable[[], None] | None = None,
         parent: Any = None,
     ) -> None:
-        import tkinter as tk
-        from tkinter import ttk
-
-        self._tk = tk
-        self._ttk = ttk
+        ensure_app()
         self._elapsed_seconds = elapsed_seconds
         self._on_dismiss = on_dismiss
         self._on_confirm = on_confirm
         self._on_reconnect = on_reconnect
-        self._on_stop = on_stop
-        self._hint_cards: dict[str, Any] = {}
-        self._empty_label: Any | None = None
-        self._visible_hint_ids: tuple[str, ...] = ()
         self._shown_once = False
-        self._topic_labels: list[Any] = []
-        self._question_labels: list[Any] = []
-
-        self.window = tk.Toplevel(parent)
-        self.window.withdraw()
-        self.window.title(i18n.t("modules.meeting_buddy.overlay.title"))
-        self.window.resizable(False, False)
-        self.window.attributes("-topmost", True)
-        self.window.configure(background="#F4F7FA", padx=12, pady=10)
-        self.window.protocol("WM_DELETE_WINDOW", self.minimize)
-
-        self._timer = tk.StringVar(value="00:00:00")
-        self._status = tk.StringVar()
-        self._listening = tk.StringVar()
-        self._recording_banner = tk.StringVar()
         self._capture_status: object = None
-        self._loopback_active: bool | None = None
-        self._loopback_requested = True
         self._pulse_on = False
+        self._hint_cards: dict[str, QFrame] = {}
+        self._topic_total = 0
+        self._topic_done = 0
+        self._mini: _MiniPill | None = None
 
-        header = tk.Frame(self.window, background="#F4F7FA")
-        header.pack(fill="x")
-        self._listening_dot = tk.Label(
-            header,
-            text="●",
-            background="#F4F7FA",
-            foreground="#9AA0A6",
-            font=("Segoe UI", 12, "bold"),
-        )
-        self._listening_dot.pack(side="left")
-        tk.Label(
-            header,
-            textvariable=self._listening,
-            background="#F4F7FA",
-            foreground="#15334A",
-            font=("Segoe UI Semibold", 10),
-        ).pack(side="left", padx=(4, 0))
-        tk.Label(
-            header,
-            textvariable=self._timer,
-            background="#F4F7FA",
-            foreground="#15334A",
-            font=("Consolas", 11, "bold"),
-        ).pack(side="left", padx=(8, 0))
-        if self._on_stop is not None:
-            ttk.Button(
-                header,
-                text=i18n.t("modules.meeting_buddy.overlay.stop"),
-                command=self._on_stop,
-            ).pack(side="right", padx=(6, 0))
-        ttk.Button(
-            header,
-            text=i18n.t("modules.meeting_buddy.overlay.minimize"),
-            command=self.minimize,
-        ).pack(side="right")
+        self.window = _HudWindow(parent if isinstance(parent, QWidget) else None)
+        apply_hud_window_flags(self.window)
+        self.window.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.window.setWindowTitle(i18n.t("modules.meeting_buddy.overlay.title"))
+        self.window.setMinimumWidth(360)
 
-        self._recording_frame = tk.Frame(self.window, background="#FFEBEE", padx=8, pady=6)
-        self._recording_label = tk.Label(
-            self._recording_frame,
-            textvariable=self._recording_banner,
-            anchor="w",
-            background="#FFEBEE",
-            foreground="#B71C1C",
-            font=("Segoe UI Semibold", 10),
-        )
-        self._recording_label.pack(fill="x")
+        shell = QVBoxLayout(self.window)
+        shell.setContentsMargins(0, 0, 0, 0)
+        card = QFrame()
+        card.setObjectName("mbCard")
+        card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        shell.addWidget(card)
+        outer = QVBoxLayout(card)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-        self._agenda = tk.Frame(self.window, background="#F4F7FA")
-        self._agenda.pack(fill="x", pady=(8, 0))
-        self._agenda_heading = tk.Label(
-            self._agenda,
-            text=i18n.t("modules.meeting_buddy.overlay.agenda"),
-            anchor="w",
-            background="#F4F7FA",
-            foreground="#536674",
-            font=("Segoe UI Semibold", 8),
-        )
-        self._agenda_list = tk.Frame(self._agenda, background="#F4F7FA")
+        # --- header bar ---
+        header = QFrame()
+        header.setObjectName("mbHeader")
+        header.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        head = QHBoxLayout(header)
+        head.setContentsMargins(12, 9, 10, 9)
+        head.setSpacing(8)
+        title = QLabel(i18n.t("modules.meeting_buddy.overlay.title"))
+        title.setObjectName("mbHeaderTitle")
+        head.addWidget(title)
+        head.addStretch(1)
+        minimize = QPushButton("—")
+        minimize.setCursor(Qt.CursorShape.PointingHandCursor)
+        minimize.setStyleSheet(self._icon_btn_qss(TOKENS["muted"]))
+        minimize.clicked.connect(self.minimize)
+        head.addWidget(minimize)
+        if on_stop is not None:
+            stop = QPushButton("■")
+            stop.setCursor(Qt.CursorShape.PointingHandCursor)
+            stop.setStyleSheet(self._icon_btn_qss(TOKENS["danger"], size=9))
+            stop.clicked.connect(on_stop)
+            head.addWidget(stop)
+        outer.addWidget(header)
 
-        self._summary_frame = tk.Frame(self.window, background="#F4F7FA")
-        self._summary_heading = tk.Label(
-            self._summary_frame,
-            text=i18n.t("modules.meeting_buddy.overlay.summary"),
-            anchor="w",
-            background="#F4F7FA",
-            foreground="#536674",
-            font=("Segoe UI Semibold", 8),
-        )
-        self._summary_var = tk.StringVar(value="")
-        self._summary_body = tk.Label(
-            self._summary_frame,
-            textvariable=self._summary_var,
-            anchor="nw",
-            justify="left",
-            wraplength=320,
-            background="#F4F7FA",
-            foreground="#15334A",
-            font=("Segoe UI", 9),
-        )
+        # --- status row ---
+        status_row = QHBoxLayout()
+        status_row.setContentsMargins(12, 10, 12, 10)
+        status_row.setSpacing(9)
+        self._listening_dot = QLabel("●")
+        self._listening_dot.setStyleSheet(f"color: {TOKENS['muted_soft']}; font-size: 11px;")
+        self._listening = QLabel()
+        self._listening.setObjectName("overlayStatus")
+        self._timer_label = QLabel("00:00:00")
+        self._timer_label.setObjectName("overlayTimer")
+        status_row.addWidget(self._listening_dot)
+        status_row.addWidget(self._listening)
+        status_row.addStretch(1)
+        status_row.addWidget(self._timer_label)
+        outer.addLayout(status_row)
 
-        self._questions_frame = tk.Frame(self.window, background="#F4F7FA")
-        self._questions_heading = tk.Label(
-            self._questions_frame,
-            text=i18n.t("modules.meeting_buddy.overlay.questions"),
-            anchor="w",
-            background="#F4F7FA",
-            foreground="#536674",
-            font=("Segoe UI Semibold", 8),
-        )
-        self._questions_list = tk.Frame(self._questions_frame, background="#F4F7FA")
+        # --- banner host ---
+        self._banner_host = QWidget()
+        banner_layout = QVBoxLayout(self._banner_host)
+        banner_layout.setContentsMargins(12, 0, 12, 10)
+        banner_layout.setSpacing(0)
+        outer.addWidget(self._banner_host)
 
-        self._hints = tk.Frame(self.window, background="#F4F7FA")
-        self._hints.pack(fill="x", pady=(9, 7))
-        tk.Label(
-            self.window,
-            textvariable=self._status,
-            anchor="w",
-            background="#F4F7FA",
-            foreground="#536674",
-            font=("Segoe UI", 8),
-        ).pack(fill="x")
-        self._reconnect_button = ttk.Button(
-            self.window,
-            text=i18n.t("modules.meeting_buddy.overlay.reconnect"),
-            command=self._on_reconnect,
+        body = QWidget()
+        self._body = QVBoxLayout(body)
+        self._body.setContentsMargins(0, 0, 0, 0)
+        self._body.setSpacing(0)
+        outer.addWidget(body)
+
+        self._topics, self._topics_body, self._topics_count = self._section(
+            "modules.meeting_buddy.overlay.agenda"
+        )
+        self._summary, self._summary_content, self._summary_count = self._section(
+            "modules.meeting_buddy.overlay.summary"
+        )
+        self._summary_body = QLabel()
+        self._summary_body.setWordWrap(True)
+        self._summary_content.addWidget(self._summary_body)
+        self._questions, self._questions_body, self._questions_count = self._section(
+            "modules.meeting_buddy.overlay.questions"
+        )
+        self._hints, self._hints_body, self._hints_count = self._section(
+            "modules.meeting_buddy.overlay.hints"
         )
 
+        # --- footer ---
+        footer = QFrame()
+        footer.setObjectName("mbFooter")
+        footer.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        foot = QHBoxLayout(footer)
+        foot.setContentsMargins(12, 7, 12, 7)
+        foot.setSpacing(8)
+        self._footer_label = QLabel()
+        self._footer_label.setObjectName("overlayFooterText")
+        foot.addWidget(self._footer_label)
+        foot.addStretch(1)
+        local = QLabel(i18n.t("modules.meeting_buddy.overlay.local"))
+        local.setObjectName("overlayFooterText")
+        foot.addWidget(local)
+        outer.addWidget(footer)
+
+        self._timer = QTimer(self.window)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start(1000)
         self._tick()
+
+    @staticmethod
+    def _icon_btn_qss(color: str, *, size: int = 13) -> str:
+        return (
+            f"QPushButton {{ background: transparent; border: none; color: {color};"
+            f" font-size: {size}px; min-width: 24px; min-height: 24px; border-radius: 4px; }}"
+            f" QPushButton:hover {{ background: {TOKENS['hover']}; }}"
+        )
+
+    def _section(self, key: str) -> tuple[QWidget, QVBoxLayout, QLabel]:
+        section = QWidget()
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(7)
+        head = QHBoxLayout()
+        head.setSpacing(8)
+        heading = QLabel(i18n.t(key).upper())
+        heading.setObjectName("overlaySection")
+        count = QLabel("")
+        count.setObjectName("overlayFooterText")
+        head.addWidget(heading)
+        head.addStretch(1)
+        head.addWidget(count)
+        layout.addLayout(head)
+        body_layout = QVBoxLayout()
+        body_layout.setSpacing(6)
+        layout.addLayout(body_layout)
+        self._body.addWidget(section)
+        section.hide()
+        return section, body_layout, count
 
     def update(
         self,
@@ -225,28 +349,26 @@ class MeetingBuddyOverlay:
         loopback_requested: bool = True,
     ) -> None:
         """Render one immutable state snapshot, capped at three active hints."""
-
         active = [hint for hint in state.emitted_hints if hint.status == HintStatus.ACTIVE]
         active.sort(key=lambda hint: (-hint.priority, -hint.confidence, hint.id))
         visible = active[:3]
-        emphasis_id = pick_emphasis(visible)
         self._render_topics(state.topics)
         self._render_summary(
-            state.live_summary,
-            enabled=bool(getattr(state, "live_summary_enabled", False)),
+            state.live_summary, enabled=bool(getattr(state, "live_summary_enabled", False))
         )
         self._render_questions(state.questions)
-        self._render_hints(visible, emphasis_id)
+        self._render_hints(visible, pick_emphasis(visible))
         self._capture_status = capture_status
-        self._loopback_active = loopback_active
-        self._loopback_requested = loopback_requested
-        self._listening.set(
-            self._listening_text(
-                capture_status,
-                transcription_status,
-                loopback_active=loopback_active,
-                loopback_requested=loopback_requested,
+        interrupted = _enum_value(capture_status) == "error"
+        self._listening.setText(
+            i18n.t(
+                "modules.meeting_buddy.overlay.headline.interrupted"
+                if interrupted
+                else "modules.meeting_buddy.overlay.headline.listening"
             )
+        )
+        self._listening.setStyleSheet(
+            f"color: {TOKENS['danger_text']};" if interrupted else ""
         )
         self._update_recording_banner(
             capture_status,
@@ -255,7 +377,7 @@ class MeetingBuddyOverlay:
             loopback_requested=loopback_requested,
         )
         self._update_listening_dot(capture_status, transcription_status)
-        self._status.set(
+        self._footer_label.setText(
             "  ·  ".join(
                 (
                     self._status_text("capture", capture_status),
@@ -263,288 +385,278 @@ class MeetingBuddyOverlay:
                 )
             )
         )
-        if _enum_value(capture_status) == "error":
-            if not self._reconnect_button.winfo_manager():
-                self._reconnect_button.pack(fill="x", pady=(7, 0))
-        else:
-            self._reconnect_button.pack_forget()
-        if self.window.state() == "withdrawn":
-            self.window.deiconify()
+        self.window.show()
         if not self._shown_once:
             self._shown_once = True
             self._place_top_right()
 
     def minimize(self) -> None:
-        self.window.iconify()
+        self.window.hide()
+        if self._mini is None:
+            self._mini = _MiniPill(self._expand)
+        self._mini.set_state(
+            format_elapsed(self._elapsed_seconds()), f"{self._topic_done}/{self._topic_total}"
+        )
+        geometry = self.window.geometry()
+        self._mini.move(geometry.right() - self._mini.width(), geometry.top())
+        self._mini.show()
+
+    def _expand(self) -> None:
+        if self._mini is not None:
+            self._mini.hide()
+        self.window.show()
 
     def close(self) -> None:
-        if self.window.winfo_exists():
-            self.window.destroy()
+        self._timer.stop()
+        if self._mini is not None:
+            self._mini.close()
+            self._mini.deleteLater()
+        self.window.close()
+        self.window.deleteLater()
+
+    @staticmethod
+    def _clear_layout(layout: QVBoxLayout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
 
     def _render_topics(self, topics: Sequence[Topic]) -> None:
-        for label in self._topic_labels:
-            label.destroy()
-        self._topic_labels.clear()
+        self._clear_layout(self._topics_body)
+        self._topic_total = len(topics)
+        self._topic_done = _topics_done(topics)
         if not topics:
-            self._agenda_heading.pack_forget()
-            self._agenda_list.pack_forget()
+            self._topics.hide()
             return
-        if not self._agenda_heading.winfo_manager():
-            self._agenda_heading.pack(fill="x")
-            self._agenda_list.pack(fill="x", pady=(2, 0))
+        self._topics_count.setText(f"{self._topic_done}/{self._topic_total}")
         for topic in topics:
-            color = topic_line_color(topic)
-            label = self._tk.Label(
-                self._agenda_list,
-                text=format_topic_line(topic),
-                anchor="w",
-                background="#F4F7FA",
-                foreground=color,
-                font=("Segoe UI", 9),
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            row.addWidget(_StatusDot(topic.status), 0, Qt.AlignmentFlag.AlignVCenter)
+            label = QLabel(topic.title)
+            label.setWordWrap(True)
+            weight = "600" if is_at_least_sequential(topic.status) else "400"
+            label.setStyleSheet(
+                f"color: {topic_line_color(topic)}; font-size: 13px; font-weight: {weight};"
             )
-            label.pack(fill="x")
-            self._topic_labels.append(label)
+            row.addWidget(label, 1)
+            self._topics_body.addLayout(row)
+        self._topics.show()
 
     def _render_questions(self, questions: Sequence[Question]) -> None:
-        for label in self._question_labels:
-            label.destroy()
-        self._question_labels.clear()
-        open_qs = [q for q in questions if q.status == QuestionStatus.OPEN][:5]
-        if not open_qs:
-            self._questions_frame.pack_forget()
+        self._clear_layout(self._questions_body)
+        open_questions = [
+            question for question in questions if question.status == QuestionStatus.OPEN
+        ][:5]
+        if not open_questions:
+            self._questions.hide()
             return
-        if not self._questions_frame.winfo_manager():
-            self._questions_frame.pack(fill="x", pady=(8, 0), before=self._hints)
-            self._questions_heading.pack(fill="x")
-            self._questions_list.pack(fill="x", pady=(2, 0))
-        for question in open_qs:
-            label = self._tk.Label(
-                self._questions_list,
-                text=f"? {question.text}",
-                anchor="w",
-                justify="left",
-                wraplength=320,
-                background="#F4F7FA",
-                foreground="#8A4B08",
-                font=("Segoe UI", 9),
-            )
-            label.pack(fill="x")
-            self._question_labels.append(label)
+        self._questions_count.setText(str(len(open_questions)))
+        for question in open_questions:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            mark = QLabel("?")
+            mark.setObjectName("overlayQ")
+            text = QLabel(question.text)
+            text.setObjectName("overlayQText")
+            text.setWordWrap(True)
+            row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
+            row.addWidget(text, 1)
+            self._questions_body.addLayout(row)
+        self._questions.show()
 
     def _render_summary(self, summary: str, *, enabled: bool = False) -> None:
         if not enabled:
-            self._summary_frame.pack_forget()
+            self._summary.hide()
             return
-        text = (summary or "").strip()
-        if not text:
-            text = i18n.t("modules.meeting_buddy.overlay.summary_waiting")
-            self._summary_body.configure(foreground="#6C7C87")
-        else:
-            self._summary_body.configure(foreground="#15334A")
-        self._summary_var.set(text)
-        if not self._summary_frame.winfo_manager():
-            # Place between agenda and hints when possible.
-            self._summary_frame.pack(fill="x", pady=(8, 0), before=self._hints)
-            self._summary_heading.pack(fill="x")
-            self._summary_body.pack(fill="x", pady=(2, 0))
+        text = (summary or "").strip() or i18n.t("modules.meeting_buddy.overlay.summary_waiting")
+        self._summary_body.setText(text)
+        self._summary_body.setStyleSheet(
+            f"color: {TOKENS['text_secondary']}; font-size: 12px;"
+            if summary.strip()
+            else f"color: {TOKENS['muted_soft']}; font-size: 12px;"
+        )
+        self._summary.show()
 
     def _render_hints(self, hints: Sequence[Hint], emphasis_id: str | None) -> None:
-        hint_ids = tuple(hint.id for hint in hints)
-        if hint_ids == self._visible_hint_ids and all(
-            hint.id in self._hint_cards for hint in hints
-        ):
-            for hint in hints:
-                self._update_hint_card(hint, emphasized=hint.id == emphasis_id)
-            return
-
-        for hint_id in list(self._hint_cards):
-            if hint_id not in hint_ids:
-                self._hint_cards[hint_id].destroy()
-                del self._hint_cards[hint_id]
-
-        if self._empty_label is not None:
-            self._empty_label.destroy()
-            self._empty_label = None
-
+        self._clear_layout(self._hints_body)
+        self._hint_cards.clear()
         if not hints:
-            self._empty_label = self._tk.Label(
-                self._hints,
-                text=i18n.t("modules.meeting_buddy.overlay.no_hints"),
-                anchor="w",
-                background="#F4F7FA",
-                foreground="#6C7C87",
-                font=("Segoe UI", 9),
-            )
-            self._empty_label.pack(fill="x")
-            self._visible_hint_ids = ()
+            self._hints_count.setText("")
+            self._hints.hide()
             return
-
+        self._hints_count.setText(str(len(hints)))
         for hint in hints:
-            if hint.id not in self._hint_cards:
-                self._hint_cards[hint.id] = self._create_hint_card(hint)
-            self._update_hint_card(hint, emphasized=hint.id == emphasis_id)
-
-        self._visible_hint_ids = hint_ids
-
-    def _create_hint_card(self, hint: Hint) -> Any:
-        card = self._tk.Frame(
-            self._hints,
-            background="#FFFFFF",
-            highlightbackground="#CFD9E0",
-            highlightthickness=1,
-            padx=8,
-            pady=7,
-        )
-        card.pack(fill="x", pady=(0, 5))
-        card.message_label = self._tk.Label(
-            card,
-            anchor="w",
-            justify="left",
-            wraplength=350,
-            background="#FFFFFF",
-            foreground="#132B3A",
-            font=("Segoe UI", 9),
-        )
-        card.message_label.pack(fill="x")
-        controls = self._tk.Frame(card, background="#FFFFFF")
-        controls.pack(fill="x", pady=(5, 0))
-        card.dismiss_button = self._ttk.Button(
-            controls,
-            text=i18n.t("modules.meeting_buddy.overlay.dismiss"),
-            command=lambda hint_id=hint.id: self._on_dismiss(hint_id),
-        )
-        card.dismiss_button.pack(side="right")
-        card.confirm_button = None
-        if _enum_value(hint.type) == HintType.CANDIDATE_ACTION_WITHOUT_OWNER.value:
-            card.confirm_button = self._ttk.Button(
-                controls,
-                text=i18n.t("modules.meeting_buddy.overlay.confirm"),
-                command=lambda hint_id=hint.id: self._on_confirm(hint_id),
+            emphasized = hint.id == emphasis_id
+            card = QFrame()
+            card.setObjectName("hintEmph" if emphasized else "hintCard")
+            card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(10, 9, 10, 9)
+            card_layout.setSpacing(7)
+            if emphasized:
+                label = QLabel(i18n.t("modules.meeting_buddy.overlay.hint_important").upper())
+                label.setObjectName("hintImportant")
+                card_layout.addWidget(label)
+            message = QLabel(hint.message)
+            message.setWordWrap(True)
+            message.setStyleSheet(
+                f"color: {TOKENS['text']}; font-size: 12.5px;"
+                + (" font-weight: 600;" if emphasized else "")
             )
-            card.confirm_button.pack(side="right", padx=(0, 6))
-        return card
-
-    def _update_hint_card(self, hint: Hint, *, emphasized: bool) -> None:
-        card = self._hint_cards[hint.id]
-        background = "#DCEEFF" if emphasized else "#FFFFFF"
-        border = "#4A90C2" if emphasized else "#CFD9E0"
-        thickness = 2 if emphasized else 1
-        card.configure(
-            background=background, highlightbackground=border, highlightthickness=thickness
-        )
-        card.message_label.configure(
-            text=hint.message,
-            background=background,
-            font=("Segoe UI Semibold" if emphasized else "Segoe UI", 9),
-        )
-        for child in card.winfo_children():
-            if isinstance(child, self._tk.Frame):
-                child.configure(background=background)
+            card_layout.addWidget(message)
+            controls = QHBoxLayout()
+            controls.setSpacing(6)
+            if _enum_value(hint.type) == HintType.CANDIDATE_ACTION_WITHOUT_OWNER.value:
+                confirm = QPushButton(i18n.t("modules.meeting_buddy.overlay.confirm"))
+                confirm.setObjectName("primary")
+                confirm.clicked.connect(
+                    lambda _checked=False, hint_id=hint.id: self._on_confirm(hint_id)
+                )
+                controls.addWidget(confirm)
+            dismiss = QPushButton(i18n.t("modules.meeting_buddy.overlay.dismiss"))
+            dismiss.setObjectName("ghost")
+            dismiss.clicked.connect(
+                lambda _checked=False, hint_id=hint.id: self._on_dismiss(hint_id)
+            )
+            controls.addWidget(dismiss)
+            controls.addStretch(1)
+            card_layout.addLayout(controls)
+            self._hints_body.addWidget(card)
+            self._hint_cards[hint.id] = card
+        self._hints.show()
 
     def _tick(self) -> None:
-        if not self.window.winfo_exists():
-            return
-        self._timer.set(format_elapsed(self._elapsed_seconds()))
+        timer = format_elapsed(self._elapsed_seconds())
+        self._timer_label.setText(timer)
+        if self._mini is not None and self._mini.isVisible():
+            self._mini.set_state(timer, f"{self._topic_done}/{self._topic_total}")
         if _enum_value(self._capture_status) == "active":
             self._pulse_on = not self._pulse_on
-            self._listening_dot.configure(foreground="#E53935" if self._pulse_on else "#FF8A80")
-        self.window.after(1000, self._tick)
+            color = COLOR_RECORDING if self._pulse_on else "#FF9E9B"
+            self._listening_dot.setStyleSheet(f"color: {color}; font-size: 11px;")
 
     def _update_recording_banner(
         self,
         capture_status: object,
         transcription_status: object,
         *,
-        loopback_active: bool | None = None,
-        loopback_requested: bool = True,
+        loopback_active: bool | None,
+        loopback_requested: bool,
     ) -> None:
+        layout = self._banner_host.layout()
+        assert isinstance(layout, QVBoxLayout)
+        self._clear_layout(layout)
         capture = _enum_value(capture_status)
-        if capture == "active":
-            stt = _enum_value(transcription_status)
-            if stt == "delayed":
-                text = self._active_recording_text(
-                    delayed=True,
-                    loopback_active=loopback_active,
-                    loopback_requested=loopback_requested,
-                )
-            else:
-                text = self._active_recording_text(
-                    delayed=False,
-                    loopback_active=loopback_active,
-                    loopback_requested=loopback_requested,
-                )
-            self._recording_banner.set(text)
-            if not self._recording_frame.winfo_manager():
-                self._recording_frame.pack(fill="x", pady=(0, 8), before=self._hints)
+        delayed = _enum_value(transcription_status) == "delayed"
+        if capture not in {"active", "starting", "reconnecting", "error"}:
+            self._banner_host.hide()
             return
-        if capture in {"starting", "reconnecting"}:
-            self._recording_banner.set(i18n.t("modules.meeting_buddy.overlay.recording.starting"))
-            if not self._recording_frame.winfo_manager():
-                self._recording_frame.pack(fill="x", pady=(0, 8), before=self._hints)
-            return
+
         if capture == "error":
-            self._recording_banner.set(i18n.t("modules.meeting_buddy.overlay.recording.error"))
-            self._recording_frame.configure(background="#FFEBEE")
-            self._recording_label.configure(background="#FFEBEE", foreground="#B71C1C")
-            if not self._recording_frame.winfo_manager():
-                self._recording_frame.pack(fill="x", pady=(0, 8), before=self._hints)
-            return
-        self._recording_frame.pack_forget()
+            kind, icon, icon_color = "bannerError", "!", TOKENS["danger"]
+            text = i18n.t("modules.meeting_buddy.overlay.recording.error")
+        elif capture in {"starting", "reconnecting"}:
+            kind, icon, icon_color = "bannerMuted", "●", TOKENS["muted"]
+            text = i18n.t("modules.meeting_buddy.overlay.recording.starting")
+        elif delayed:
+            kind, icon, icon_color = "bannerWarn", "!", TOKENS["amber_icon"]
+            text = self._active_recording_text(
+                delayed=True, loopback_active=loopback_active, loopback_requested=loopback_requested
+            )
+        elif loopback_active is True:
+            kind, icon, icon_color = "bannerInfo", "♪", TOKENS["accent"]
+            text = self._active_recording_text(
+                delayed=False, loopback_active=True, loopback_requested=loopback_requested
+            )
+        elif loopback_requested and loopback_active is False:
+            kind, icon, icon_color = "bannerWarn", "!", TOKENS["amber_icon"]
+            text = self._active_recording_text(
+                delayed=False, loopback_active=False, loopback_requested=True
+            )
+        else:
+            kind, icon, icon_color = "bannerMuted", "●", TOKENS["muted"]
+            text = self._active_recording_text(
+                delayed=False,
+                loopback_active=loopback_active,
+                loopback_requested=loopback_requested,
+            )
+
+        banner = QFrame()
+        banner.setObjectName(kind)
+        banner.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        box = QVBoxLayout(banner)
+        box.setContentsMargins(10, 8, 10, 8)
+        box.setSpacing(7)
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        glyph = QLabel(icon)
+        glyph.setStyleSheet(f"color: {icon_color}; font-weight: 700;")
+        message = QLabel(text)
+        message.setWordWrap(True)
+        message.setStyleSheet(f"color: {TOKENS['text_secondary']}; font-size: 12px;")
+        top.addWidget(glyph, 0, Qt.AlignmentFlag.AlignTop)
+        top.addWidget(message, 1)
+        box.addLayout(top)
+        if capture == "error":
+            reconnect = QPushButton(i18n.t("modules.meeting_buddy.overlay.reconnect"))
+            reconnect.setObjectName("primary")
+            reconnect.clicked.connect(self._on_reconnect)
+            actions = QHBoxLayout()
+            actions.addWidget(reconnect)
+            actions.addStretch(1)
+            box.addLayout(actions)
+        layout.addWidget(banner)
+        self._banner_host.show()
 
     def _update_listening_dot(self, capture_status: object, transcription_status: object) -> None:
-        if _enum_value(capture_status) == "active":
-            return
-        self._listening_dot.configure(
-            foreground=self._listening_color(capture_status, transcription_status)
-        )
+        if _enum_value(capture_status) != "active":
+            self._listening_dot.setStyleSheet(
+                f"color: {self._listening_color(capture_status, transcription_status)};"
+                " font-size: 11px;"
+            )
 
     def _place_top_right(self) -> None:
-        self.window.update_idletasks()
-        width = self.window.winfo_reqwidth()
-        x = max(0, self.window.winfo_screenwidth() - width - 24)
-        self.window.geometry(f"+{x}+24")
+        self.window.adjustSize()
+        screen = self.window.screen()
+        if screen is not None:
+            geometry = screen.availableGeometry()
+            self.window.move(geometry.right() - self.window.width() - 24, geometry.top() + 24)
 
     @staticmethod
     def _status_text(kind: str, status: object) -> str:
         value = _enum_value(status)
         key = f"modules.meeting_buddy.overlay.{kind}.{value}"
         translated = i18n.t(key)
-        if translated == key:
-            translated = str(value)
-        label = i18n.t(f"modules.meeting_buddy.overlay.{kind}")
-        return f"{label}: {translated}"
+        return f"{i18n.t(f'modules.meeting_buddy.overlay.{kind}')}: {str(value) if translated == key else translated}"
 
     @staticmethod
     def _active_recording_text(
-        *,
-        delayed: bool,
-        loopback_active: bool | None,
-        loopback_requested: bool,
+        *, delayed: bool, loopback_active: bool | None, loopback_requested: bool
     ) -> str:
         if loopback_active is True:
-            key = (
+            return i18n.t(
                 "modules.meeting_buddy.overlay.recording.active_loopback_delayed"
                 if delayed
                 else "modules.meeting_buddy.overlay.recording.active_loopback"
             )
-            return i18n.t(key)
         if loopback_requested and loopback_active is False:
-            key = (
+            return i18n.t(
                 "modules.meeting_buddy.overlay.recording.mic_only_unavailable_delayed"
                 if delayed
                 else "modules.meeting_buddy.overlay.recording.mic_only_unavailable"
             )
-            return i18n.t(key)
         if not loopback_requested:
-            key = (
+            return i18n.t(
                 "modules.meeting_buddy.overlay.recording.mic_only_delayed"
                 if delayed
                 else "modules.meeting_buddy.overlay.recording.mic_only"
             )
-            return i18n.t(key)
-        if delayed:
-            return i18n.t("modules.meeting_buddy.overlay.recording.active_delayed")
-        return i18n.t("modules.meeting_buddy.overlay.recording.active")
+        return i18n.t(
+            "modules.meeting_buddy.overlay.recording.active_delayed"
+            if delayed
+            else "modules.meeting_buddy.overlay.recording.active"
+        )
 
     @staticmethod
     def _listening_text(
@@ -554,45 +666,43 @@ class MeetingBuddyOverlay:
         loopback_active: bool | None = None,
         loopback_requested: bool = True,
     ) -> str:
-        capture = _enum_value(capture_status)
-        stt = _enum_value(transcription_status)
+        capture, stt = _enum_value(capture_status), _enum_value(transcription_status)
         if capture == "error":
             return i18n.t("modules.meeting_buddy.overlay.listening.error")
         if capture in {"starting", "reconnecting"}:
-            if capture == "reconnecting" and loopback_requested:
-                return i18n.t("modules.meeting_buddy.overlay.listening.reconnecting_loopback")
-            return i18n.t("modules.meeting_buddy.overlay.listening.starting")
-        if capture == "active" and stt == "delayed":
-            if loopback_active is True:
-                return i18n.t("modules.meeting_buddy.overlay.listening.active_loopback_delayed")
-            if loopback_requested and loopback_active is False:
-                return i18n.t("modules.meeting_buddy.overlay.listening.mic_only_unavailable")
-            if not loopback_requested:
-                return i18n.t("modules.meeting_buddy.overlay.listening.mic_only_delayed")
-            return i18n.t("modules.meeting_buddy.overlay.listening.delayed")
+            return i18n.t(
+                "modules.meeting_buddy.overlay.listening.reconnecting_loopback"
+                if capture == "reconnecting" and loopback_requested
+                else "modules.meeting_buddy.overlay.listening.starting"
+            )
         if capture == "active" and loopback_active is True:
-            return i18n.t("modules.meeting_buddy.overlay.listening.active_loopback")
+            return i18n.t(
+                "modules.meeting_buddy.overlay.listening.active_loopback_delayed"
+                if stt == "delayed"
+                else "modules.meeting_buddy.overlay.listening.active_loopback"
+            )
         if capture == "active" and loopback_requested and loopback_active is False:
             return i18n.t("modules.meeting_buddy.overlay.listening.mic_only_unavailable")
         if capture == "active" and not loopback_requested:
-            return i18n.t("modules.meeting_buddy.overlay.listening.mic_only")
-        if capture == "active" and stt == "active":
-            return i18n.t("modules.meeting_buddy.overlay.listening.active")
+            return i18n.t(
+                "modules.meeting_buddy.overlay.listening.mic_only_delayed"
+                if stt == "delayed"
+                else "modules.meeting_buddy.overlay.listening.mic_only"
+            )
+        if capture == "active" and stt == "delayed":
+            return i18n.t("modules.meeting_buddy.overlay.listening.delayed")
         if capture == "active":
             return i18n.t("modules.meeting_buddy.overlay.listening.active")
         return i18n.t("modules.meeting_buddy.overlay.listening.idle")
 
     @staticmethod
     def _listening_color(capture_status: object, transcription_status: object) -> str:
-        capture = _enum_value(capture_status)
-        stt = _enum_value(transcription_status)
+        capture, stt = _enum_value(capture_status), _enum_value(transcription_status)
         if capture == "error":
             return "#E53935"
         if capture in {"starting", "reconnecting"}:
             return "#FFB020"
         if capture == "active" and stt in {"active", "delayed"}:
-            return "#43A047"
-        if capture == "active":
             return "#43A047"
         return "#9AA0A6"
 

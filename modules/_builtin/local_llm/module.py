@@ -15,6 +15,7 @@ from pathlib import Path
 
 from modules._contract import CycleEvent, ModuleAction, ModuleContext
 from modules.capabilities.semantic_analysis import CAPABILITY_ID, CONTRACT_VERSION
+from ui.dialogs import message
 
 from .config import DEFAULT_MODEL, load_local_llm_config
 from .ollama_client import OllamaClient, OllamaError
@@ -91,19 +92,15 @@ class LocalLlmModule:
         ]
 
     def check_status(self) -> None:
-        from tkinter import messagebox
-
         import i18n
 
         status = self._status_message()
-        messagebox.showinfo(i18n.t("modules.local_llm.dialog.title"), status)
+        message.info(i18n.t("modules.local_llm.dialog.title"), status)
 
     def open_install_page(self) -> None:
         webbrowser.open(_OLLAMA_INSTALL_URL)
 
     def pull_default_model(self) -> None:
-        from tkinter import messagebox
-
         import i18n
 
         cfg = load_local_llm_config(self._require_app_dir())
@@ -113,7 +110,7 @@ class LocalLlmModule:
             local = Path.home() / "AppData/Local/Programs/Ollama/ollama.exe"
             ollama_bin = str(local) if local.is_file() else None
         if not ollama_bin:
-            messagebox.showerror(
+            message.error(
                 i18n.t("modules.local_llm.dialog.title"),
                 i18n.t("modules.local_llm.status.ollama_missing"),
             )
@@ -124,12 +121,12 @@ class LocalLlmModule:
                 cwd=str(Path(ollama_bin).parent),
             )
         except OSError as exc:
-            messagebox.showerror(
+            message.error(
                 i18n.t("modules.local_llm.dialog.title"),
                 i18n.t("modules.local_llm.status.pull_failed", error=str(exc)),
             )
             return
-        messagebox.showinfo(
+        message.info(
             i18n.t("modules.local_llm.dialog.title"),
             i18n.t("modules.local_llm.status.pull_started", model=model),
         )

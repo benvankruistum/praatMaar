@@ -15,8 +15,9 @@ een OS-specifieke plak-toets aan.
 
 - **Interface:** `Host`-Protocol — `paste()`, `set_autostart()`,
   `is_autostart_enabled()`, `app_dir()`, `acquire_single_instance()`.
-- **Adapters:** `host._win` (Windows, absorbeert het vroegere `autostart.py`) en
-  `host._mac` (macOS; `paste`/`app_dir` compleet, LaunchAgent nog ongetest).
+- **Adapters:** `host._win` (Windows, absorbeert het vroegere `autostart.py`),
+  `host._mac` (macOS; `paste`/`app_dir` compleet, LaunchAgent nog ongetest) en
+  `host._linux` (Linux; autostart en plakken best-effort).
 - **Selectie:** één instantie, gekozen op `sys.platform` (`host.default`).
 - Heet bewust `host` en niet `platform` (dat zou de stdlib schaduwen).
 - Buiten scope van de seam (voorlopig): het no-activate indicator-venster — een
@@ -42,10 +43,11 @@ te stelen van het actieve invoerveld. Package `indicator/`:
 
 - **Contract:** `RecordingState`, `notify_state` / `push_level` / `reset_levels`
   (`indicator._contract`) — platform-neutraal.
-- **Windows:** tkinter + `WS_EX_NOACTIVATE` (`indicator._win`).
-- **macOS:** native overlay via AppKit `NSPanel` / `nonactivatingPanel` (PyObjC,
-  `indicator._mac`) — [ADR-0002](docs/adr/0002-macos-native-overlay-indicator.md).
-- **Façade:** `indicator.RecordingIndicator` lazy per `sys.platform`.
+- **UI:** één PySide6-implementatie (`indicator._qt`) met Qt Tool/no-focus/
+  always-on-top-flags. Qt 6.9.2 gebruikt op Windows `WS_EX_NOACTIVATE`;
+  macOS en Linux/Wayland houden de platformbeperkingen uit
+  [ADR-0002](docs/adr/0002-macos-native-overlay-indicator.md).
+- **Façade:** `indicator.RecordingIndicator` exporteert de Qt-implementatie.
 
 ### i18n (UI-taal)
 

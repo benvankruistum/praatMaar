@@ -20,7 +20,7 @@ from modules.whisper import SharedWhisper
 SCHEMA_VERSION = 1
 
 UiDispatch = Callable[[Callable[[], None]], None]
-"""Plan een callable op de UI-thread (tkinter / Cocoa main)."""
+"""Plan een callable op de Qt-hoofdthread."""
 
 
 class CycleEventType(StrEnum):

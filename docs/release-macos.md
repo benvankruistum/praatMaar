@@ -50,6 +50,10 @@ pyinstaller praatMaar.spec --clean
 
 Resultaat: `dist/praatMaar.app`.
 
+De Qt/PySide6-runtime maakt de `.app` merkbaar groter dan de vroegere
+Tk-gebaseerde UI. Er geldt geen harde groottelimiet; controleer alleen dat de
+bundle volledig is en functioneel start.
+
 Optioneel zippen (versie gelijk aan `pyproject.toml`):
 
 ```bash

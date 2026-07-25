@@ -76,6 +76,11 @@ def _select() -> Host:
 
         return MacHost()
 
+    if sys.platform == "linux":
+        from ._linux import LinuxHost
+
+        return LinuxHost()
+
     raise RuntimeError(f"Niet-ondersteund platform: {sys.platform!r}")
 
 

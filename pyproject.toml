@@ -5,20 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "praatMaar"
 version = "0.2.0"
-description = "Lokale dicteertool (Faster-Whisper; Windows + macOS; UI/spraak nl/en/de)"
+description = "Lokale dicteertool (Faster-Whisper; Windows, macOS + Linux; UI/spraak nl/en/de)"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [{ name = "Ben van Kruistum" }]
-keywords = ["dictation", "whisper", "speech-to-text", "dutch", "windows", "macos"]
+keywords = ["dictation", "whisper", "speech-to-text", "dutch", "windows", "macos", "linux"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Win32 (MS Windows)",
     "Environment :: MacOS X",
+    "Environment :: X11 Applications :: Qt",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]
@@ -26,13 +28,13 @@ dependencies = [
     "faster-whisper==1.2.1",
     "sounddevice==0.5.5",
     "pynput==1.8.2",
-    "pystray==0.19.5",
     "Pillow==12.3.0",
     "pyautogui==0.9.54",
     "pyperclip==1.11.0",
     "numpy==2.5.1",
     "scipy==1.18.0",
     "PyYAML==6.0.3",
+    "PySide6==6.11.1",
     "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
 ]
@@ -60,14 +62,12 @@ py-modules = [
     "hotkeys",
     "recovery",
     "settings",
-    "settings_process",
     "splash",
     "tray",
     "app_logging",
     "opnamesessie",
     "win_identity",
     "i18n",
-    "mac_input",
 ]
 packages = [
     "host",
@@ -76,6 +76,8 @@ packages = [
     "modules._builtin",
     "modules._builtin.meeting_buddy",
     "modules.capabilities",
+    "ui",
+    "ui.dialogs",
 ]
 
 [tool.setuptools.package-data]
@@ -106,7 +108,7 @@ select = [
 ]
 ignore = [
     "E501",   # line length: format regelt stijl; lange NL-strings ok
-    "B008",   # function calls in defaults (tkinter/callbacks)
+    "B008",   # function calls in callback defaults
     "UP007",  # Optional[X] vs X | None — bestaande annotations laten
 ]
 
