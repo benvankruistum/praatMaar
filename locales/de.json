@@ -343,5 +343,10 @@
   "modules.meeting_buddy.settings.summary_or_after": "oder nach",
   "modules.meeting_buddy.settings.summary_chars": "Zeichen",
   "modules.meeting_buddy.settings.privacy_note": "Alles bleibt auf diesem PC — Audio, Transkript und Zusammenfassung gehen nicht in eine Cloud.",
-  "modules.meeting_buddy.dialog.properties_title": "praatMaar — Meeting-Buddy-Eigenschaften"
+  "modules.meeting_buddy.dialog.properties_title": "praatMaar — Meeting-Buddy-Eigenschaften",
+  "modules.meeting_buddy.dialog.agenda_title": "praatMaar — Agenda",
+  "modules.meeting_buddy.dialog.topics_label": "Themen",
+  "modules.meeting_buddy.dialog.one_per_line": "eins pro Zeile",
+  "modules.meeting_buddy.dialog.saved_as": "gespeichert als {name}",
+  "modules.meeting_buddy.dialog.local_saved": "Lokal gespeichert · keine Cloud"
 }

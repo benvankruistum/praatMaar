@@ -358,6 +358,22 @@ def build_qss(
     QLabel#successText {{ color: {t["success_text"]}; font-size: 12px; }}
     QLabel#mbTitle {{ font-size: 13px; font-weight: 600; color: {t["text"]}; }}
     QLabel#mbDesc {{ color: {t["muted_soft"]}; font-size: 11.5px; }}
+
+    /* --- Meeting Buddy #1a agenda dialog --- */
+    QPlainTextEdit#agendaEditor {{
+        background: {t["surface"]}; border: 1px solid {t["border_strong"]};
+        border-radius: {t["radius_button"]};
+    }}
+    QFrame#agendaLibrary {{
+        background: {t["page"]}; border: none; border-left: 1px solid {t["border_subtle"]};
+    }}
+    QFrame#libRow {{ background: transparent; border: 1px solid transparent; border-radius: 4px; }}
+    QFrame#libRow:hover {{ background: {t["hover"]}; }}
+    QFrame#libRow[active="true"] {{
+        background: {t["accent_soft"]}; border: 1px solid {t["accent_border"]};
+    }}
+    QLabel#libTitle {{ font-size: 12.5px; color: {t["text"]}; }}
+    QLabel#libDate {{ font-size: 10.5px; color: {t["muted_soft"]}; }}
     """
 
 

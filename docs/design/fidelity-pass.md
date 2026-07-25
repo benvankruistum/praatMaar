@@ -115,7 +115,13 @@ Subdialoog:
 
 ### 08 Agenda-dialoog (`agenda_dialog.py`)
 
-- [ ] Nog te doen
+- [x] Family-shell 620px; titel "praatMaar — Agenda"
+- [x] Twee-pane: onderwerpen links (genummerde gutter) + bibliotheek rechts (216px, border-left)
+- [x] Onderwerpen-editor met "één per regel"; count-regel + "opgeslagen als <bestand>"
+- [x] Bibliotheek: RECENT (met datum + actieve markering) en ALLE AGENDA'S
+- [x] Groene "Lokaal opgeslagen · geen cloud"-voet
+- [x] Eén footer-rij: Openen/Opslaan/Opslaan als… + Annuleren/Meeting starten
+- [x] Live side-by-side goedgekeurd door gebruiker
 
 ### 01–07 Overlay (`overlay.py`)
 
