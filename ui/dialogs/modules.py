@@ -23,7 +23,7 @@ from modules._contract import module_actions
 from modules.registry import all_builtin_modules, modules_config_for_settings
 from ui.app import ensure_app
 from ui.theme import TOKENS
-from ui.widgets import ToggleSwitch
+from ui.widgets import FlowLayout, ToggleSwitch
 
 _open_dialog: QDialog | None = None
 
@@ -78,7 +78,7 @@ class ModulesDialog(QDialog):
         self._running_ids = set(enabled_module_ids or ())
         self._module_checks: dict[str, ToggleSwitch] = {}
         self._action_hosts: dict[str, QWidget] = {}
-        self._action_layouts: dict[str, QHBoxLayout] = {}
+        self._action_layouts: dict[str, FlowLayout] = {}
         self._cards: dict[str, QFrame] = {}
         self._running_labels: dict[str, QLabel] = {}
 
@@ -129,7 +129,10 @@ class ModulesDialog(QDialog):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet(f"QScrollArea {{ background: {TOKENS['surface']}; border: none; }}")
         cards = QWidget()
-        cards.setStyleSheet(f"background: {TOKENS['surface']};")
+        # Scope to the host so the bare background does not cascade onto the
+        # cards' primary action buttons (white-on-white = invisible label).
+        cards.setObjectName("modulesCardsHost")
+        cards.setStyleSheet(f"QWidget#modulesCardsHost {{ background: {TOKENS['surface']}; }}")
         self._cards_layout = QVBoxLayout(cards)
         self._cards_layout.setContentsMargins(0, 0, 0, 0)
         self._cards_layout.setSpacing(8)
@@ -214,11 +217,10 @@ class ModulesDialog(QDialog):
         card_layout.addLayout(top)
 
         actions_host = QWidget()
-        actions_host.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        actions_layout = QHBoxLayout(actions_host)
-        actions_layout.setContentsMargins(0, 0, 0, 0)
-        actions_layout.setSpacing(6)
-        actions_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        actions_host.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        # FlowLayout so the action row wraps to a second line (canvas M2) instead
+        # of forcing the card — and the whole list — wider than the dialog.
+        actions_layout = FlowLayout(actions_host, margin=0, hspacing=6, vspacing=6)
         self._action_hosts[module.id] = actions_host
         self._action_layouts[module.id] = actions_layout
         card_layout.addWidget(actions_host)
@@ -270,7 +272,6 @@ class ModulesDialog(QDialog):
                 )
             )
             layout.addWidget(button)
-        layout.addStretch(1)
 
     def _save(self) -> None:
         updated = {
