@@ -32,6 +32,9 @@ class _FakeIndicator:
     def set_destination(self, _destination: str | None) -> None:
         pass
 
+    def set_hotkey_label(self, _text: str | None) -> None:
+        pass
+
     def call_on_main(self, fn: object) -> None:
         assert callable(fn)
         fn()

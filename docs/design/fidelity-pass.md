@@ -86,6 +86,19 @@ Subdialoog:
 - [x] Inline validatie (rode rand + ⚠-regel), amber "gereserveerde namen"-infobox; geen messagebox
 - [x] Live side-by-side met canvas B1–B6 goedgekeurd door gebruiker
 
+## Checklist — Pill `#2a`
+
+- [x] Capsule 340×60, radius 30, bg `#1C1F23`, state-getinte 1px rand
+- [x] Kleuren canvas: opname `#FF5C57`, transcriberen `#FFB020`, geannuleerd `#8B929B`, fout `#FF6B6B`
+- [x] Idle: map-icoon + naam + subregel "Gereed · <sneltoets>" + 32px record/✕ hit-areas
+- [x] Opname: pulse-dot + 18-bar waveform + modus-tag pill (↔/●) + vierkante stop in ronde ring
+- [x] Meeting-modus: tag met blauw accent (`#7FB1E0`/`#BFD8EF`)
+- [x] Transcriberen: draaiende arc + "{n} %" tabular + marching dots + voortgangsdraad onderaan; geen stop
+- [x] Geannuleerd: doorgestreepte ring + "niets ingevoegd"
+- [x] Fout: driehoek + rood-getinte capsule + sneltoets-hint
+- [x] Vorm draagt betekenis (dot · arc · doorgestreept · driehoek · map) — leesbaar in grijswaarden
+- [x] Live side-by-side met canvas P1–P6 goedgekeurd door gebruiker
+
 ## Agent-prompt (plakken)
 
 ```text

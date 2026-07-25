@@ -5,17 +5,30 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from PySide6.QtCore import QPoint, QRect, Qt, QTimer
-from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt, QTimer
+from PySide6.QtGui import (
+    QColor,
+    QFont,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPaintEvent,
+    QPen,
+)
 from PySide6.QtWidgets import QWidget
 
+import i18n
 from ui.app import ensure_app
 from ui.marshal import ui_dispatch
 from ui.overlay_flags import apply_hud_window_flags
-from ui.theme import TOKENS
 
 from ._contract import (
     CANCELLED_DURATION_MS,
+    COLOR_CANCELLED,
+    COLOR_ERROR,
+    COLOR_ERROR_LABEL,
+    COLOR_MEETING_DOT,
+    COLOR_MEETING_TEXT,
     COLOR_RECORDING,
     COLOR_TRANSCRIBING,
     ERROR_DURATION_MS,
@@ -24,9 +37,11 @@ from ._contract import (
     MUTED_COLOR,
     NUM_BARS,
     PILL_BG,
+    PILL_BG_ERROR,
     POLL_INTERVAL_MS,
     POSITION_LAST,
-    STATE_COLORS,
+    SUBTLE_COLOR,
+    TAG_TEXT_COLOR,
     TEXT_COLOR,
     WAVEFORM_GAIN,
     WINDOW_ALPHA,
@@ -36,13 +51,15 @@ from ._contract import (
     destination_display_name,
     drain_status_queue,
     get_transcription_progress,
-    mode_tag,
     normalize_indicator_position,
     preset_indicator_xy,
     snapshot_levels,
     state_label,
-    transcribing_label,
 )
+
+_BTN = 32
+_BTN_Y = (INDICATOR_HEIGHT - _BTN) // 2
+_RIGHT_PAD = 8
 
 
 class RecordingIndicator(QWidget):
@@ -80,6 +97,7 @@ class RecordingIndicator(QWidget):
         self._control_held = False
         self._dest_pill = DestinationPillModel()
         self._stop_requested = False
+        self._hotkey_label: str | None = None
 
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_INTERVAL_MS)
@@ -183,6 +201,12 @@ class RecordingIndicator(QWidget):
             self._apply_idle_visibility()
             self.update()
 
+    def set_hotkey_label(self, text: str | None) -> None:
+        """Set the shortcut shown in the idle subline (e.g. ``Ctrl + Space``)."""
+        self._hotkey_label = (text or "").strip() or None
+        if self.isVisible():
+            self.update()
+
     def _tick(self) -> None:
         if self._stop_requested:
             self._stop()
@@ -214,13 +238,19 @@ class RecordingIndicator(QWidget):
         self._hide_timer.stop()
         self._hide_window()
 
+    def _dismiss_rect(self) -> QRect:
+        return QRect(INDICATOR_WIDTH - _RIGHT_PAD - _BTN, _BTN_Y, _BTN, _BTN)
+
+    def _record_rect(self) -> QRect:
+        return QRect(INDICATOR_WIDTH - _RIGHT_PAD - _BTN * 2 - 10, _BTN_Y, _BTN, _BTN)
+
+    def _stop_rect(self) -> QRect:
+        return QRect(INDICATOR_WIDTH - _RIGHT_PAD - _BTN, _BTN_Y, _BTN, _BTN)
+
     def _control_rect(self) -> QRect:
         if self._state == RecordingState.RECORDING:
-            return QRect(INDICATOR_WIDTH - 40, 8, 32, INDICATOR_HEIGHT - 16)
-        return QRect(INDICATOR_WIDTH - 72, 8, 28, INDICATOR_HEIGHT - 16)
-
-    def _dismiss_rect(self) -> QRect:
-        return QRect(INDICATOR_WIDTH - 40, 8, 32, INDICATOR_HEIGHT - 16)
+            return self._stop_rect()
+        return self._record_rect()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         if event.button() == Qt.RightButton:
@@ -297,98 +327,308 @@ class RecordingIndicator(QWidget):
             except Exception:
                 pass
 
+    # ---- painting (canvas #2a) ---------------------------------------
+    _CY = INDICATOR_HEIGHT / 2
+    _LEFT = 16
+
+    def _font(self, px: int, *, bold: bool = False) -> QFont:
+        font = QFont(self.font())
+        font.setPixelSize(px)
+        if bold:
+            font.setWeight(QFont.Weight.DemiBold)
+        return font
+
+    def _border_color(self) -> QColor:
+        state = self._state
+        if state == RecordingState.RECORDING:
+            return QColor(255, 92, 87, 61)
+        if state == RecordingState.TRANSCRIBING:
+            return QColor(255, 176, 32, 61)
+        if state == RecordingState.ERROR:
+            return QColor(255, 107, 107, 87)
+        if state == RecordingState.CANCELLED:
+            return QColor(255, 255, 255, 20)
+        return QColor(255, 255, 255, 26)
+
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        rect = QRectF(0.5, 0.5, INDICATOR_WIDTH - 1.0, INDICATOR_HEIGHT - 1.0)
+        radius = INDICATOR_HEIGHT / 2
+        bg = PILL_BG_ERROR if self._state == RecordingState.ERROR else PILL_BG
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(PILL_BG))
-        painter.drawRoundedRect(self.rect(), INDICATOR_HEIGHT / 2, INDICATOR_HEIGHT / 2)
+        painter.setBrush(QColor(bg))
+        painter.drawRoundedRect(rect, radius, radius)
+        border = QPen(self._border_color())
+        border.setWidthF(1.0)
+        painter.setPen(border)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRoundedRect(rect, radius, radius)
 
-        if self._state == RecordingState.IDLE and self._dest_pill.idle_visible:
-            self._paint_idle_destination(painter)
-            return
+        state = self._state
+        if state == RecordingState.IDLE:
+            if self._dest_pill.idle_visible:
+                self._paint_idle(painter)
+        elif state == RecordingState.RECORDING:
+            self._paint_recording(painter)
+        elif state == RecordingState.TRANSCRIBING:
+            self._paint_transcribing(painter)
+        elif state == RecordingState.CANCELLED:
+            self._paint_cancelled(painter)
+        elif state == RecordingState.ERROR:
+            self._paint_error(painter)
 
-        color = QColor(STATE_COLORS.get(self._state, MUTED_COLOR))
-        self._paint_status_dot(painter, color)
+    def _draw_folder(self, painter: QPainter, x: float, color: QColor) -> None:
+        painter.setBrush(Qt.NoBrush)
+        pen = QPen(color)
+        pen.setWidthF(1.5)
+        painter.setPen(pen)
+        painter.drawRoundedRect(QRectF(x, self._CY - 5.0, 7.0, 4.0), 1.5, 1.5)
+        painter.drawRoundedRect(QRectF(x, self._CY - 2.0, 15.0, 9.0), 1.5, 1.5)
+
+    def _pulse_dot(self, painter: QPainter, x: float, base: float, color: QColor) -> None:
+        phase = 0.5 + 0.5 * math.cos(2 * math.pi * ((self._frame % 32) / 32.0))
+        scale = 0.82 + 0.18 * phase
+        alpha = int(255 * (0.5 + 0.5 * phase))
+        size = base * scale
+        tint = QColor(color)
+        tint.setAlpha(alpha)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(tint)
+        painter.drawEllipse(QRectF(x + (base - size) / 2, self._CY - size / 2, size, size))
+
+    def _paint_idle(self, painter: QPainter) -> None:
+        self._draw_folder(painter, self._LEFT, QColor(MUTED_COLOR))
+        record, dismiss = self._record_rect(), self._dismiss_rect()
+        text_left, text_right = 40, record.left() - 8
+
         painter.setPen(QColor(TEXT_COLOR))
+        painter.setFont(self._font(14, bold=True))
         painter.drawText(
-            QRect(44, 0, 106, INDICATOR_HEIGHT),
-            Qt.AlignVCenter | Qt.AlignLeft,
-            self._status_label(),
-        )
-
-        if self._state == RecordingState.RECORDING:
-            self._paint_waveform(painter, color)
-            painter.setBrush(QColor(TEXT_COLOR))
-            painter.drawRect(INDICATOR_WIDTH - 27, 25, 10, 10)
-        elif self._state == RecordingState.TRANSCRIBING:
-            self._paint_marching_dots(painter)
-
-        if self._state in (RecordingState.RECORDING, RecordingState.TRANSCRIBING):
-            painter.setPen(QColor(TOKENS["accent"] if self._mode == "meeting" else MUTED_COLOR))
-            painter.drawText(
-                QRect(255, 0, 76, INDICATOR_HEIGHT),
-                Qt.AlignVCenter | Qt.AlignRight,
-                mode_tag(self._mode),
-            )
-
-    def _paint_idle_destination(self, painter: QPainter) -> None:
-        painter.setBrush(QColor(MUTED_COLOR))
-        painter.drawRect(18, 28, 16, 8)
-        painter.drawRect(18, 25, 8, 4)
-        painter.setPen(QColor(MUTED_COLOR))
-        painter.drawText(
-            QRect(44, 0, 205, INDICATOR_HEIGHT),
+            QRect(text_left, 11, text_right - text_left, 20),
             Qt.AlignVCenter | Qt.AlignLeft,
             destination_display_name(self._dest_pill.name),
         )
-        painter.setBrush(QColor(COLOR_RECORDING))
-        painter.drawEllipse(INDICATOR_WIDTH - 64, 24, 12, 12)
-        painter.setPen(QColor(MUTED_COLOR))
+        subline = i18n.t("state.ready")
+        if self._hotkey_label:
+            subline = f"{subline} · {self._hotkey_label}"
+        painter.setPen(QColor(SUBTLE_COLOR))
+        painter.setFont(self._font(11))
         painter.drawText(
-            self._dismiss_rect(),
-            Qt.AlignCenter,
-            "×",
+            QRect(text_left, 31, text_right - text_left, 16),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            subline,
         )
 
-    def _paint_status_dot(self, painter: QPainter, color: QColor) -> None:
-        radius = 7.0
-        if self._state == RecordingState.RECORDING:
-            radius *= 0.7 + 0.3 * (0.5 + 0.5 * math.sin(self._frame * 0.35))
-        painter.setBrush(color)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(255, 92, 87, 36))
+        painter.drawEllipse(record)
+        painter.setBrush(QColor(COLOR_RECORDING))
+        inner = 13
         painter.drawEllipse(
-            int(26 - radius),
-            int(INDICATOR_HEIGHT / 2 - radius),
-            int(radius * 2),
-            int(radius * 2),
+            record.center().x() - inner // 2 + 1, record.center().y() - inner // 2 + 1, inner, inner
+        )
+        painter.setPen(QColor(SUBTLE_COLOR))
+        painter.setFont(self._font(15))
+        painter.drawText(dismiss, Qt.AlignCenter, "×")
+
+    def _paint_recording(self, painter: QPainter) -> None:
+        self._pulse_dot(painter, self._LEFT, 11.0, QColor(COLOR_RECORDING))
+        painter.setPen(QColor(TEXT_COLOR))
+        painter.setFont(self._font(14, bold=True))
+        label = state_label(RecordingState.RECORDING)
+        label_w = painter.fontMetrics().horizontalAdvance(label)
+        label_x = self._LEFT + 11 + 10
+        painter.drawText(
+            QRect(label_x, 0, label_w + 4, INDICATOR_HEIGHT),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            label,
+        )
+        stop = self._stop_rect()
+        tag_left = self._draw_mode_tag(painter, stop.left() - 10)
+        self._paint_waveform(
+            painter, QColor(COLOR_RECORDING), label_x + label_w + 12, tag_left - 10
         )
 
-    def _paint_waveform(self, painter: QPainter, color: QColor) -> None:
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(255, 92, 87, 41))
+        painter.drawEllipse(stop)
+        painter.setBrush(QColor(COLOR_RECORDING))
+        square = 11.0
+        painter.drawRoundedRect(
+            QRectF(
+                stop.center().x() - square / 2 + 1,
+                stop.center().y() - square / 2 + 1,
+                square,
+                square,
+            ),
+            2,
+            2,
+        )
+
+    def _draw_mode_tag(self, painter: QPainter, right_x: int) -> int:
+        painter.setFont(self._font(11, bold=True))
+        metrics = painter.fontMetrics()
+        height, pad, gap = 20, 8, 6
+        y = (INDICATOR_HEIGHT - height) // 2
+        if self._mode == "meeting":
+            text = i18n.t("state.tag.meeting")
+            text_w = metrics.horizontalAdvance(text)
+            tag_w = pad * 2 + 6 + gap + text_w
+            left = right_x - tag_w
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(92, 147, 199, 51))
+            painter.drawRoundedRect(QRectF(left, y, tag_w, height), 10, 10)
+            painter.setBrush(QColor(COLOR_MEETING_DOT))
+            painter.drawEllipse(QRectF(left + pad, self._CY - 3, 6, 6))
+            painter.setPen(QColor(COLOR_MEETING_TEXT))
+            painter.drawText(
+                QRectF(left + pad + 6 + gap, y, text_w + 2, height),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                text,
+            )
+            return int(left)
+        glyph = "●" if self._mode == "ptt" else "↔"
+        key = "state.tag.ptt" if self._mode == "ptt" else "state.tag.toggle"
+        combined = f"{glyph} {i18n.t(key)}"
+        text_w = metrics.horizontalAdvance(combined)
+        tag_w = pad * 2 + text_w
+        left = right_x - tag_w
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(255, 255, 255, 20))
+        painter.drawRoundedRect(QRectF(left, y, tag_w, height), 10, 10)
+        painter.setPen(QColor(TAG_TEXT_COLOR))
+        painter.drawText(
+            QRectF(left + pad, y, text_w + 2, height),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            combined,
+        )
+        return int(left)
+
+    def _paint_waveform(
+        self, painter: QPainter, color: QColor, x_left: float, x_right: float
+    ) -> None:
+        region = max(0.0, x_right - x_left)
+        if region <= 0:
+            return
         levels = snapshot_levels()
-        padded = [0.0] * (NUM_BARS - len(levels)) + levels
-        x1, x2 = 150.0, 252.0
-        bar_slot = (x2 - x1) / NUM_BARS
-        bar_width = max(2.0, bar_slot * 0.55)
-        max_half = INDICATOR_HEIGHT / 2 - 12
+        padded = [0.0] * (NUM_BARS - len(levels)) + levels[-NUM_BARS:]
+        slot = region / NUM_BARS
+        bar_width = 2.0
+        max_half = 10.0
+        painter.setPen(Qt.NoPen)
         painter.setBrush(color)
         for index, level in enumerate(padded):
             half = max(1.5, min(1.0, level * WAVEFORM_GAIN) * max_half)
+            cx = x_left + slot * index + slot / 2
             painter.drawRoundedRect(
-                int(x1 + index * bar_slot),
-                int(INDICATOR_HEIGHT / 2 - half),
-                int(bar_width),
-                int(half * 2),
-                1,
-                1,
+                QRectF(cx - bar_width / 2, self._CY - half, bar_width, half * 2), 1, 1
             )
 
-    def _paint_marching_dots(self, painter: QPainter) -> None:
-        active = (self._frame // 4) % 3
-        for index in range(3):
-            painter.setBrush(QColor(COLOR_TRANSCRIBING if index == active else MUTED_COLOR))
-            painter.drawEllipse(190 + index * 18, 26, 8, 8)
+    def _paint_transcribing(self, painter: QPainter) -> None:
+        painter.setBrush(Qt.NoBrush)
+        pen = QPen(QColor(COLOR_TRANSCRIBING))
+        pen.setWidthF(2.0)
+        painter.setPen(pen)
+        diameter = 13.0
+        arc = QRectF(self._LEFT, self._CY - diameter / 2, diameter, diameter)
+        start = (self._frame * 12) % 360
+        painter.drawArc(arc, int(-start * 16), int(300 * 16))
 
-    def _status_label(self) -> str:
-        if self._state == RecordingState.TRANSCRIBING:
-            return transcribing_label(get_transcription_progress())
-        return state_label(self._state)
+        x = self._LEFT + diameter + 10
+        painter.setPen(QColor(TEXT_COLOR))
+        painter.setFont(self._font(14, bold=True))
+        label = state_label(RecordingState.TRANSCRIBING)
+        label_w = painter.fontMetrics().horizontalAdvance(label)
+        painter.drawText(
+            QRect(x, 0, label_w + 4, INDICATOR_HEIGHT), Qt.AlignVCenter | Qt.AlignLeft, label
+        )
+        x += label_w + 8
+
+        percent = get_transcription_progress()
+        if percent is not None:
+            percent_text = f"{percent} %"
+            painter.setPen(QColor(COLOR_TRANSCRIBING))
+            percent_w = painter.fontMetrics().horizontalAdvance(percent_text)
+            painter.drawText(
+                QRect(x, 0, percent_w + 4, INDICATOR_HEIGHT),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                percent_text,
+            )
+            x += percent_w + 10
+        self._paint_marching_dots(painter, x)
+        self._draw_mode_tag(painter, INDICATOR_WIDTH - 16)
+
+        if percent is not None:
+            clip = QPainterPath()
+            clip.addRoundedRect(
+                QRectF(0.5, 0.5, INDICATOR_WIDTH - 1.0, INDICATOR_HEIGHT - 1.0),
+                INDICATOR_HEIGHT / 2,
+                INDICATOR_HEIGHT / 2,
+            )
+            painter.setClipPath(clip)
+            thread = QColor(COLOR_TRANSCRIBING)
+            thread.setAlphaF(0.85)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(thread)
+            painter.drawRect(QRectF(0, INDICATOR_HEIGHT - 2, INDICATOR_WIDTH * percent / 100.0, 2))
+            painter.setClipping(False)
+
+    def _paint_marching_dots(self, painter: QPainter, x: float) -> None:
+        active = (self._frame // 4) % 3
+        painter.setPen(Qt.NoPen)
+        for index in range(3):
+            dot = QColor(COLOR_TRANSCRIBING)
+            dot.setAlpha(255 if index == active else 90)
+            painter.setBrush(dot)
+            painter.drawEllipse(QRectF(x + index * 7, self._CY - 2, 4, 4))
+
+    def _paint_cancelled(self, painter: QPainter) -> None:
+        painter.setBrush(Qt.NoBrush)
+        pen = QPen(QColor(COLOR_CANCELLED))
+        pen.setWidthF(1.5)
+        painter.setPen(pen)
+        painter.drawEllipse(QRectF(self._LEFT, self._CY - 6, 12, 12))
+        painter.drawLine(
+            QPointF(self._LEFT + 1, self._CY + 4), QPointF(self._LEFT + 11, self._CY - 4)
+        )
+        painter.setPen(QColor(MUTED_COLOR))
+        painter.setFont(self._font(14, bold=True))
+        painter.drawText(
+            QRect(self._LEFT + 12 + 11, 0, 180, INDICATOR_HEIGHT),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            state_label(RecordingState.CANCELLED),
+        )
+        painter.setPen(QColor("#6E757D"))
+        painter.setFont(self._font(11))
+        painter.drawText(
+            QRect(0, 0, INDICATOR_WIDTH - 16, INDICATOR_HEIGHT),
+            Qt.AlignVCenter | Qt.AlignRight,
+            i18n.t("state.cancelled_note"),
+        )
+
+    def _paint_error(self, painter: QPainter) -> None:
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(COLOR_ERROR))
+        top = self._CY - 6
+        triangle = QPainterPath()
+        triangle.moveTo(self._LEFT + 7, top)
+        triangle.lineTo(self._LEFT + 14, top + 12)
+        triangle.lineTo(self._LEFT, top + 12)
+        triangle.closeSubpath()
+        painter.drawPath(triangle)
+        painter.setPen(QColor(COLOR_ERROR_LABEL))
+        painter.setFont(self._font(14, bold=True))
+        painter.drawText(
+            QRect(self._LEFT + 14 + 10, 0, 180, INDICATOR_HEIGHT),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            state_label(RecordingState.ERROR),
+        )
+        if self._hotkey_label:
+            painter.setPen(QColor(SUBTLE_COLOR))
+            painter.setFont(self._font(11))
+            painter.drawText(
+                QRect(0, 0, INDICATOR_WIDTH - 16, INDICATOR_HEIGHT),
+                Qt.AlignVCenter | Qt.AlignRight,
+                self._hotkey_label,
+            )

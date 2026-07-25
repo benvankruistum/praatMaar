@@ -29,7 +29,7 @@ class RecordingState(Enum):
 
 INDICATOR_WIDTH = 340
 INDICATOR_HEIGHT = 60
-WINDOW_ALPHA = 0.92
+WINDOW_ALPHA = 0.94
 MARGIN_FRACTION = 0.10
 POLL_INTERVAL_MS = 50
 CANCELLED_DURATION_MS = 2000
@@ -99,14 +99,21 @@ def preset_indicator_xy(
 # Max. tekens voor sticky bestemmingsnaam in de pill (voorkomt knippen).
 MAX_DESTINATION_DISPLAY_CHARS = 24
 
+# Kleuren uit canvas #2a (donkere HUD). Vorm draagt betekenis, kleur versterkt.
 PILL_BG = "#1C1F23"
-TEXT_COLOR = "#f1f3f4"
-MUTED_COLOR = "#9aa0a6"
-COLOR_RECORDING = "#ff4d4d"
-COLOR_TRANSCRIBING = "#ffb020"
-COLOR_CANCELLED = "#9aa0a6"
-COLOR_ERROR = "#ff5252"
+PILL_BG_ERROR = "#221819"  # rood-getinte capsule bij fout
+TEXT_COLOR = "#F1F3F4"
+MUTED_COLOR = "#A7AEB6"  # secundair op donker
+SUBTLE_COLOR = "#8B929B"  # sublabel / dismiss-glyph
+TAG_TEXT_COLOR = "#C9CFD6"  # modus-tag tekst
+COLOR_RECORDING = "#FF5C57"
+COLOR_TRANSCRIBING = "#FFB020"
+COLOR_CANCELLED = "#8B929B"
+COLOR_ERROR = "#FF6B6B"
+COLOR_ERROR_LABEL = "#FF8F8B"
 COLOR_MEETING_TAG = "#0F6CBD"
+COLOR_MEETING_DOT = "#7FB1E0"  # meeting-tag stip op donker
+COLOR_MEETING_TEXT = "#BFD8EF"  # meeting-tag tekst op donker
 
 STATE_LABEL_KEYS = {
     RecordingState.RECORDING: "state.recording",

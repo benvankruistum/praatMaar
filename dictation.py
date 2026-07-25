@@ -1135,6 +1135,7 @@ def main() -> None:
     )
     _indicator = indicator
     indicator.set_destination(ACTIVE_DESTINATION)
+    indicator.set_hotkey_label(hotkeys.format_hotkey(HOTKEY_TOKENS))
 
     global _ui_dispatch
     _ui_dispatch = indicator.call_on_main
