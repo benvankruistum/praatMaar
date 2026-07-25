@@ -2,7 +2,51 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QApplication
+
+_check_icon_path: str | None = None
+
+
+def _checkbox_check_icon() -> str | None:
+    """Paint the white checkmark to a cached PNG and return its QSS-safe path.
+
+    QSS has no reliable checkmark for a styled ``::indicator``; a runtime PNG
+    works in dev and packaged builds without shipping assets.
+    """
+    global _check_icon_path
+    if _check_icon_path is not None and os.path.exists(_check_icon_path):
+        return _check_icon_path
+    image = QImage(16, 16, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor("white"))
+    pen.setWidthF(2.0)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    painter.setPen(pen)
+    path = QPainterPath()
+    path.moveTo(3.5, 8.2)
+    path.lineTo(6.6, 11.2)
+    path.lineTo(12.0, 4.5)
+    painter.drawPath(path)
+    painter.end()
+    try:
+        cache = os.path.join(tempfile.gettempdir(), "praatMaar-ui")
+        os.makedirs(cache, exist_ok=True)
+        out = os.path.join(cache, "checkbox-check.png")
+        if image.save(out):
+            _check_icon_path = out.replace("\\", "/")
+            return _check_icon_path
+    except OSError:
+        return None
+    return None
+
 
 # Hex values from docs/design/canvas/praatMaar-ui.dc.html (#5a and family).
 TOKENS: dict[str, str] = {
@@ -33,12 +77,29 @@ TOKENS: dict[str, str] = {
     "ok_legacy": "#107C10",
     "radius_card": "6px",
     "radius_button": "5px",
+    # Bestemmingen (#3a) — tabel, badges, amber-hints en iconen.
+    "muted_label": "#7A8494",
+    "icon_muted": "#A9B2BD",
+    "row_system": "#F6F7F9",
+    "row_active": "#EFF6FD",
+    "row_active_border": "#E1EDF8",
+    "row_divider": "#F0F2F5",
+    "col_header_bg": "#FAFBFC",
+    "system_badge_bg": "#E7EAEE",
+    "amber_bg": "#FFF6E5",
+    "amber_border": "#F2DBA8",
+    "amber_text": "#7A5200",
+    "amber_icon": "#9A6700",
+    "danger_text": "#A8261A",
+    "danger_border_soft": "#E7C7C2",
+    "mono": "Consolas, 'Courier New', monospace",
 }
 
 
-def build_qss(tokens: dict[str, str] | None = None) -> str:
+def build_qss(tokens: dict[str, str] | None = None, check_icon: str | None = None) -> str:
     """Build the shared stylesheet from the supplied colour tokens."""
     t = tokens or TOKENS
+    check_image = f"image: url({check_icon});" if check_icon else ""
     return f"""
     QWidget {{ color: {t["text"]}; font-size: 13px; }}
     QDialog, QMainWindow {{ background: {t["surface"]}; }}
@@ -123,30 +184,123 @@ def build_qss(tokens: dict[str, str] | None = None) -> str:
     }}
     QCheckBox::indicator {{
         width: 16px; height: 16px; border-radius: 3px;
-        border: 1.5px solid #A9B2BD; background: {t["surface"]};
+        border: 1.5px solid {t["icon_muted"]}; background: {t["surface"]};
     }}
     QCheckBox::indicator:checked {{
-        border: 1.5px solid {t["accent"]}; background: {t["accent"]};
+        border: 1.5px solid {t["accent"]}; background: {t["accent"]}; {check_image}
     }}
     QCheckBox#switch::indicator {{
-        width: 34px; height: 19px; border: none;
+        width: 34px; height: 19px; border: none; image: none;
     }}
     QCheckBox#switch::indicator:unchecked {{
-        border-radius: 10px; background: {t["border_strong"]};
+        border-radius: 10px; background: {t["border_strong"]}; image: none;
     }}
     QCheckBox#switch::indicator:checked {{
-        border-radius: 10px; background: {t["accent"]};
+        border-radius: 10px; background: {t["accent"]}; image: none;
     }}
     QRadioButton::indicator {{
-        width: 16px; height: 16px; border-radius: 8px;
-        border: 1.5px solid #A9B2BD; background: {t["surface"]};
+        width: 16px; height: 16px; border-radius: 9px;
+        border: 1.5px solid {t["icon_muted"]}; background: {t["surface"]};
     }}
     QRadioButton::indicator:checked {{
-        border: 5px solid {t["accent"]}; background: {t["surface"]};
+        border: 1.5px solid {t["accent"]};
+        background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+            stop:0 {t["accent"]}, stop:0.42 {t["accent"]},
+            stop:0.5 {t["surface"]}, stop:1 {t["surface"]});
     }}
+
+    /* --- Bestemmingen #3a --- */
+    QFrame#destIntro {{
+        background: {t["page"]}; border: none;
+        border-bottom: 1px solid {t["border_subtle"]};
+    }}
+    QLabel#introBadge {{
+        min-width: 26px; max-width: 26px; min-height: 26px; max-height: 26px;
+        border-radius: 13px; background: {t["accent_soft"]};
+        color: {t["accent"]}; font-size: 13px; font-weight: 700;
+    }}
+    QLabel#introLine {{ color: {t["text_secondary"]}; font-size: 12.5px; }}
+    QLabel#introLineMuted {{ color: {t["muted_soft"]}; font-size: 12.5px; }}
+
+    QFrame#destColHeaderRow {{
+        background: {t["col_header_bg"]};
+        border-bottom: 1px solid {t["border_card"]};
+    }}
+    QLabel#destColHead {{
+        color: {t["muted_label"]}; font-size: 11px; font-weight: 600;
+        letter-spacing: 0.06em;
+    }}
+
+    QFrame#destRow {{
+        background: transparent; border: 2px solid transparent; border-radius: 4px;
+    }}
+    QFrame#destRow[rowKind="system"] {{ background: {t["row_system"]}; }}
+    QFrame#destRow[rowKind="active"] {{ background: {t["row_active"]}; }}
+    QFrame#destRow[selected="true"] {{ border: 2px solid {t["accent"]}; }}
+    QFrame#destDivider {{ background: {t["row_divider"]}; border: none; }}
+    QFrame#destStrip {{ background: {t["accent"]}; border: none; }}
+
+    QLabel#destName {{ font-size: 13.5px; font-weight: 600; color: {t["text"]}; }}
+    QLabel#destNameMuted {{
+        font-size: 13.5px; font-weight: 600; color: {t["text_secondary"]};
+    }}
+    QLabel#destPath {{
+        font-size: 11.5px; color: {t["muted"]}; font-family: {t["mono"]};
+    }}
+    QLabel#destPathMuted {{ font-size: 11.5px; color: {t["muted_soft"]}; }}
+    QLabel#destCell {{ font-size: 12.5px; color: {t["text_secondary"]}; }}
+    QLabel#destCellMuted {{ font-size: 12.5px; color: {t["muted"]}; }}
+    QLabel#systemBadge {{
+        color: {t["muted_soft"]}; background: {t["system_badge_bg"]};
+        font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+        padding: 2px 5px; border-radius: 3px;
+    }}
+    QLabel#activePill {{
+        color: white; background: {t["accent"]};
+        font-size: 10.5px; font-weight: 600;
+        padding: 2px 8px; border-radius: 10px;
+    }}
+
+    QFrame#destActions {{
+        background: {t["surface_card_off"]};
+        border-top: 1px solid {t["border_subtle"]};
+    }}
+    QPushButton#danger {{
+        background: {t["surface"]}; border: 1px solid {t["border_strong"]};
+        border-radius: {t["radius_button"]}; color: {t["danger"]};
+    }}
+    QPushButton#danger:hover {{
+        background: {t["danger_hover"]}; border-color: {t["danger_border_soft"]};
+    }}
+    QPushButton#danger:disabled {{
+        color: {t["icon_muted"]}; background: {t["surface_card_off"]};
+        border-color: {t["border_card"]};
+    }}
+    QPushButton#link {{
+        background: transparent; border: none; color: {t["accent"]};
+        padding: 2px 2px; min-height: 0; text-align: left;
+    }}
+    QPushButton#link:hover {{ color: {t["accent_hover"]}; }}
+    QPushButton#link:disabled {{ color: {t["muted_soft"]}; }}
+    QLabel#footerNote {{ color: {t["muted_soft"]}; font-size: 11.5px; }}
+
+    QLabel#fieldTitle {{ font-size: 12.5px; font-weight: 600; color: {t["text"]}; }}
+    QLabel#reqStar {{ color: {t["danger"]}; font-size: 12.5px; font-weight: 600; }}
+    QLabel#fieldError {{ color: {t["danger_text"]}; font-size: 11.5px; }}
+    QLineEdit[error="true"] {{ border: 1px solid {t["danger"]}; }}
+    QFrame#appendGroup {{
+        border: none; border-left: 1px solid {t["row_active_border"]};
+    }}
+    QFrame#reservedInfo {{
+        background: {t["amber_bg"]}; border: 1px solid {t["amber_border"]};
+        border-radius: {t["radius_button"]};
+    }}
+    QLabel#reservedInfoText {{ color: {t["amber_text"]}; font-size: 11.5px; }}
+    QLabel#emptyTitle {{ font-size: 13.5px; font-weight: 600; color: {t["text"]}; }}
+    QLabel#emptyBody {{ font-size: 12.5px; color: {t["muted"]}; }}
     """
 
 
 def apply_theme(app: QApplication) -> None:
     """Apply praatMaar's shared stylesheet to ``app``."""
-    app.setStyleSheet(build_qss())
+    app.setStyleSheet(build_qss(check_icon=_checkbox_check_icon()))

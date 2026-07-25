@@ -106,6 +106,26 @@ def open_in_explorer(path: Path) -> None:
         raise RuntimeError(f"Map openen niet ondersteund op {sys.platform!r}")
 
 
+# Mapsegmenten die op een gedeelde/onveilige locatie wijzen. Bewust conservatief:
+# alleen ondubbelzinnig gedeelde namen, zodat privémappen geen valse waarschuwing krijgen.
+SHARED_PATH_SEGMENTS = frozenset({"gedeeld", "shared", "public", "openbaar"})
+
+
+def is_shared_location(path: str) -> bool:
+    """Heuristiek: staat het pad op een (waarschijnlijk) gedeelde locatie?
+
+    True voor UNC-netwerkpaden (``\\\\server\\share``) en paden met een segment
+    als ``Gedeeld`` / ``Shared`` / ``Public`` / ``Openbaar``. Puur voor een
+    subtiele UI-waarschuwing — geen toegangscontrole.
+    """
+    text = (path or "").strip()
+    if not text:
+        return False
+    if text.startswith("\\\\") or text.startswith("//"):
+        return True
+    return any(segment.lower() in SHARED_PATH_SEGMENTS for segment in re.split(r"[\\/]", text))
+
+
 def is_reserved_name(name: str) -> bool:
     return normalize_phrase(name) in RESET_PHRASES
 

@@ -5,6 +5,23 @@ from unittest.mock import patch
 import destinations as d
 
 
+def test_is_shared_location_flags_unc_paths():
+    assert d.is_shared_location(r"\\server\share\Inbox")
+    assert d.is_shared_location("//server/share/Inbox")
+
+
+def test_is_shared_location_flags_shared_name_segments():
+    assert d.is_shared_location(r"C:\Gedeeld\Inbox")
+    assert d.is_shared_location("/home/user/Public/notes")
+    assert d.is_shared_location(r"D:\Team\Openbaar")
+
+
+def test_is_shared_location_allows_private_paths():
+    assert not d.is_shared_location(r"D:\Werk\Notulen\Q3")
+    assert not d.is_shared_location(r"C:\Users\marijke\Dagboek")
+    assert not d.is_shared_location("")
+
+
 def test_normalize_strips_punct_and_case():
     assert d.normalize_phrase("  Boodschappenlijst! ") == "boodschappenlijst"
     assert d.normalize_phrase("Hallo, wereld.") == "hallo wereld"

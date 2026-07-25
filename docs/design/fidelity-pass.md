@@ -60,6 +60,32 @@ Kopieer naar de PR/commit-body en vink af:
 - [x] Footer: Annuleren ghost + Opslaan primary
 - [ ] Live side-by-side met canvas S1 goedgekeurd door gebruiker
 
+## Checklist — Bestemmingen `#3a`
+
+Hoofddialoog:
+
+- [x] Family-shell: `body` + `dialogFooter`-frame (idioom `modules.py`); breedte ~760px
+- [x] Intro: licht paneel + rond `?`-badge + 3 regels (stemwoorden vet, 1 muted hint)
+- [x] Tabel: kolommen Naam/Map/Plakken/Opslag/Actief, rijhoogte 44px, 3px accent-strip
+- [x] Standaard-rij: systeemband, map-icoon, badge **systeem**, "App-opslagmap" muted
+- [x] Custom-rij: map-icoon, naam 13.5/600, pad monospace muted
+- [x] Gedeelde/onveilige map: amber ⚠ naast pad (heuristiek `is_shared_location`)
+- [x] Actieve rij: accent-strip + lichte tint + pill **✓ Actief**
+- [x] Selectie: accent-rand om rij (los van "actief")
+- [x] Actierij: Toevoegen (primary) · Wijzigen · Actief zetten · Verwijderen (danger); rechts map-open links
+- [x] Standaard geselecteerd: Wijzigen/Verwijderen disabled + inline hint (geen messagebox)
+- [x] Empty state: dashed map-icoon + kop + tekst + primary CTA
+- [x] Footer: band + muted note + Annuleren ghost + Opslaan primary
+
+Subdialoog:
+
+- [x] Verticale veldstack: label (600 + rode `*`) + control + hint
+- [x] Naam met hint; focus-ring
+- [x] Opslag als twee radio's (geen dropdown)
+- [x] Append-bestandveld ingesprongen, alleen bij "toevoegen"; met hint
+- [x] Inline validatie (rode rand + ⚠-regel), amber "gereserveerde namen"-infobox; geen messagebox
+- [x] Live side-by-side met canvas B1–B6 goedgekeurd door gebruiker
+
 ## Agent-prompt (plakken)
 
 ```text
