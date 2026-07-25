@@ -17,6 +17,12 @@ def _close_dialogs() -> None:
         widget.deleteLater()
 
 
+def test_tray_app_survives_closing_last_window() -> None:
+    # A tray-driven app must not quit when a dialog (its last window) closes.
+    app = ensure_app([])
+    assert app.quitOnLastWindowClosed() is False
+
+
 def test_dialog_facades_accept_no_parent() -> None:
     ensure_app([])
     open_settings_dialog(None, {}, lambda _settings: None)

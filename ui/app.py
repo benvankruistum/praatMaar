@@ -22,5 +22,8 @@ def ensure_app(argv: list[str] | None = None) -> QApplication:
     _app = QApplication(argv if argv is not None else sys.argv)
     _app.setApplicationName("praatMaar")
     _app.setOrganizationName("praatMaar")
+    # Tray-driven app: closing a dialog (or hiding the pill) must not quit the
+    # process. Quitting happens only via the tray or an explicit request.
+    _app.setQuitOnLastWindowClosed(False)
     apply_theme(_app)
     return _app
