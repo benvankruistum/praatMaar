@@ -204,7 +204,7 @@ def test_dictation_priority_stops_buddy_reclaiming_between_chunks() -> None:
         producer.join(timeout=1)
 
 
-def test_stop_waits_for_drain_and_discards_in_flight_delta() -> None:
+def test_stop_waits_for_drain_and_publishes_in_flight_delta() -> None:
     capture = FakeContinuousCapture()
     whisper = SharedWhisper()
     whisper.set_model(object())
@@ -216,7 +216,7 @@ def test_stop_waits_for_drain_and_discards_in_flight_delta() -> None:
     def transcribe(_model: object, _chunk: object) -> str:
         transcription_started.set()
         assert finish_transcription.wait(timeout=2)
-        return "te laat"
+        return "eindstuk"
 
     stt = IncrementalSpeechToText(
         whisper=whisper,
@@ -246,8 +246,48 @@ def test_stop_waits_for_drain_and_discards_in_flight_delta() -> None:
         stopper.join(timeout=1)
 
     assert stop_done.is_set()
-    assert not any(isinstance(event, TranscriptDeltaReceived) for event in events)
+    deltas = [e for e in events if isinstance(e, TranscriptDeltaReceived)]
+    assert len(deltas) == 1
+    assert deltas[0].delta.text == "eindstuk"
     assert stt.get_status(session.session_id) == TranscriptionStatus.IDLE
+
+
+def test_stop_drains_queued_chunks() -> None:
+    capture = FakeContinuousCapture()
+    whisper = SharedWhisper()
+    whisper.set_model(object())
+    gate = threading.Event()
+    events: list[object] = []
+    seen: list[str] = []
+
+    def transcribe(_model: object, chunk: object) -> str:
+        gate.wait(timeout=2)
+        text = f"c{chunk.chunk_id}"
+        seen.append(text)
+        return text
+
+    stt = IncrementalSpeechToText(
+        whisper=whisper,
+        transcribe_fn=transcribe,
+        on_event=events.append,
+        max_whisper_queue_duration_s=60.0,
+    )
+    capture_session = capture.start_session()
+    session = stt.start_session(
+        capture_session_id=capture_session.session_id,
+        capture=capture,
+    )
+    capture.emit_seconds(0.05)
+    capture.emit_seconds(0.05)
+    # Laat enqueue afronden, daarna stop vóór gate open — flush moet beide doen.
+    time.sleep(0.05)
+    gate.set()
+    stt.stop_session(session.session_id)
+
+    deltas = [e for e in events if isinstance(e, TranscriptDeltaReceived)]
+    assert len(deltas) >= 2
+    assert stt.get_status(session.session_id) == TranscriptionStatus.IDLE
+    assert len(seen) >= 2
 
 
 def test_stop_waits_for_capture_callback_and_suppresses_late_events() -> None:
@@ -279,14 +319,14 @@ def test_stop_waits_for_capture_callback_and_suppresses_late_events() -> None:
 
     def pause_after_stopping_check(state: object) -> list[TranscriptGap]:
         callback_started.set()
-        deadline = time.monotonic() + 2
+        deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             with stt._lock:
                 if getattr(state, "stopping", False):
                     break
             time.sleep(0.001)
         else:
-            raise AssertionError("stop_session zette stopping niet binnen 2s")
+            raise AssertionError("stop_session zette stopping niet binnen 5s")
         assert finish_callback.wait(timeout=2)
         return original_trim_queue(state)
 
@@ -306,7 +346,8 @@ def test_stop_waits_for_capture_callback_and_suppresses_late_events() -> None:
     finally:
         finish_callback.set()
         emitter.join(timeout=1)
-        stopper.join(timeout=1)
+        # Model blijft bezet → flush-busy-timeout (~2s) vóór stop terugkeert.
+        stopper.join(timeout=5)
 
     assert stop_done.is_set()
     assert late_events == []

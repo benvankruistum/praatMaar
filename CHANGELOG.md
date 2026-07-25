@@ -9,9 +9,20 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Added
 
+- **Local LLM-eigenschappen:** keuze tussen standaard Ollama
+  (`127.0.0.1:11434` + `qwen2.5:7b`) of een eigen Ollama-endpoint (basis-URL +
+  model) via Modules → Local LLM → Eigenschappen.
+
 ### Changed
 
 ### Fixed
+
+- **Incrementele transcriptie:** bij stop altijd een finale Whisper-run over de
+  hele buffer (niet langer de laatste partial als eindtekst). Voorkomt dat het
+  eindstuk ontbreekt wanneer de buffer groeit en partials achterlopen.
+- **Meeting Buddy / continuous STT:** bij stop wordt de capture-buffer geflusht
+  en de STT-wachtrij leeggedraaid (geen discard meer), zodat het eindstuk van
+  een meeting niet stil verdwijnt.
 
 ## [0.2.0] - 2026-07-24
 

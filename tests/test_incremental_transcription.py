@@ -1,4 +1,4 @@
-"""Incrementele transcriptie: partials + finaal uit laatste partial (optie C)."""
+"""Incrementele transcriptie: partials tijdens opname; finaal altijd volle Whisper."""
 
 from __future__ import annotations
 
@@ -65,7 +65,12 @@ class CountingModel:
             self.calls.append(path)
 
         segment = MagicMock()
-        segment.text = self.text
+        # Finale run (na partials) krijgt een herkenbaar andere tekst.
+        if self._call_index == 1:
+            segment.text = self.text
+        else:
+            segment.text = f"{self.text} plus staart"
+        segment.end = 0.5
         return [segment], MagicMock()
 
 
@@ -190,13 +195,13 @@ def test_incremental_emits_partial_events_without_saving(
     session.cancel()
 
 
-def test_stop_reuses_last_partial_without_extra_whisper(
+def test_stop_runs_final_whisper_even_with_partial(
     session: Opnamesessie,
     events: list[CycleEvent],
     saves: list[Path],
     model: CountingModel,
 ) -> None:
-    """Optie C: laatste partial wordt finaal; geen Whisper meer bij stop."""
+    """Partials tijdens opname; bij stop altijd een extra Whisper over de volle buffer."""
 
     session.start()
     _feed_audio(session)
@@ -207,9 +212,6 @@ def test_stop_reuses_last_partial_without_extra_whisper(
     # Voorkom een volgende partial vóór stop (interval was kort voor de test).
     session._incremental_interval_seconds = 3600.0
     calls_during_recording = len(model.calls)
-    last_partial = next(
-        e.transcript for e in reversed(events) if e.type == CycleEventType.TRANSCRIPT_PARTIAL
-    )
 
     session.stop_and_transcribe()
     _wait_until(
@@ -217,9 +219,9 @@ def test_stop_reuses_last_partial_without_extra_whisper(
         timeout=2.0,
     )
 
-    assert len(model.calls) == calls_during_recording
+    assert len(model.calls) == calls_during_recording + 1
     assert len(saves) == 1
-    assert saves[0].read_text(encoding="utf-8") == last_partial
+    assert saves[0].read_text(encoding="utf-8") == "tussentijdse tekst plus staart"
 
 
 def test_stop_without_partial_falls_back_to_full_whisper(

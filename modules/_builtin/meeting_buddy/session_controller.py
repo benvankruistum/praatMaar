@@ -317,6 +317,16 @@ class CapabilitySessionController:
         return language or "nl"
 
     def _cleanup_sessions(self, binding: MeetingSessionBinding) -> None:
+        # Eerst capture stoppen (flush eindstuk) terwijl STT nog subscribed is;
+        # daarna STT-flush van de wachtrij; pas daarna handlers loskoppelen.
+        try:
+            self._capture.stop_session(binding.capture_session_id)
+        except Exception:
+            pass
+        try:
+            self._stt.stop_session(binding.transcription_session_id)
+        except Exception:
+            pass
         if self._on_stt_event is not None:
             try:
                 self._stt.unsubscribe(binding.transcription_session_id, self._on_stt_event)
@@ -327,14 +337,6 @@ class CapabilitySessionController:
                 self._capture.unsubscribe(binding.capture_session_id, self._on_capture_status)
             except Exception:
                 pass
-        try:
-            self._stt.stop_session(binding.transcription_session_id)
-        except Exception:
-            pass
-        try:
-            self._capture.stop_session(binding.capture_session_id)
-        except Exception:
-            pass
 
     def _require_binding(self) -> MeetingSessionBinding:
         if self._binding is None:

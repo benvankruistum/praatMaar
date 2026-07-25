@@ -58,6 +58,11 @@ v1: geen plugin-installatie buiten de repo; modules worden geregistreerd in
 
 Zie ook [docs/modules-authoring.md](docs/modules-authoring.md) (valkuilen).
 
+## Profileren
+
+Dicteercyclus-timings staan standaard in `praatMaar.log` (`cycle.timing`).
+Sampling/CPU-geheugen: [docs/profiling.md](docs/profiling.md) (py-spy, Scalene).
+
 ## Git-workflow
 
 We werken **altijd via feature-branches**. Direct op `main` committen of
