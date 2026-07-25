@@ -330,5 +330,18 @@
   "modules.meeting_buddy.settings.live_summary_enabled": "Live summary (Local LLM)",
   "modules.meeting_buddy.settings.live_summary_hint": "Requires the Local LLM module with a ready model. Updates based on time and new transcript text.",
   "modules.meeting_buddy.settings.llm_chunk_interval_s": "Min. seconds between LLM calls",
-  "modules.meeting_buddy.settings.llm_chunk_min_new_chars": "Min. new characters"
+  "modules.meeting_buddy.settings.llm_chunk_min_new_chars": "Min. new characters",
+  "modules.meeting_buddy.settings.section.audio": "Audio",
+  "modules.meeting_buddy.settings.section.storage": "Storage",
+  "modules.meeting_buddy.settings.section.summary": "Summary",
+  "modules.meeting_buddy.settings.loopback_title": "Record meeting audio",
+  "modules.meeting_buddy.settings.loopback_desc": "Windows loopback: also records the other participants.",
+  "modules.meeting_buddy.settings.output_device": "Output device",
+  "modules.meeting_buddy.settings.transcript_label": "Transcript folder",
+  "modules.meeting_buddy.settings.summary_every": "Every",
+  "modules.meeting_buddy.settings.summary_seconds": "s",
+  "modules.meeting_buddy.settings.summary_or_after": "or after",
+  "modules.meeting_buddy.settings.summary_chars": "characters",
+  "modules.meeting_buddy.settings.privacy_note": "Everything stays on this PC — audio, transcript and summary never go to a cloud.",
+  "modules.meeting_buddy.dialog.properties_title": "praatMaar — Meeting Buddy properties"
 }

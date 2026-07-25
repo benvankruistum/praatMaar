@@ -48,6 +48,41 @@ def _checkbox_check_icon() -> str | None:
     return None
 
 
+_chevron_icon_path: str | None = None
+
+
+def _combo_chevron_icon() -> str | None:
+    """Paint the muted down-chevron for QComboBox to a cached PNG."""
+    global _chevron_icon_path
+    if _chevron_icon_path is not None and os.path.exists(_chevron_icon_path):
+        return _chevron_icon_path
+    image = QImage(12, 12, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(TOKENS["muted_soft"]))
+    pen.setWidthF(1.5)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    painter.setPen(pen)
+    path = QPainterPath()
+    path.moveTo(3.0, 4.8)
+    path.lineTo(6.0, 7.8)
+    path.lineTo(9.0, 4.8)
+    painter.drawPath(path)
+    painter.end()
+    try:
+        cache = os.path.join(tempfile.gettempdir(), "praatMaar-ui")
+        os.makedirs(cache, exist_ok=True)
+        out = os.path.join(cache, "combo-chevron.png")
+        if image.save(out):
+            _chevron_icon_path = out.replace("\\", "/")
+            return _chevron_icon_path
+    except OSError:
+        return None
+    return None
+
+
 # Hex values from docs/design/canvas/praatMaar-ui.dc.html (#5a and family).
 TOKENS: dict[str, str] = {
     "accent": "#0F6CBD",
@@ -93,14 +128,30 @@ TOKENS: dict[str, str] = {
     "danger_text": "#A8261A",
     "danger_border_soft": "#E7C7C2",
     "mono": "Consolas, 'Courier New', monospace",
+    # Meeting Buddy (#1a) — succes/info banners.
+    "success_bg": "#EAF6EE",
+    "success_border": "#BCE0C9",
+    "success_text": "#0C5B2E",
 }
 
 
-def build_qss(tokens: dict[str, str] | None = None, check_icon: str | None = None) -> str:
+def build_qss(
+    tokens: dict[str, str] | None = None,
+    check_icon: str | None = None,
+    chevron_icon: str | None = None,
+) -> str:
     """Build the shared stylesheet from the supplied colour tokens."""
     t = tokens or TOKENS
     check_image = f"image: url({check_icon});" if check_icon else ""
+    chevron = (
+        f"QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right;"
+        f" width: 24px; border: none; background: transparent; }}"
+        f" QComboBox::down-arrow {{ image: url({chevron_icon}); width: 12px; height: 12px; }}"
+        if chevron_icon
+        else ""
+    )
     return f"""
+    {chevron}
     QWidget {{ color: {t["text"]}; font-size: 13px; }}
     QDialog, QMainWindow {{ background: {t["surface"]}; }}
     QLineEdit, QComboBox, QTextEdit {{
@@ -298,9 +349,20 @@ def build_qss(tokens: dict[str, str] | None = None, check_icon: str | None = Non
     QLabel#reservedInfoText {{ color: {t["amber_text"]}; font-size: 11.5px; }}
     QLabel#emptyTitle {{ font-size: 13.5px; font-weight: 600; color: {t["text"]}; }}
     QLabel#emptyBody {{ font-size: 12.5px; color: {t["muted"]}; }}
+
+    /* --- Meeting Buddy #1a banners --- */
+    QFrame#successBanner {{
+        background: {t["success_bg"]}; border: 1px solid {t["success_border"]};
+        border-radius: {t["radius_button"]};
+    }}
+    QLabel#successText {{ color: {t["success_text"]}; font-size: 12px; }}
+    QLabel#mbTitle {{ font-size: 13px; font-weight: 600; color: {t["text"]}; }}
+    QLabel#mbDesc {{ color: {t["muted_soft"]}; font-size: 11.5px; }}
     """
 
 
 def apply_theme(app: QApplication) -> None:
     """Apply praatMaar's shared stylesheet to ``app``."""
-    app.setStyleSheet(build_qss(check_icon=_checkbox_check_icon()))
+    app.setStyleSheet(
+        build_qss(check_icon=_checkbox_check_icon(), chevron_icon=_combo_chevron_icon())
+    )

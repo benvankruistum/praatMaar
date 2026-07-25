@@ -330,5 +330,18 @@
   "modules.meeting_buddy.settings.live_summary_enabled": "Live samenvatting (Local LLM)",
   "modules.meeting_buddy.settings.live_summary_hint": "Vereist de module Local LLM met een klaarstaand model. Updates op basis van tijd én nieuwe transcripttekst.",
   "modules.meeting_buddy.settings.llm_chunk_interval_s": "Min. seconden tussen LLM-calls",
-  "modules.meeting_buddy.settings.llm_chunk_min_new_chars": "Min. nieuwe tekens"
+  "modules.meeting_buddy.settings.llm_chunk_min_new_chars": "Min. nieuwe tekens",
+  "modules.meeting_buddy.settings.section.audio": "Audio",
+  "modules.meeting_buddy.settings.section.storage": "Opslag",
+  "modules.meeting_buddy.settings.section.summary": "Samenvatting",
+  "modules.meeting_buddy.settings.loopback_title": "Meetinggeluid opnemen",
+  "modules.meeting_buddy.settings.loopback_desc": "Windows-loopback: neemt ook de andere deelnemers op.",
+  "modules.meeting_buddy.settings.output_device": "Uitvoerapparaat",
+  "modules.meeting_buddy.settings.transcript_label": "Transcriptmap",
+  "modules.meeting_buddy.settings.summary_every": "Elke",
+  "modules.meeting_buddy.settings.summary_seconds": "s",
+  "modules.meeting_buddy.settings.summary_or_after": "of na",
+  "modules.meeting_buddy.settings.summary_chars": "tekens",
+  "modules.meeting_buddy.settings.privacy_note": "Alles blijft op deze pc — audio, transcript en samenvatting gaan niet naar een cloud.",
+  "modules.meeting_buddy.dialog.properties_title": "praatMaar — Meeting Buddy-eigenschappen"
 }

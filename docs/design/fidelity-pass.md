@@ -99,6 +99,28 @@ Subdialoog:
 - [x] Vorm draagt betekenis (dot · arc · doorgestreept · driehoek · map) — leesbaar in grijswaarden
 - [x] Live side-by-side met canvas P1–P6 goedgekeurd door gebruiker
 
+## Checklist — Meeting Buddy `#1a` (drie sub-slices)
+
+### 09 Eigenschappen (`properties_dialog.py`)
+
+- [x] Family-shell 620px (body + `dialogFooter`); titel "praatMaar — Meeting Buddy-eigenschappen"
+- [x] Secties AUDIO / OPSLAG / SAMENVATTING (uppercase, top-border)
+- [x] Meetinggeluid opnemen: titel + desc + toggle-switch; Uitvoerapparaat (label 150px + combo)
+- [x] Transcriptmap: label 150px + veld + Bladeren…
+- [x] Live samenvatting: titel + desc + toggle; interval-rij "Elke [n] s of na [n] tekens"
+- [x] Groene privacy-succesbanner
+- [x] Footer: Annuleren ghost + Opslaan primary
+- [x] Gedeelde `ToggleSwitch` (track + knop) en combobox-chevron (ook #4a/#5a)
+- [x] Live side-by-side goedgekeurd door gebruiker
+
+### 08 Agenda-dialoog (`agenda_dialog.py`)
+
+- [ ] Nog te doen
+
+### 01–07 Overlay (`overlay.py`)
+
+- [ ] Nog te doen
+
 ## Agent-prompt (plakken)
 
 ```text

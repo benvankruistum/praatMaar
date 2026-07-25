@@ -7,7 +7,6 @@ from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -24,6 +23,7 @@ from modules._contract import module_actions
 from modules.registry import all_builtin_modules, modules_config_for_settings
 from ui.app import ensure_app
 from ui.theme import TOKENS
+from ui.widgets import ToggleSwitch
 
 _open_dialog: QDialog | None = None
 
@@ -76,7 +76,7 @@ class ModulesDialog(QDialog):
         self._on_module_action = on_module_action
         self._get_enabled_module_ids = get_enabled_module_ids
         self._running_ids = set(enabled_module_ids or ())
-        self._module_checks: dict[str, QCheckBox] = {}
+        self._module_checks: dict[str, ToggleSwitch] = {}
         self._action_hosts: dict[str, QWidget] = {}
         self._action_layouts: dict[str, QHBoxLayout] = {}
         self._cards: dict[str, QFrame] = {}
@@ -101,8 +101,7 @@ class ModulesDialog(QDialog):
         inc_layout = QHBoxLayout(self._incremental_box)
         inc_layout.setContentsMargins(12, 10, 12, 10)
         inc_layout.setSpacing(9)
-        self._incremental = QCheckBox()
-        self._incremental.setObjectName("switch")
+        self._incremental = ToggleSwitch()
         self._incremental.setChecked(bool(current.get("incremental_transcription", False)))
         self._incremental.toggled.connect(self._sync_incremental_style)
         inc_text = QVBoxLayout()
@@ -203,8 +202,7 @@ class ModulesDialog(QDialog):
         left.addWidget(description)
         top.addLayout(left, 1)
 
-        check = QCheckBox()
-        check.setObjectName("switch")
+        check = ToggleSwitch()
         check.setAccessibleName(i18n.t(module.display_name_key()))
         check.setChecked(enabled)
         check.toggled.connect(lambda _checked, mid=module.id: self._on_toggle(mid))

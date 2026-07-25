@@ -6,13 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
-    QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -23,6 +22,8 @@ from PySide6.QtWidgets import (
 
 import i18n
 from ui.app import ensure_app
+from ui.theme import TOKENS
+from ui.widgets import ToggleSwitch
 
 from .devices import list_loopback_output_devices
 from .transcript_journal import transcripts_dir
@@ -95,51 +96,185 @@ class _PropertiesDialog(QDialog):
         devices = list_loopback_output_devices()
         labels, self._device_values, _, current = device_selection_maps(devices, loopback_device)
         self._result: PropertiesResult | None = None
-        self.setWindowTitle(i18n.t("modules.meeting_buddy.dialog.title"))
-        self.setMinimumWidth(480)
-        layout = QVBoxLayout(self)
-        form = QFormLayout()
-        self._loopback = QCheckBox(i18n.t("modules.meeting_buddy.settings.enable_loopback"))
+        self.setWindowTitle(i18n.t("modules.meeting_buddy.dialog.properties_title"))
+        self.setMinimumWidth(620)
+        self.setStyleSheet(
+            f"QDialog {{ background: {TOKENS['surface']}; "
+            f"border: 1px solid {TOKENS['border_dialog']}; }}"
+        )
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        body = QWidget()
+        col = QVBoxLayout(body)
+        col.setContentsMargins(18, 16, 18, 18)
+        col.setSpacing(0)
+
+        # --- Audio ---
+        col.addWidget(self._section(i18n.t("modules.meeting_buddy.settings.section.audio")))
+        self._loopback = ToggleSwitch()
         self._loopback.setChecked(enable_loopback)
-        form.addRow(self._loopback)
+        col.addLayout(
+            self._toggle_row(
+                i18n.t("modules.meeting_buddy.settings.loopback_title"),
+                i18n.t("modules.meeting_buddy.settings.loopback_desc"),
+                self._loopback,
+            )
+        )
         self._device = QComboBox()
         self._device.addItems(labels)
         self._device.setCurrentText(current)
-        form.addRow(i18n.t("modules.meeting_buddy.settings.loopback_output"), self._device)
-        folder = QHBoxLayout()
+        col.addLayout(
+            self._field_row(i18n.t("modules.meeting_buddy.settings.output_device"), self._device)
+        )
+
+        # --- Opslag ---
+        col.addWidget(
+            self._section(i18n.t("modules.meeting_buddy.settings.section.storage"), top=True)
+        )
         self._folder = QLineEdit(transcripts_directory or "")
         browse = QPushButton(i18n.t("modules.meeting_buddy.settings.transcripts_browse"))
+        browse.setObjectName("secondary")
         browse.clicked.connect(lambda: self._browse_folder(app_dir))
-        folder.addWidget(self._folder, 1)
-        folder.addWidget(browse)
-        form.addRow(i18n.t("modules.meeting_buddy.settings.transcripts_directory"), folder)
-        default_dir = (
-            str(transcripts_dir(app_dir)) if app_dir is not None else "…/meeting-buddy/transcripts"
+        col.addLayout(
+            self._field_row(
+                i18n.t("modules.meeting_buddy.settings.transcript_label"),
+                self._folder,
+                trailing=browse,
+            )
         )
-        hint = QLabel(
-            i18n.t("modules.meeting_buddy.settings.transcripts_directory_hint", path=default_dir)
+
+        # --- Samenvatting ---
+        col.addWidget(
+            self._section(i18n.t("modules.meeting_buddy.settings.section.summary"), top=True)
         )
-        hint.setWordWrap(True)
-        form.addRow(hint)
-        self._summary = QCheckBox(i18n.t("modules.meeting_buddy.settings.live_summary_enabled"))
+        self._summary = ToggleSwitch()
         self._summary.setChecked(live_summary_enabled)
-        form.addRow(self._summary)
-        summary_hint = QLabel(i18n.t("modules.meeting_buddy.settings.live_summary_hint"))
-        summary_hint.setWordWrap(True)
-        form.addRow(summary_hint)
-        self._interval = QLineEdit(str(int(llm_chunk_interval_s)))
-        self._chars = QLineEdit(str(int(llm_chunk_min_new_chars)))
-        form.addRow(i18n.t("modules.meeting_buddy.settings.llm_chunk_interval_s"), self._interval)
-        form.addRow(i18n.t("modules.meeting_buddy.settings.llm_chunk_min_new_chars"), self._chars)
-        layout.addLayout(form)
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Save
+        col.addLayout(
+            self._toggle_row(
+                i18n.t("modules.meeting_buddy.settings.live_summary_enabled"),
+                i18n.t("modules.meeting_buddy.settings.live_summary_hint"),
+                self._summary,
+            )
         )
-        buttons.rejected.connect(self.reject)
-        buttons.accepted.connect(self._confirm)
-        layout.addWidget(buttons)
+        self._interval = QLineEdit(str(int(llm_chunk_interval_s)))
+        self._interval.setFixedWidth(72)
+        self._chars = QLineEdit(str(int(llm_chunk_min_new_chars)))
+        self._chars.setFixedWidth(88)
+        col.addLayout(self._interval_row())
+
+        # --- Privacy-banner ---
+        banner = QFrame()
+        banner.setObjectName("successBanner")
+        banner_row = QHBoxLayout(banner)
+        banner_row.setContentsMargins(11, 9, 11, 9)
+        banner_row.setSpacing(9)
+        check = QLabel("✓")
+        check.setStyleSheet(
+            f"background: {TOKENS['ok']}; color: white; font-size: 9px; font-weight: 700;"
+            " border-radius: 7px; min-width: 14px; max-width: 14px; min-height: 14px;"
+            " max-height: 14px;"
+        )
+        check.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        note = QLabel(i18n.t("modules.meeting_buddy.settings.privacy_note"))
+        note.setObjectName("successText")
+        note.setWordWrap(True)
+        banner_row.addWidget(check, 0, Qt.AlignmentFlag.AlignTop)
+        banner_row.addWidget(note, 1)
+        col.addSpacing(14)
+        col.addWidget(banner)
+
+        outer.addWidget(body, 1)
+
+        footer = QFrame()
+        footer.setObjectName("dialogFooter")
+        footer_row = QHBoxLayout(footer)
+        footer_row.setContentsMargins(18, 12, 18, 12)
+        footer_row.addStretch(1)
+        cancel = QPushButton(i18n.t("modules.meeting_buddy.dialog.cancel"))
+        cancel.setObjectName("ghost")
+        cancel.clicked.connect(self.reject)
+        save = QPushButton(i18n.t("modules.meeting_buddy.dialog.save"))
+        save.setObjectName("primary")
+        save.clicked.connect(self._confirm)
+        footer_row.addWidget(cancel)
+        footer_row.addWidget(save)
+        outer.addWidget(footer)
+
         self._loopback.toggled.connect(self._device.setEnabled)
         self._device.setEnabled(enable_loopback)
+
+    # -- shell helpers ---------------------------------------------------
+    def _section(self, text: str, *, top: bool = False) -> QWidget:
+        wrap = QWidget()
+        box = QVBoxLayout(wrap)
+        box.setContentsMargins(0, 16 if top else 0, 0, 4)
+        box.setSpacing(0)
+        if top:
+            divider = QFrame()
+            divider.setObjectName("destDivider")
+            divider.setFixedHeight(1)
+            box.addWidget(divider)
+            box.addSpacing(12)
+        label = QLabel(text.upper())
+        label.setObjectName("sectionLabel")
+        box.addWidget(label)
+        return wrap
+
+    def _toggle_row(self, title: str, desc: str, toggle: ToggleSwitch) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 10, 0, 12)
+        row.setSpacing(16)
+        text = QVBoxLayout()
+        text.setSpacing(3)
+        title_label = QLabel(title)
+        title_label.setObjectName("mbTitle")
+        desc_label = QLabel(desc)
+        desc_label.setObjectName("mbDesc")
+        desc_label.setWordWrap(True)
+        text.addWidget(title_label)
+        text.addWidget(desc_label)
+        row.addLayout(text, 1)
+        row.addWidget(toggle, 0, Qt.AlignmentFlag.AlignTop)
+        return row
+
+    def _field_row(
+        self, label_text: str, field: QWidget, *, trailing: QWidget | None = None
+    ) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 12)
+        row.setSpacing(16)
+        label = QLabel(label_text)
+        label.setObjectName("fieldLabel")
+        label.setFixedWidth(150)
+        row.addWidget(label)
+        row.addWidget(field, 1)
+        if trailing is not None:
+            row.addWidget(trailing)
+        return row
+
+    def _interval_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(24)
+        spacer = QLabel()
+        spacer.setFixedWidth(150)
+        row.addWidget(spacer)
+        every = QHBoxLayout()
+        every.setSpacing(10)
+        every.addWidget(QLabel(i18n.t("modules.meeting_buddy.settings.summary_every")))
+        every.addWidget(self._interval)
+        every.addWidget(QLabel(i18n.t("modules.meeting_buddy.settings.summary_seconds")))
+        after = QHBoxLayout()
+        after.setSpacing(10)
+        after.addWidget(QLabel(i18n.t("modules.meeting_buddy.settings.summary_or_after")))
+        after.addWidget(self._chars)
+        after.addWidget(QLabel(i18n.t("modules.meeting_buddy.settings.summary_chars")))
+        row.addLayout(every)
+        row.addLayout(after)
+        row.addStretch(1)
+        return row
 
     @property
     def result(self) -> PropertiesResult | None:
