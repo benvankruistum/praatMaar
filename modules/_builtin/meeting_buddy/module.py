@@ -311,6 +311,12 @@ class MeetingBuddyModule:
     def _sync_recording_pill(self, capture_status: CaptureStatus) -> None:
         """Toon de opname-pill zolang Meeting Buddy microfooncapture actief is."""
 
+        # Na stoppen (geen binding) mag een late capture-event de pill niet
+        # opnieuw op 'meeting'-opname zetten; laat 'm dan los.
+        if not self.is_session_active:
+            self._release_recording_pill()
+            return
+
         recording_states = {
             CaptureStatus.ACTIVE,
             CaptureStatus.STARTING,
