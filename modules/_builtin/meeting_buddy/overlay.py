@@ -367,9 +367,7 @@ class MeetingBuddyOverlay:
                 else "modules.meeting_buddy.overlay.headline.listening"
             )
         )
-        self._listening.setStyleSheet(
-            f"color: {TOKENS['danger_text']};" if interrupted else ""
-        )
+        self._listening.setStyleSheet(f"color: {TOKENS['danger_text']};" if interrupted else "")
         self._update_recording_banner(
             capture_status,
             transcription_status,
