@@ -508,11 +508,49 @@ def print_ready_message() -> None:
 
 
 def _copy_to_clipboard(text: str) -> None:
-    """Kopieert tekst via het lazy geladen pyperclip."""
+    """Kopieert tekst naar het klembord.
 
-    if pyperclip is None:
-        raise RuntimeError("pyperclip is nog niet geladen.")
-    pyperclip.copy(text)
+    Primair via pyperclip; als dat faalt (bijv. Linux zonder ``xclip``/``xsel``)
+    valt het terug op het Qt-klembord, gemarshald naar de Qt-main-thread.
+    """
+
+    try:
+        if pyperclip is not None:
+            pyperclip.copy(text)
+            return
+    except Exception:
+        pass
+    _copy_to_clipboard_via_qt(text)
+
+
+def _copy_to_clipboard_via_qt(text: str) -> None:
+    """Best-effort klembord-fallback via Qt (thread-veilig gemarshald)."""
+
+    from PySide6.QtCore import QThread
+    from PySide6.QtGui import QGuiApplication
+
+    app = QGuiApplication.instance()
+    if app is None:
+        raise RuntimeError("Geen Qt-applicatie voor klembord-fallback.")
+
+    def _set() -> None:
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(text)
+
+    if QThread.currentThread() == app.thread():
+        _set()
+        return
+    done = threading.Event()
+
+    def _run() -> None:
+        try:
+            _set()
+        finally:
+            done.set()
+
+    _ui_dispatch(_run)
+    done.wait(timeout=1.0)
 
 
 def _user_config_dict() -> dict[str, Any]:

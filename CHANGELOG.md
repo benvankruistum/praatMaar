@@ -24,6 +24,39 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
   en de STT-wachtrij leeggedraaid (geen discard meer), zodat het eindstuk van
   een meeting niet stil verdwijnt.
 
+## [0.3.0] - 2026-07-27
+
+### Added
+
+- **PySide6 (Qt 6) UI** voor Windows, macOS en Linux; de Tk-UI is
+  uitgefaseerd ([ADR-0005](docs/adr/0005-ui-toolkit-pyside6.md)).
+- **Canvas-fidelity** voor alle schermen: status-pill (states P1–P6),
+  Bestemmingen, Instellingen, Modules en Meeting Buddy (overlay + Agenda-
+  en Eigenschappen-dialoog), conform `docs/design/canvas/`.
+- **Meeting Buddy live-samenvatting tweekoloms:** met samenvatting aan
+  groeit de overlay naar 600 px met een eigen samenvatting-kolom (losse
+  punten + Kopiëren); geminimaliseerd toont de overlay een donkere mini-pill.
+- Gedeelde UI-componenten en -tokens in `ui/theme.py` / `ui/widgets.py`
+  (`ToggleSwitch`, `FlowLayout`, checkbox-vinkje, radio-stip, combobox-chevron).
+- Subtiele waarschuwing voor gedeelde/onveilige mappen bij Bestemmingen.
+- **Linux (experimenteel, X11/AppImage):** host-seam (paste, XDG, autostart,
+  single-instance), systeemvak met venster-fallback, `xdg-open` voor mappen
+  en een Qt-klembord-fallback.
+
+### Changed
+
+- Alle dialogen, de pill en de overlay volgen de canvas-designtokens; native
+  OS-titelbalk en systeemfonts zijn de enige bewuste afwijkingen.
+
+### Fixed
+
+- De tray-app sluit niet meer af wanneer een dialoog wordt gesloten.
+- De status-pill sluit netjes bij het stoppen van een meeting.
+- Modules-kaarten worden niet meer afgekapt bij scrollen; actieknoppen
+  wrappen naar een tweede regel en de primaire knop is weer zichtbaar.
+- Overlay-rijen worden bij elke her-render correct vrijgegeven (geen
+  widget-ophoping tijdens een meeting).
+
 ## [0.2.0] - 2026-07-24
 
 ### Added

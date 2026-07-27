@@ -367,5 +367,7 @@
   "modules.local_llm.settings.model": "Model",
   "modules.local_llm.settings.error.empty_url": "Enter a base URL.",
   "modules.local_llm.settings.error.invalid_url": "Invalid URL. Use http:// or https:// with host and port, e.g. http://127.0.0.1:11434.",
-  "modules.local_llm.settings.error.empty_model": "Enter a model name."
+  "modules.local_llm.settings.error.empty_model": "Enter a model name.",
+  "modules.meeting_buddy.overlay.summary_source": "Local model",
+  "modules.meeting_buddy.overlay.summary_copy": "Copy"
 }

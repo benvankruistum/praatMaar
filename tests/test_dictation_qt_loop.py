@@ -141,3 +141,17 @@ def test_main_uses_qt_event_loop_and_quits_through_application(monkeypatch) -> N
     assert app.quit_called
     assert indicator is not None and indicator.run_called and indicator.stop_requested
     assert tray is not None and tray.stopped
+
+
+def test_copy_to_clipboard_falls_back_to_qt(monkeypatch) -> None:
+    # When pyperclip is unavailable (e.g. Linux without xclip/xsel), the copy
+    # must fall back to the Qt clipboard instead of failing.
+    from ui.app import ensure_app
+
+    ensure_app([])
+    monkeypatch.setattr(dictation, "pyperclip", None)
+    dictation._copy_to_clipboard("hallo linux")
+
+    from PySide6.QtGui import QGuiApplication
+
+    assert QGuiApplication.clipboard().text() == "hallo linux"

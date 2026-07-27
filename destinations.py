@@ -102,6 +102,8 @@ def open_in_explorer(path: Path) -> None:
         os.startfile(path)  # type: ignore[attr-defined]
     elif sys.platform == "darwin":
         subprocess.run(["open", str(path)], check=False)
+    elif sys.platform.startswith("linux"):
+        subprocess.run(["xdg-open", str(path)], check=False)
     else:
         raise RuntimeError(f"Map openen niet ondersteund op {sys.platform!r}")
 

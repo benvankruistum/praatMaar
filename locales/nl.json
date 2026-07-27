@@ -367,5 +367,7 @@
   "modules.local_llm.settings.model": "Model",
   "modules.local_llm.settings.error.empty_url": "Vul een basis-URL in.",
   "modules.local_llm.settings.error.invalid_url": "Ongeldige URL. Gebruik http:// of https:// met host en poort, bijv. http://127.0.0.1:11434.",
-  "modules.local_llm.settings.error.empty_model": "Vul een modelnaam in."
+  "modules.local_llm.settings.error.empty_model": "Vul een modelnaam in.",
+  "modules.meeting_buddy.overlay.summary_source": "Lokaal model",
+  "modules.meeting_buddy.overlay.summary_copy": "Kopiëren"
 }

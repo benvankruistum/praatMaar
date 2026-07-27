@@ -183,3 +183,18 @@ def test_open_in_explorer_uses_resolved_path(tmp_path: Path, monkeypatch):
 
     assert target.is_dir()
     assert opened == [target.resolve()]
+
+
+def test_open_in_explorer_uses_xdg_open_on_linux(tmp_path: Path, monkeypatch):
+    target = tmp_path / "transcripts"
+    calls: list[list[str]] = []
+    monkeypatch.setattr(d.sys, "platform", "linux")
+
+    def fake_run(args, check=False):  # noqa: ARG001
+        calls.append(list(args))
+        return None
+
+    with patch.object(d.subprocess, "run", fake_run):
+        d.open_in_explorer(target)
+
+    assert calls == [["xdg-open", str(target.resolve())]]
