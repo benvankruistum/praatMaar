@@ -404,6 +404,11 @@ def build_qss(
     QFrame#hintCard {{ background: #F9FAFC; border: 1px solid #E6EAEF; border-radius: 6px; }}
     QLabel#hintImportant {{ color: #0A4C86; font-size: 10px; font-weight: 700;
         letter-spacing: 0.06em; }}
+    QFrame#summaryCol {{ background: #FCFDFE; border: none;
+        border-left: 1px solid {t["border_subtle"]}; }}
+    QLabel#summaryPoint {{ color: {t["text"]}; font-size: 12.5px; }}
+    QLabel#summaryDot {{ background: {t["accent"]}; border-radius: 3px; }}
+    QLabel#summaryCopy {{ color: {t["accent"]}; font-size: 11px; }}
     """
 
 

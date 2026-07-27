@@ -353,5 +353,7 @@
   "modules.meeting_buddy.overlay.local": "lokal",
   "modules.meeting_buddy.overlay.hints": "Hinweise",
   "modules.meeting_buddy.overlay.headline.listening": "Hört zu",
-  "modules.meeting_buddy.overlay.headline.interrupted": "Aufnahme unterbrochen"
+  "modules.meeting_buddy.overlay.headline.interrupted": "Aufnahme unterbrochen",
+  "modules.meeting_buddy.overlay.summary_source": "Lokales Modell",
+  "modules.meeting_buddy.overlay.summary_copy": "Kopieren"
 }

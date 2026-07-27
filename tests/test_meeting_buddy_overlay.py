@@ -1,6 +1,24 @@
 from modules._builtin.meeting_buddy.hints import HintType
-from modules._builtin.meeting_buddy.overlay import format_elapsed, pick_emphasis
+from modules._builtin.meeting_buddy.overlay import format_elapsed, pick_emphasis, summary_points
 from modules._builtin.meeting_buddy.state import Hint, HintStatus
+
+
+def test_summary_points_splits_lines_and_strips_bullets() -> None:
+    assert summary_points("- one\n* two\n3. three") == ["one", "two", "three"]
+
+
+def test_summary_points_caps_at_three() -> None:
+    assert summary_points("a\nb\nc\nd") == ["a", "b", "c"]
+
+
+def test_summary_points_splits_paragraph_into_sentences() -> None:
+    points = summary_points("First thing. Second thing. Third thing. Fourth thing.")
+    assert points == ["First thing.", "Second thing.", "Third thing."]
+
+
+def test_summary_points_empty() -> None:
+    assert summary_points("") == []
+    assert summary_points("   ") == []
 
 
 def _hint(hint_id: str, priority: int, *, status: HintStatus = HintStatus.ACTIVE) -> Hint:

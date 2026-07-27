@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -76,6 +77,26 @@ def pick_emphasis(hints: Sequence[Hint]) -> str | None:
 
 def _topics_done(topics: Sequence[Topic]) -> int:
     return sum(1 for t in topics if t.status in (TopicStatus.SEQUENTIAL, TopicStatus.CONFIRMED))
+
+
+def summary_points(text: str, *, limit: int = 3) -> list[str]:
+    """Split a live summary into up to ``limit`` separate points (canvas 03).
+
+    Prefers explicit lines (stripping bullet markers); falls back to sentence
+    splitting for a single paragraph.
+    """
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return []
+    lines = [
+        re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", line).strip()
+        for line in cleaned.splitlines()
+        if line.strip()
+    ]
+    if len(lines) > 1:
+        return lines[:limit]
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", cleaned) if part.strip()]
+    return sentences[:limit] if sentences else [cleaned]
 
 
 class _StatusDot(QWidget):
@@ -266,27 +287,32 @@ class MeetingBuddyOverlay:
         banner_layout.setSpacing(0)
         outer.addWidget(self._banner_host)
 
-        body = QWidget()
-        self._body = QVBoxLayout(body)
-        self._body.setContentsMargins(0, 0, 0, 0)
-        self._body.setSpacing(0)
-        outer.addWidget(body)
+        content = QWidget()
+        content_row = QHBoxLayout(content)
+        content_row.setContentsMargins(0, 0, 0, 0)
+        content_row.setSpacing(0)
 
+        # Left status column: agenda, questions, hints.
+        self._left_col = QWidget()
+        left = QVBoxLayout(self._left_col)
+        left.setContentsMargins(0, 0, 0, 0)
+        left.setSpacing(0)
         self._topics, self._topics_body, self._topics_count = self._section(
-            "modules.meeting_buddy.overlay.agenda"
+            "modules.meeting_buddy.overlay.agenda", left
         )
-        self._summary, self._summary_content, self._summary_count = self._section(
-            "modules.meeting_buddy.overlay.summary"
-        )
-        self._summary_body = QLabel()
-        self._summary_body.setWordWrap(True)
-        self._summary_content.addWidget(self._summary_body)
         self._questions, self._questions_body, self._questions_count = self._section(
-            "modules.meeting_buddy.overlay.questions"
+            "modules.meeting_buddy.overlay.questions", left
         )
         self._hints, self._hints_body, self._hints_count = self._section(
-            "modules.meeting_buddy.overlay.hints"
+            "modules.meeting_buddy.overlay.hints", left
         )
+        content_row.addWidget(self._left_col, 1)
+
+        # Right summary column (canvas 03): shown only when live summary is on.
+        self._summary_text = ""
+        self._summary_col = self._build_summary_column()
+        content_row.addWidget(self._summary_col)
+        outer.addWidget(content)
 
         # --- footer ---
         footer = QFrame()
@@ -317,7 +343,7 @@ class MeetingBuddyOverlay:
             f" QPushButton:hover {{ background: {TOKENS['hover']}; }}"
         )
 
-    def _section(self, key: str) -> tuple[QWidget, QVBoxLayout, QLabel]:
+    def _section(self, key: str, target: QVBoxLayout) -> tuple[QWidget, QVBoxLayout, QLabel]:
         section = QWidget()
         layout = QVBoxLayout(section)
         layout.setContentsMargins(12, 8, 12, 8)
@@ -335,9 +361,54 @@ class MeetingBuddyOverlay:
         body_layout = QVBoxLayout()
         body_layout.setSpacing(6)
         layout.addLayout(body_layout)
-        self._body.addWidget(section)
+        target.addWidget(section)
         section.hide()
         return section, body_layout, count
+
+    def _build_summary_column(self) -> QWidget:
+        column = QFrame()
+        column.setObjectName("summaryCol")
+        column.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        column.setFixedWidth(320)
+        col = QVBoxLayout(column)
+        col.setContentsMargins(14, 10, 14, 12)
+        col.setSpacing(9)
+        head = QHBoxLayout()
+        head.setSpacing(8)
+        heading = QLabel(i18n.t("modules.meeting_buddy.overlay.summary").upper())
+        heading.setObjectName("overlaySection")
+        self._summary_time = QLabel("")
+        self._summary_time.setObjectName("overlayFooterText")
+        head.addWidget(heading)
+        head.addStretch(1)
+        head.addWidget(self._summary_time)
+        col.addLayout(head)
+        self._summary_bullets = QVBoxLayout()
+        self._summary_bullets.setSpacing(9)
+        col.addLayout(self._summary_bullets)
+        col.addStretch(1)
+        footer = QHBoxLayout()
+        footer.setSpacing(8)
+        source = QLabel(i18n.t("modules.meeting_buddy.overlay.summary_source"))
+        source.setObjectName("overlayFooterText")
+        copy = QLabel(i18n.t("modules.meeting_buddy.overlay.summary_copy"))
+        copy.setObjectName("summaryCopy")
+        copy.setCursor(Qt.CursorShape.PointingHandCursor)
+        copy.mousePressEvent = lambda _e: self._copy_summary()  # type: ignore[method-assign]
+        footer.addWidget(source)
+        footer.addStretch(1)
+        footer.addWidget(copy)
+        line = QFrame()
+        line.setObjectName("destDivider")
+        line.setFixedHeight(1)
+        col.addWidget(line)
+        col.addLayout(footer)
+        column.hide()
+        return column
+
+    def _copy_summary(self) -> None:
+        if self._summary_text:
+            ensure_app().clipboard().setText(self._summary_text)
 
     def update(
         self,
@@ -353,11 +424,14 @@ class MeetingBuddyOverlay:
         active.sort(key=lambda hint: (-hint.priority, -hint.confidence, hint.id))
         visible = active[:3]
         self._render_topics(state.topics)
-        self._render_summary(
-            state.live_summary, enabled=bool(getattr(state, "live_summary_enabled", False))
-        )
+        two_column = bool(getattr(state, "live_summary_enabled", False))
+        self._render_summary(state.live_summary, enabled=two_column)
         self._render_questions(state.questions)
         self._render_hints(visible, pick_emphasis(visible))
+        # Canvas 03: grow to two columns (600px) with a summary column; else 360px.
+        self.window.setFixedWidth(600 if two_column else 360)
+        if two_column:
+            self._summary_time.setText(format_elapsed(self._elapsed_seconds())[:5])
         self._capture_status = capture_status
         interrupted = _enum_value(capture_status) == "error"
         self._listening.setText(
@@ -367,9 +441,7 @@ class MeetingBuddyOverlay:
                 else "modules.meeting_buddy.overlay.headline.listening"
             )
         )
-        self._listening.setStyleSheet(
-            f"color: {TOKENS['danger_text']};" if interrupted else ""
-        )
+        self._listening.setStyleSheet(f"color: {TOKENS['danger_text']};" if interrupted else "")
         self._update_recording_banner(
             capture_status,
             transcription_status,
@@ -466,17 +538,37 @@ class MeetingBuddyOverlay:
         self._questions.show()
 
     def _render_summary(self, summary: str, *, enabled: bool = False) -> None:
+        self._summary_text = (summary or "").strip()
+        while self._summary_bullets.count():
+            item = self._summary_bullets.takeAt(0)
+            if item.layout() is not None:
+                self._clear_layout(item.layout())
+                item.layout().deleteLater()
+            elif item.widget() is not None:
+                item.widget().deleteLater()
         if not enabled:
-            self._summary.hide()
+            self._summary_col.hide()
             return
-        text = (summary or "").strip() or i18n.t("modules.meeting_buddy.overlay.summary_waiting")
-        self._summary_body.setText(text)
-        self._summary_body.setStyleSheet(
-            f"color: {TOKENS['text_secondary']}; font-size: 12px;"
-            if summary.strip()
-            else f"color: {TOKENS['muted_soft']}; font-size: 12px;"
-        )
-        self._summary.show()
+        points = summary_points(self._summary_text)
+        if not points:
+            waiting = QLabel(i18n.t("modules.meeting_buddy.overlay.summary_waiting"))
+            waiting.setWordWrap(True)
+            waiting.setStyleSheet(f"color: {TOKENS['muted_soft']}; font-size: 12.5px;")
+            self._summary_bullets.addWidget(waiting)
+        else:
+            for point in points:
+                row = QHBoxLayout()
+                row.setSpacing(9)
+                dot = QLabel()
+                dot.setObjectName("summaryDot")
+                dot.setFixedSize(6, 6)
+                text = QLabel(point)
+                text.setObjectName("summaryPoint")
+                text.setWordWrap(True)
+                row.addWidget(dot, 0, Qt.AlignmentFlag.AlignTop)
+                row.addWidget(text, 1)
+                self._summary_bullets.addLayout(row)
+        self._summary_col.show()
 
     def _render_hints(self, hints: Sequence[Hint], emphasis_id: str | None) -> None:
         self._clear_layout(self._hints_body)
