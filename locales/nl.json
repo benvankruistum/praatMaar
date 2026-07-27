@@ -353,5 +353,7 @@
   "modules.meeting_buddy.overlay.local": "lokaal",
   "modules.meeting_buddy.overlay.hints": "Hints",
   "modules.meeting_buddy.overlay.headline.listening": "Luistert",
-  "modules.meeting_buddy.overlay.headline.interrupted": "Opname onderbroken"
+  "modules.meeting_buddy.overlay.headline.interrupted": "Opname onderbroken",
+  "modules.meeting_buddy.overlay.summary_source": "Lokaal model",
+  "modules.meeting_buddy.overlay.summary_copy": "Kopiëren"
 }

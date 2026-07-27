@@ -1602,41 +1602,51 @@
       </div>
 
       <!-- 3. Rijke overlay -->
-      <div style="width:392px; display:flex; flex-direction:column; gap:12px;">
+      <div style="width:632px; display:flex; flex-direction:column; gap:12px;">
         <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; font-weight:700; color:#0F6CBD;">03</span><span style="font-size:13px; font-weight:600;">Live samenvatting + vragen</span></div>
-        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}"><p style="margin:0; font-size:12px; line-height:1.5; color:#5A6572; text-wrap:pretty;">De volle overlay. Samenvatting blijft drie regels; vragen van anderen zijn genummerd en maximaal vijf. Nog steeds geen transcript.</p></sc-if>
-        <div style="width:360px; background:#fff; border:1px solid #DDE2E8; border-radius:8px; box-shadow:0 10px 30px rgba(16,24,40,.14); overflow:hidden;">
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}"><p style="margin:0; font-size:12px; line-height:1.5; color:#5A6572; text-wrap:pretty;">Zodra de live samenvatting aan staat, groeit de overlay naar 600 px en krijgt de samenvatting een eigen kolom van 320 px — drie gescheiden punten in plaats van één geknelde alinea. Links blijft de smalle statuskolom: agenda en open vragen. Zonder samenvatting valt de overlay terug op één kolom van 360 px.</p></sc-if>
+        <div style="width:600px; background:#fff; border:1px solid #DDE2E8; border-radius:8px; box-shadow:0 10px 30px rgba(16,24,40,.14); overflow:hidden;">
           <div style="padding:9px 10px 9px 12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #EDEFF3; background:#FAFBFC;">
             <span style="font-size:12px; font-weight:600;">praatMaar <span style="color:#A9B2BD; font-weight:400;">—</span> Meeting Buddy</span>
             <span style="flex:1;"></span>
             <span style="width:24px; height:24px; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#5A6572; font-size:13px;">—</span>
             <span style="width:24px; height:24px; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#C42B1C; font-size:9px;">■</span>
           </div>
-          <div style="padding:10px 12px; display:flex; align-items:center; gap:9px;">
+          <div style="padding:10px 12px; display:flex; align-items:center; gap:9px; border-bottom:1px solid #EDEFF3;">
             <span style="width:8px; height:8px; border-radius:50%; background:#C42B1C; animation:recpulse 1.8s ease-out infinite; flex:none;"></span>
             <span style="font-size:13px; font-weight:600;">Luistert</span>
             <span style="flex:1;"></span>
             <span style="font-size:12.5px; color:#5A6572; font-variant-numeric:tabular-nums;">00:34:51</span>
           </div>
-          <div style="padding:0 12px 10px; display:flex; flex-direction:column; gap:8px;">
-            <div style="display:flex; align-items:center; gap:8px;"><span style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#7A8494;">Agenda</span><span style="flex:1; height:1px; background:#EDEFF3;"></span><span style="font-size:11px; color:#8A94A0; font-variant-numeric:tabular-nums;">3/5</span></div>
-            <div style="display:grid; grid-template-columns:16px 1fr; gap:8px 8px; align-items:center;">
-              <span style="width:14px; height:14px; border-radius:50%; background:#0F6CBD;"></span><span style="font-size:13px; color:#8A94A0;">Opening en mededelingen</span>
-              <span style="width:14px; height:14px; border-radius:50%; background:#0F7B3E; color:#fff; font-size:9px; line-height:14px; text-align:center; font-weight:700;">✓</span><span style="font-size:13px; color:#8A94A0;">Status migratie dicteerserver</span>
-              <span style="width:14px; height:14px; border-radius:50%; background:#0F6CBD;"></span><span style="font-size:13px; color:#8A94A0;">Privacy-toets Meeting Buddy</span>
-              <span style="width:14px; height:14px; border-radius:50%; border:1.5px solid #0F6CBD; box-sizing:border-box; background:linear-gradient(90deg,#0F6CBD 50%, transparent 50%);"></span><span style="font-size:13px; color:#1B1F24; font-weight:600;">Planning release 2.4</span>
-              <span style="width:14px; height:14px; border-radius:50%; border:1.5px solid #A9B2BD; box-sizing:border-box;"></span><span style="font-size:13px; color:#3B4652;">Rondvraag</span>
+          <div style="display:grid; grid-template-columns:1fr 320px; align-items:stretch;">
+            <div style="display:flex; flex-direction:column;">
+              <div style="padding:10px 12px; display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px;"><span style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#7A8494;">Agenda</span><span style="flex:1; height:1px; background:#EDEFF3;"></span><span style="font-size:11px; color:#8A94A0; font-variant-numeric:tabular-nums;">3/5</span></div>
+                <div style="display:grid; grid-template-columns:16px 1fr; gap:8px 8px; align-items:center;">
+                  <span style="width:14px; height:14px; border-radius:50%; background:#0F6CBD;"></span><span style="font-size:13px; color:#8A94A0;">Opening en mededelingen</span>
+                  <span style="width:14px; height:14px; border-radius:50%; background:#0F7B3E; color:#fff; font-size:9px; line-height:14px; text-align:center; font-weight:700;">✓</span><span style="font-size:13px; color:#8A94A0;">Status migratie dicteerserver</span>
+                  <span style="width:14px; height:14px; border-radius:50%; background:#0F6CBD;"></span><span style="font-size:13px; color:#8A94A0;">Privacy-toets Meeting Buddy</span>
+                  <span style="width:14px; height:14px; border-radius:50%; border:1.5px solid #0F6CBD; box-sizing:border-box; background:linear-gradient(90deg,#0F6CBD 50%, transparent 50%);"></span><span style="font-size:13px; color:#1B1F24; font-weight:600;">Planning release 2.4</span>
+                  <span style="width:14px; height:14px; border-radius:50%; border:1.5px solid #A9B2BD; box-sizing:border-box;"></span><span style="font-size:13px; color:#3B4652;">Rondvraag</span>
+                </div>
+              </div>
+              <div style="padding:10px 12px 12px; display:flex; flex-direction:column; gap:7px; border-top:1px solid #EDEFF3;">
+                <div style="display:flex; align-items:center; gap:8px;"><span style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#7A8494;">Vragen van anderen</span><span style="flex:1; height:1px; background:#EDEFF3;"></span><span style="font-size:11px; color:#8A94A0;">2</span></div>
+                <div style="display:grid; grid-template-columns:14px 1fr; gap:7px 8px;">
+                  <span style="font-size:12px; font-weight:700; color:#0F6CBD; line-height:1.5;">?</span><span style="font-size:12.5px; line-height:1.5; color:#3B4652;">Wie test de loopback-opname op de laptops van Bureau?</span>
+                  <span style="font-size:12px; font-weight:700; color:#0F6CBD; line-height:1.5;">?</span><span style="font-size:12.5px; line-height:1.5; color:#3B4652;">Blijft 2.4 haalbaar als de migratie uitloopt?</span>
+                </div>
+              </div>
             </div>
-          </div>
-          <div style="padding:10px 12px; display:flex; flex-direction:column; gap:6px; border-top:1px solid #EDEFF3;">
-            <div style="display:flex; align-items:center; gap:8px;"><span style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#7A8494;">Samenvatting</span><span style="flex:1; height:1px; background:#EDEFF3;"></span><span style="font-size:10.5px; color:#A9B2BD;">bijgewerkt 00:34</span></div>
-            <p style="margin:0; font-size:12px; line-height:1.55; color:#3B4652; text-wrap:pretty;">Migratie is afgerond op twee servers na; die volgen komende week. Privacybeoordeling is akkoord mits transcripts lokaal blijven. Release 2.4 schuift mogelijk twee weken op.</p>
-          </div>
-          <div style="padding:10px 12px; display:flex; flex-direction:column; gap:7px; border-top:1px solid #EDEFF3;">
-            <div style="display:flex; align-items:center; gap:8px;"><span style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#7A8494;">Vragen van anderen</span><span style="flex:1; height:1px; background:#EDEFF3;"></span><span style="font-size:11px; color:#8A94A0;">2</span></div>
-            <div style="display:grid; grid-template-columns:14px 1fr; gap:7px 8px;">
-              <span style="font-size:12px; font-weight:700; color:#0F6CBD; line-height:1.5;">?</span><span style="font-size:12.5px; line-height:1.5; color:#3B4652;">Wie test de loopback-opname op de laptops van Bureau?</span>
-              <span style="font-size:12px; font-weight:700; color:#0F6CBD; line-height:1.5;">?</span><span style="font-size:12.5px; line-height:1.5; color:#3B4652;">Blijft 2.4 haalbaar als de migratie uitloopt?</span>
+            <div style="border-left:1px solid #EDEFF3; background:#FCFDFE; padding:10px 14px 12px; display:flex; flex-direction:column; gap:9px;">
+              <div style="display:flex; align-items:center; gap:8px;"><span style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:#7A8494;">Samenvatting</span><span style="flex:1; height:1px; background:#E7EBEF;"></span><span style="font-size:10.5px; color:#A9B2BD;">00:34</span></div>
+              <div style="display:flex; flex-direction:column; gap:9px;">
+                <div style="display:grid; grid-template-columns:6px 1fr; gap:9px; align-items:start;"><span style="width:5px; height:5px; border-radius:50%; background:#0F6CBD; margin-top:6px;"></span><p style="margin:0; font-size:12.5px; line-height:1.55; color:#1B1F24; text-wrap:pretty;">Migratie is klaar op twee servers na; die volgen komende week.</p></div>
+                <div style="display:grid; grid-template-columns:6px 1fr; gap:9px; align-items:start;"><span style="width:5px; height:5px; border-radius:50%; background:#0F6CBD; margin-top:6px;"></span><p style="margin:0; font-size:12.5px; line-height:1.55; color:#1B1F24; text-wrap:pretty;">De privacybeoordeling is akkoord, mits transcripts lokaal blijven.</p></div>
+                <div style="display:grid; grid-template-columns:6px 1fr; gap:9px; align-items:start;"><span style="width:5px; height:5px; border-radius:50%; background:#0F6CBD; margin-top:6px;"></span><p style="margin:0; font-size:12.5px; line-height:1.55; color:#1B1F24; text-wrap:pretty;">Release 2.4 schuift mogelijk twee weken op; besluit staat nog open.</p></div>
+              </div>
+              <span style="flex:1;"></span>
+              <div style="display:flex; align-items:center; gap:8px; padding-top:9px; border-top:1px solid #E7EBEF;"><span style="font-size:10.5px; color:#A9B2BD;">Lokaal model · Qwen</span><span style="flex:1;"></span><span style="font-size:11px; color:#0F6CBD;">Kopiëren</span></div>
             </div>
           </div>
           <div style="padding:7px 12px; display:flex; align-items:center; gap:8px; border-top:1px solid #EDEFF3; background:#FAFBFC;">

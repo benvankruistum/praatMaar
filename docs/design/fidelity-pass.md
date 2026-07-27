@@ -132,6 +132,7 @@ Subdialoog:
 - [x] Samenvatting + Vragen (accent "?") + Hints (max 3, één uitgelicht met strook + BELANGRIJK)
 - [x] Footer: Opname · Transcriptie · lokaal
 - [x] Geminimaliseerd: donkere mini-pill 230×44 (familie #2a) met timer + count + meeting-tag + expand
+- [x] Live samenvatting → tweekoloms 600px (links agenda/vragen, rechts 320px bullets + Kopiëren); zonder samenvatting één kolom 360px
 - [x] Live side-by-side goedgekeurd door gebruiker
 
 ## Agent-prompt (plakken)
