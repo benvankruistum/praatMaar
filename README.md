@@ -146,6 +146,7 @@ python -m pytest
 
 Architectuurtermen: [CONTEXT.md](CONTEXT.md). Beslissingen: [docs/adr/](docs/adr/).
 Huidige status / roadmap: [docs/STATUS.md](docs/STATUS.md).
+Profileren (cycle-timings, py-spy, Scalene): [docs/profiling.md](docs/profiling.md).
 Bijdragen: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licentie

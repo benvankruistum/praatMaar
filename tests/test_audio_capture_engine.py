@@ -400,3 +400,43 @@ def test_callback_failure_marks_capture_error_and_stopped() -> None:
         for event in events
     )
     assert CaptureStopped(session.session_id, reason="error") in events
+
+
+def test_stop_flushes_partial_tail_beyond_overlap() -> None:
+    sounddevice = FakeSoundDevice()
+    engine = AudioCaptureEngine(
+        sounddevice_module=sounddevice,
+        platform_name="win32",
+    )
+    session = engine.start_session()
+    events: list[object] = []
+    engine.subscribe(session.session_id, events.append)
+
+    state = engine._require_session(session.session_id)
+    # overlap = 0.8s; schrijf 2s zodat flush iets na de retain emit.
+    state.buffer.write(np.zeros(SAMPLE_RATE * 2, dtype=np.float32), start_ms=0)
+    engine.stop_session(session.session_id)
+
+    chunks = [e.chunk for e in events if isinstance(e, AudioChunkReceived)]
+    assert len(chunks) == 1
+    assert chunks[0].start_ms == 0
+    assert chunks[0].end_ms == 2000
+    assert CaptureStopped(session.session_id, reason="user") in events
+
+
+def test_stop_skips_flush_when_only_overlap_remain() -> None:
+    sounddevice = FakeSoundDevice()
+    engine = AudioCaptureEngine(
+        sounddevice_module=sounddevice,
+        platform_name="win32",
+    )
+    session = engine.start_session()
+    events: list[object] = []
+    engine.subscribe(session.session_id, events.append)
+
+    state = engine._require_session(session.session_id)
+    overlap = SAMPLE_RATE * CHUNK_OVERLAP_MS // 1000
+    state.buffer.write(np.zeros(overlap, dtype=np.float32), start_ms=0)
+    engine.stop_session(session.session_id)
+
+    assert not any(isinstance(e, AudioChunkReceived) for e in events)

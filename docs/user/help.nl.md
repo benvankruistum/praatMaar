@@ -60,9 +60,9 @@ Rechtsklik op het praatMaar-icoon in het systeemvak:
 
 Via **Modules** in het systeemvak kun je uitbreidingen aan- of uitzetten en
 **incrementele transcriptie** inschakelen. Whisper draait dan al tijdens je
-opname op de achtergrond (tussentijdse tekst voor modules/tools). Bij stop wordt
-de laatste tussentijdse tekst als eindtranscript gebruikt — sneller, maar de
-laatste seconden na die tussentijdse run kunnen ontbreken.
+opname op de achtergrond (tussentijdse tekst voor modules/tools). Bij stop volgt
+altijd nog een finale transcriptie over de hele opname, zodat het eindstuk niet
+ontbreekt.
 
 **Event-journal:** elke dicteercyclus wordt als JSON-regels weggeschreven in
 `%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). Externe
@@ -106,14 +106,22 @@ acties.
 
 Tijdens een meeting groeit het transcript als `.md` onder
 `%APPDATA%\praatMaar\meeting-buddy\transcripts\` (alleen definitieve tekst;
-aanpasbaar via Eigenschappen). Bij stoppen volgt een melding met het pad.
+aanpasbaar via Eigenschappen). Bij stoppen volgt een melding met het pad; de
+laatste audiobuffer en openstaande transcriptie-chunks worden eerst nog
+verwerkt.
 
 ### Local LLM, live samenvatting en agenda-review
 
 Optioneel (standaard uit): schakel **Local LLM** in via **Modules**. Die module
-gebruikt [Ollama](https://ollama.com/) met een lokaal Qwen-model. Via de
-Modules-acties kun je status controleren, installatiehulp openen en het model
-downloaden. Zonder klaar Local LLM blijft Meeting Buddy bij heuristische hints.
+gebruikt [Ollama](https://ollama.com/). Via **Eigenschappen** kies je:
+
+- **Standaard (lokaal Ollama):** `http://127.0.0.1:11434` + model `qwen2.5:7b`
+- **Eigen Ollama-server:** zelfde Ollama-API, andere basis-URL (host + poort) en
+  modelnaam — handig voor een zwaarder model op deze machine of in het LAN
+
+Via de Modules-acties kun je status controleren, installatiehulp openen en het
+model downloaden (lokaal `ollama pull`). Zonder klaar Local LLM blijft Meeting
+Buddy bij heuristische hints.
 
 Met Local LLM klaar kun je in Meeting Buddy-**Eigenschappen** live samenvatting
 en agenda-review aanzetten (standaard uit):

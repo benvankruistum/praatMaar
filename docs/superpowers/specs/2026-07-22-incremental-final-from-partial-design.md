@@ -1,58 +1,39 @@
 # Design: incrementeel finaal uit laatste partial
 
 Datum: 2026-07-22  
-Status: approved
+Status: **superseded** (2026-07-25) — bij stop opnieuw volle Whisper; anders mist
+het eindstuk (in de praktijk vaak ≫ interval zodra de buffer groeit).
 
 ## Probleem
 
 `incremental_transcription` draait Whisper periodiek tijdens opname en emitteert
-`transcript.partial`, maar bij stop wordt de hele buffer opnieuw getranscribeerd.
-Dat maakt de feature nuttig voor externe consumers, niet voor snellere eindtijd.
+`transcript.partial`, maar bij stop werd de hele buffer opnieuw getranscribeerd.
+Dat maakte de feature nuttig voor externe consumers, niet voor snellere eindtijd.
 
-## Beslissing (optie C)
+## Oorspronkelijke beslissing (optie C) — ingetrokken
 
 Bij stop met incrementele transcriptie **aan** en minstens één geslaagde partial:
 
 - gebruik de **laatste partialtekst** als finaal transcript;
 - **geen** nieuwe Whisper-run;
-- audio ná die partial (vaak ≤ ~interval) wordt **niet** meegenomen.
+- audio ná die partial wordt **niet** meegenomen.
 
-Zonder partial (te kort / eerste cycle nog niet klaar): fallback naar volledige
-Whisper zoals nu. Incremental uit: ongewijzigd.
+Aanname “vaak ≤ ~interval” bleek onjuist bij langere opnames (model `medium`):
+elke partial hertranscribeert de groeiende buffer, dus de gap tot stop loopt op
+(bijv. ~15 s missing op ~51 s opname).
 
-## Gedrag
+## Huidig gedrag (vervanging)
 
-### Tijdens opname
+- Tijdens opname: ongewijzigd — periodieke partials over de hele buffer.
+- Bij stop: **altijd** `_transcribe_audio` over alle chunks (ook met partials).
+- Partials blijven voor modules/event-journal; eindtekst is altijd de finale run.
 
-Ongewijzigd: ~elke 3 s Whisper over de hele buffer → `transcript.partial`.
-Sessie onthoudt de laatste niet-lege partialtekst (gewist bij start/cancel).
+## Buiten scope (ongewijzigd)
 
-### Bij stop
-
-1. Incremental worker stoppen (join met timeout), zodat een in-flight partial
-   nog kan landen als laatste tekst.
-2. Als laatste partial aanwezig: eindpad met die tekst (bestemmingscommando,
-   save, plakken, events) **zonder** `model.transcribe`.
-3. Anders: bestaande `_transcribe_audio` over alle chunks.
-
-Eventketen blijft: `cycle.transcribing` → `cycle.completed` /
-`transcript.saved` / … (geen nieuw event-type). Partials blijven tussentijds;
-finaal is de gekozen partialtekst (of volle Whisper-fallback).
-
-## Buiten scope
-
-- Staart apart transcriberen en plakken (optie A)
+- Staart apart transcriberen en aan de partial plakken (optie A)
 - UI die partials toont
 - Wijziging van interval/min-seconden defaults
 
-## Tests
-
-- Met partial + stop → geen extra Whisper-call; save bevat partialtekst
-- Zonder partial + stop → wel Whisper
-- Incremental uit → wel Whisper
-- Partials blijven events zonder save tijdens opname
-
 ## Docs
 
-Help nl/en/de + modules-design/integration + i18n-label: uitleggen dat eindtijd
-sneller kan en dat de laatste seconden na de partial kunnen ontbreken.
+Help nl/en/de + Modules-label: incrementeel = tussentijds; finaal altijd volledig.

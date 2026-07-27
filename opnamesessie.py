@@ -8,9 +8,10 @@ toestanden aandrijft. Toetsenbordrouting blijft in `dictation.py`.
 Elke cyclus krijgt een `session_id` (UUID). Optioneel `emit_event` stuurt
 `CycleEvent`-payloads naar de module-bus (zie `modules/`). Met
 `incremental_transcription` draait tussentijdse Whisper op de achtergrond
-tijdens opname (`transcript.partial`); bij stop wordt de laatste partial
-als finaal gebruikt (geen tweede volle Whisper-run; audio ná die partial
-kan ontbreken).
+tijdens opname (`transcript.partial` voor modules/tools). Bij stop volgt
+altijd een finale Whisper-run over de volledige buffer — anders ontbreekt
+audio die ná de laatste partial is opgenomen (vaak meer dan één interval
+zodra de buffer groeit).
 
 OS-plakken gaat via een geïnjecteerde `Host` (zie `docs/adr/0001-platform-seam.md`),
 zodat tests een `FakeHost` kunnen steken.
@@ -25,6 +26,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -58,6 +60,40 @@ class Host(Protocol):
 
 
 NotifyFn = Callable[[RecordingState], None] | Callable[[RecordingState, str | None], None]
+
+
+@dataclass
+class CycleTiming:
+    """Fase-tijden van één dicteercyclus (na stop), voor `praatMaar.log`."""
+
+    session_id: str
+    path: str  # "full" | "partial"
+    record_s: float
+    stop_at: float
+    stop_join_s: float
+    wav_s: float | None = None
+    whisper_s: float | None = None
+    deliver_s: float | None = None
+
+    def log(self) -> None:
+        print(format_cycle_timing(self))
+
+
+def format_cycle_timing(timing: CycleTiming) -> str:
+    """Machine-leesbare timingregel; zie `docs/profiling.md`."""
+
+    sid = (timing.session_id or "?")[:8]
+
+    def _fmt(value: float | None) -> str:
+        return "—" if value is None else f"{value:.3f}s"
+
+    total = max(0.0, time.perf_counter() - timing.stop_at)
+    return (
+        f"cycle.timing id={sid} path={timing.path} "
+        f"record={timing.record_s:.3f}s stop_join={timing.stop_join_s:.3f}s "
+        f"wav={_fmt(timing.wav_s)} whisper={_fmt(timing.whisper_s)} "
+        f"deliver={_fmt(timing.deliver_s)} total_after_stop={total:.3f}s"
+    )
 
 
 class Opnamesessie:
@@ -581,6 +617,8 @@ class Opnamesessie:
     def stop_and_transcribe(self) -> None:
         """Stopt de opname en start de transcriptie."""
 
+        stop_at = time.perf_counter()
+
         with self._lock:
             if not self._recording:
                 return
@@ -588,6 +626,7 @@ class Opnamesessie:
             self._recording = False
             started_at = self._recording_started_at
             self._recording_started_at = None
+            session_id = self._session_id or ""
 
         duration = 0.0
         if started_at is not None:
@@ -633,25 +672,27 @@ class Opnamesessie:
         self._release_stream_if_cold()
         self._notify(RecordingState.TRANSCRIBING, self.mode)
 
-        # Join zodat een in-flight partial nog als laatste tekst kan landen.
+        # Join zodat een in-flight partial nog kan landen (events); finaal
+        # transcript komt altijd uit een volle Whisper-run over alle chunks.
         self._stop_incremental_worker(wait=True)
+        stop_join_s = time.perf_counter() - stop_at
 
         with self._lock:
-            partial = self._last_partial_transcript
             self._last_partial_transcript = None
 
-        if self.incremental_transcription and partial:
-            thread = threading.Thread(
-                target=self._finalize_from_partial,
-                args=(partial,),
-                daemon=True,
-            )
-        else:
-            thread = threading.Thread(
-                target=self._transcribe_audio,
-                args=(chunks_to_process,),
-                daemon=True,
-            )
+        timing = CycleTiming(
+            session_id=session_id,
+            path="full",
+            record_s=duration,
+            stop_at=stop_at,
+            stop_join_s=stop_join_s,
+        )
+
+        thread = threading.Thread(
+            target=self._transcribe_audio,
+            args=(chunks_to_process, timing),
+            daemon=True,
+        )
         thread.start()
 
     def cancel(self) -> None:
@@ -699,32 +740,6 @@ class Opnamesessie:
         temporary_path = Path(temporary_file.name)
         write_wav(temporary_path, self.sample_rate, audio_int16)
         return temporary_path
-
-    def _finalize_from_partial(self, transcript: str) -> None:
-        """Rondt de cyclus af met de laatste partial (geen Whisper bij stop)."""
-
-        final_state = RecordingState.IDLE
-        error_message: str | None = None
-
-        try:
-            print(i18n.t("rec.transcribing"))
-            self._apply_transcript(transcript)
-        except Exception as exc:
-            final_state = RecordingState.ERROR
-            error_message = str(exc)
-            print()
-            print(i18n.t("rec.transcribe_error"))
-            print(i18n.t("rec.error", error=exc))
-        finally:
-            with self._lock:
-                self._processing = False
-
-            self._notify(final_state)
-            if error_message is not None:
-                self._event(CycleEventType.CYCLE_ERROR, error=error_message)
-            self._event(CycleEventType.CYCLE_IDLE)
-            self._session_id = None
-            self.on_ready()
 
     def _apply_transcript(self, transcript: str) -> None:
         """Bestemmingscommando, save, plakken en completion-events voor klaar tekst."""
@@ -806,7 +821,7 @@ class Opnamesessie:
                 if saved_path is not None:
                     print(i18n.t("rec.and_saved", path=saved_path))
 
-    def _transcribe_audio(self, chunks: list[Any]) -> None:
+    def _transcribe_audio(self, chunks: list[Any], timing: CycleTiming) -> None:
         """Transcribeert de opgenomen audio lokaal met Faster-Whisper."""
 
         temporary_path: Path | None = None
@@ -822,7 +837,11 @@ class Opnamesessie:
             duration_seconds = sample_count / float(self.sample_rate)
             last_logged_bucket = -1
 
+            wav_started = time.perf_counter()
             temporary_path = self.create_temporary_wav(chunks)
+            timing.wav_s = time.perf_counter() - wav_started
+
+            whisper_started = time.perf_counter()
             with self._whisper.locked_model() as model:
                 segments, _info = model.transcribe(
                     str(temporary_path),
@@ -844,9 +863,12 @@ class Opnamesessie:
                     text = segment.text.strip()
                     if text:
                         text_parts.append(text)
+            timing.whisper_s = time.perf_counter() - whisper_started
 
             set_transcription_progress(100)
+            deliver_started = time.perf_counter()
             self._apply_transcript(" ".join(text_parts).strip())
+            timing.deliver_s = time.perf_counter() - deliver_started
 
         except Exception as exc:
             final_state = RecordingState.ERROR
@@ -870,6 +892,7 @@ class Opnamesessie:
                     except OSError as exc:
                         print(i18n.t("rec.temp_delete_warn", error=exc))
 
+            timing.log()
             with self._lock:
                 self._processing = False
 

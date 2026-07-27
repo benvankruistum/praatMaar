@@ -17,8 +17,9 @@ from modules._contract import CycleEvent, ModuleAction, ModuleContext
 from modules.capabilities.semantic_analysis import CAPABILITY_ID, CONTRACT_VERSION
 from ui.dialogs import message
 
-from .config import DEFAULT_MODEL, load_local_llm_config
+from .config import DEFAULT_MODEL, load_local_llm_config, save_local_llm_config
 from .ollama_client import OllamaClient, OllamaError
+from .properties_dialog import show_properties_dialog
 from .provider import OllamaSemanticAnalysis
 
 log = logging.getLogger("praatmaar.local_llm")
@@ -49,16 +50,7 @@ class LocalLlmModule:
         self._app_dir = ctx.app_dir
         self._capabilities = ctx.capabilities
         self._ui_dispatch = ctx.ui_dispatch
-        cfg = load_local_llm_config(ctx.app_dir)
-        self._client = OllamaClient(cfg["ollama_base_url"])
-        self._provider = OllamaSemanticAnalysis(self._client, model=cfg["ollama_model"])
-        if self._provider.is_ready():
-            self._register()
-        else:
-            log.info(
-                "local-llm: Ollama/model niet klaar (model=%s); capability niet geregistreerd",
-                cfg["ollama_model"],
-            )
+        self._reload_provider()
 
     def on_event(self, event: CycleEvent) -> None:
         return None
@@ -71,6 +63,12 @@ class LocalLlmModule:
 
     def actions(self) -> list[ModuleAction]:
         return [
+            ModuleAction(
+                id="properties",
+                label_key="modules.local_llm.actions.properties",
+                handler=self.open_properties,
+                in_tray=True,
+            ),
             ModuleAction(
                 id="check_status",
                 label_key="modules.local_llm.actions.check_status",
@@ -90,6 +88,11 @@ class LocalLlmModule:
                 in_tray=False,
             ),
         ]
+
+    def open_properties(self) -> None:
+        if self._ui_dispatch is None:
+            raise RuntimeError("local-llm is niet gestart")
+        self._ui_dispatch(self._show_properties_dialog)
 
     def check_status(self) -> None:
         import i18n
@@ -131,22 +134,71 @@ class LocalLlmModule:
             i18n.t("modules.local_llm.status.pull_started", model=model),
         )
 
+    def _show_properties_dialog(self) -> None:
+        cfg = load_local_llm_config(self._require_app_dir())
+        result = show_properties_dialog(
+            endpoint_mode=str(cfg["endpoint_mode"]),
+            custom_base_url=str(cfg["custom_base_url"]),
+            custom_model=str(cfg["custom_model"]),
+        )
+        if result is None:
+            return
+        if result.endpoint_mode == "custom":
+            save_local_llm_config(
+                self._require_app_dir(),
+                endpoint_mode=result.endpoint_mode,
+                ollama_base_url=result.ollama_base_url,
+                ollama_model=result.ollama_model,
+            )
+        else:
+            save_local_llm_config(
+                self._require_app_dir(),
+                endpoint_mode=result.endpoint_mode,
+            )
+        self._reload_provider()
+
+    def _reload_provider(self) -> None:
+        """Herlaadt URL/model uit config en (her)registreert de capability."""
+
+        cfg = load_local_llm_config(self._require_app_dir())
+        if self._capabilities is not None:
+            try:
+                self._capabilities.unregister(CAPABILITY_ID, self.id)
+            except ValueError:
+                self._capabilities.unregister_owner(self.id)
+
+        self._client = OllamaClient(cfg["ollama_base_url"])
+        self._provider = OllamaSemanticAnalysis(self._client, model=cfg["ollama_model"])
+        if self._provider.is_ready():
+            self._register()
+        else:
+            log.info(
+                "local-llm: Ollama/model niet klaar (url=%s model=%s); capability niet geregistreerd",
+                cfg["ollama_base_url"],
+                cfg["ollama_model"],
+            )
+
     def _status_message(self) -> str:
         import i18n
 
+        # Altijd verse config (na eigenschappen-wijziging zonder aparte herstart).
+        self._reload_provider()
         cfg = load_local_llm_config(self._require_app_dir())
         client = self._client or OllamaClient(cfg["ollama_base_url"])
         try:
             tags = client.tags()
         except OllamaError:
-            return i18n.t("modules.local_llm.status.ollama_offline")
+            return i18n.t(
+                "modules.local_llm.status.ollama_offline",
+                url=cfg["ollama_base_url"],
+            )
         model = cfg["ollama_model"]
         if client.has_model(model):
-            if self._capabilities is not None and self._capabilities.get(CAPABILITY_ID) is None:
-                self._provider = OllamaSemanticAnalysis(client, model=model)
-                self._client = client
-                self._register()
-            return i18n.t("modules.local_llm.status.ready", model=model)
+            return i18n.t(
+                "modules.local_llm.status.ready",
+                model=model,
+                url=cfg["ollama_base_url"],
+            )
         return i18n.t(
             "modules.local_llm.status.model_missing",
             model=model,

@@ -62,8 +62,8 @@ Rechtsklick auf das praatMaar-Symbol im Infobereich:
 Unter **Module** im Infobereich schalten Sie Erweiterungen ein oder aus und
 aktivieren optional **inkrementelle Transkription**. Whisper läuft dann bereits
 während der Aufnahme im Hintergrund (Zwischentext für Module/Tools). Beim Stoppen
-wird der letzte Zwischentext zum Endtranskript — schneller, aber die letzten
-Sekunden nach diesem Zwischenlauf können fehlen.
+folgt immer eine finale Transkription der gesamten Aufnahme, damit das Ende nicht
+fehlt.
 
 **Event-Journal:** jeder Diktierzyklus wird als JSON-Zeilen nach
 `%APPDATA%\praatMaar\events\events.jsonl` geschrieben (macOS: Application Support).
@@ -108,15 +108,22 @@ Aktionen.
 
 Während eines Meetings wächst das Transkript als `.md` unter
 `%APPDATA%\praatMaar\meeting-buddy\transcripts\` (nur finale Texte; änderbar
-unter Eigenschaften). Beim Stoppen erscheint eine Meldung mit dem Pfad.
+unter Eigenschaften). Beim Stoppen erscheint eine Meldung mit dem Pfad; der
+letzte Audiopuffer und offene Transkriptions-Chunks werden zuerst noch
+verarbeitet.
 
 ### Local LLM, Live-Zusammenfassung und Agenda-Review
 
 Optional (standardmäßig aus): aktivieren Sie **Local LLM** unter **Module**.
-Das Modul nutzt [Ollama](https://ollama.com/) mit einem lokalen Qwen-Modell.
+Das Modul nutzt [Ollama](https://ollama.com/). Unter **Eigenschaften** wählen Sie:
+
+- **Standard (lokales Ollama):** `http://127.0.0.1:11434` + Modell `qwen2.5:7b`
+- **Eigener Ollama-Server:** dieselbe Ollama-API, andere Basis-URL (Host + Port)
+  und Modellname — z. B. für ein schwereres Modell auf diesem Rechner oder im LAN
+
 Über Modulaktionen prüfen Sie den Status, öffnen Installationshilfe und laden
-das Modell herunter. Ohne bereites Local LLM bleibt Meeting Buddy bei
-heuristischen Hinweisen.
+das Modell herunter (lokales `ollama pull`). Ohne bereites Local LLM bleibt
+Meeting Buddy bei heuristischen Hinweisen.
 
 Mit bereitem Local LLM schalten Sie Live-Zusammenfassung und Agenda-Review unter
 Meeting-Buddy-**Eigenschaften** ein (standardmäßig aus):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from collections import deque
 from collections.abc import Callable
@@ -31,6 +32,8 @@ from modules.whisper import SharedWhisper
 MAX_WHISPER_QUEUE_DURATION_S = 10.0
 # Meerdere capture-chunks in één Whisper-call: minder overhead, beter realtime-houden.
 MAX_TRANSCRIBE_BATCH_MS = 24_000
+# Bij stop: niet eindeloos wachten als dicteren/model de lock vasthoudt.
+_FLUSH_BUSY_TIMEOUT_S = 2.0
 
 log = logging.getLogger("praatmaar.speech_to_text")
 
@@ -138,7 +141,10 @@ class IncrementalSpeechToText:
                 state.handlers.remove(handler)
 
     def stop_session(self, session_id: str) -> None:
-        state = self._require_session(session_id)
+        with self._lock:
+            state = self._sessions.get(session_id)
+            if state is None:
+                raise ValueError(f"Onbekende transcriptiesessie: {session_id}")
         # Zonder _lock: enqueue-callback kan _lock vasthouden in _trim_queue.
         state.stopping = True
         with state.drain_wakeup:
@@ -148,7 +154,7 @@ class IncrementalSpeechToText:
             state.callback_condition.wait_for(lambda: state.active_callbacks == 0)
         thread = state.drain_thread
         if thread is not None and thread is not current_thread():
-            thread.join(timeout=30)
+            thread.join(timeout=120)
         with state.drain_lock:
             with self._lock:
                 state.queue.clear()
@@ -179,7 +185,9 @@ class IncrementalSpeechToText:
                 if state.stopping:
                     return
                 state.queue.append(event.chunk)
-                gaps = self._trim_queue(state)
+            # Trim buiten de lock zodat stop_session `stopping` kan zetten terwijl
+            # een test/callback in trim wacht.
+            gaps = self._trim_queue(state)
             if gaps:
                 self._set_status(state, TranscriptionStatus.DELAYED)
                 for gap in gaps:
@@ -193,6 +201,7 @@ class IncrementalSpeechToText:
                     state.callback_condition.notify_all()
 
     def _drain_loop(self, state: _TranscriptionState) -> None:
+        busy_since: float | None = None
         while True:
             with state.drain_wakeup:
                 while True:
@@ -202,39 +211,62 @@ class IncrementalSpeechToText:
                     if stopping or has_work:
                         break
                     state.drain_wakeup.wait(timeout=0.5)
-            if state.stopping:
-                # Stop discards remaining queue; don't drain further.
-                return
             if has_work:
                 blocked = self._drain_queue(state)
                 if blocked:
+                    now = time.monotonic()
+                    if stopping:
+                        if busy_since is None:
+                            busy_since = now
+                        elif now - busy_since >= _FLUSH_BUSY_TIMEOUT_S:
+                            with self._lock:
+                                dropped = len(state.queue)
+                                state.queue.clear()
+                            if dropped:
+                                log.warning(
+                                    "STT flush timeout (model bezet): %s chunk(s) gedropt (sessie %s)",
+                                    dropped,
+                                    state.session_id,
+                                )
+                            return
+                    else:
+                        busy_since = None
                     with state.drain_wakeup:
                         state.drain_wakeup.wait(timeout=0.25)
+                    continue
+                busy_since = None
+                continue
+            if stopping:
+                # Wachtrij leeg na stop: flush klaar.
+                return
 
     def _trim_queue(self, state: _TranscriptionState) -> list[TranscriptGap]:
         gaps: list[TranscriptGap] = []
-        while (
-            state.queue
-            and state.queue[-1].end_ms - state.queue[0].start_ms > state.max_queue_duration_ms
-        ):
-            dropped = state.queue.popleft()
-            gap_end_ms = (
-                min(dropped.end_ms, state.queue[0].start_ms) if state.queue else dropped.end_ms
-            )
-            gaps.append(
-                TranscriptGap(
-                    session_id=state.session_id,
-                    start_ms=dropped.start_ms,
-                    end_ms=gap_end_ms,
-                    reason="whisper_queue_overflow",
+        with self._lock:
+            if state.stopping:
+                return gaps
+            while (
+                state.queue
+                and state.queue[-1].end_ms - state.queue[0].start_ms > state.max_queue_duration_ms
+            ):
+                dropped = state.queue.popleft()
+                gap_end_ms = (
+                    min(dropped.end_ms, state.queue[0].start_ms) if state.queue else dropped.end_ms
                 )
-            )
-            log.warning(
-                "STT-wachtrij vol: drop %sms–%sms (sessie %s)",
-                dropped.start_ms,
-                gap_end_ms,
-                state.session_id,
-            )
+                gaps.append(
+                    TranscriptGap(
+                        session_id=state.session_id,
+                        start_ms=dropped.start_ms,
+                        end_ms=gap_end_ms,
+                        reason="whisper_queue_overflow",
+                    )
+                )
+                log.warning(
+                    "STT-wachtrij vol: drop %sms–%sms (sessie %s)",
+                    dropped.start_ms,
+                    gap_end_ms,
+                    state.session_id,
+                )
         return gaps
 
     def _drain_queue(self, state: _TranscriptionState) -> bool:
@@ -280,12 +312,11 @@ class IncrementalSpeechToText:
     def _drain_queue_serially(self, state: _TranscriptionState) -> bool:
         while True:
             with self._lock:
-                if state.stopping:
-                    return False
                 queue_empty = not state.queue
                 was_delayed = state.status == TranscriptionStatus.DELAYED
+                stopping = state.stopping
             if queue_empty:
-                if was_delayed:
+                if was_delayed and not stopping:
                     self._set_status(state, TranscriptionStatus.ACTIVE)
                 return False
 
@@ -311,20 +342,16 @@ class IncrementalSpeechToText:
                     else:
                         text = self._transcribe_fn(model, batch[0]).strip()
                 except Exception as exc:
-                    with self._lock:
-                        if state.stopping:
-                            return False
                     log.exception("Transcriptie faalde voor sessie %s", state.session_id)
-                    self._set_status(
-                        state,
-                        TranscriptionStatus.ERROR,
-                        f"Whisper transcription failed: {exc}",
-                    )
+                    if not stopping:
+                        self._set_status(
+                            state,
+                            TranscriptionStatus.ERROR,
+                            f"Whisper transcription failed: {exc}",
+                        )
                     return False
 
             with self._lock:
-                if state.stopping:
-                    return False
                 state.sequence += 1
                 sequence = state.sequence
             if text:
@@ -366,7 +393,8 @@ class IncrementalSpeechToText:
 
     def _publish(self, state: _TranscriptionState, event: object) -> None:
         with self._lock:
-            if state.stopping:
+            # Tijdens stop-flush: deltas wél doorlaten; status/gaps niet meer.
+            if state.stopping and not isinstance(event, TranscriptDeltaReceived):
                 return
             handlers = list(state.handlers)
         if self._on_event is not None:

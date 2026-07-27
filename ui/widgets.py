@@ -15,7 +15,12 @@ class FlowLayout(QLayout):
     """Left-to-right layout that wraps items to the next row (canvas action rows)."""
 
     def __init__(
-        self, parent: QWidget | None = None, *, margin: int = 0, hspacing: int = 6, vspacing: int = 6
+        self,
+        parent: QWidget | None = None,
+        *,
+        margin: int = 0,
+        hspacing: int = 6,
+        vspacing: int = 6,
     ) -> None:
         super().__init__(parent)
         self._items: list[QLayoutItem] = []
@@ -75,6 +80,7 @@ class FlowLayout(QLayout):
             x = next_x
             line_height = max(line_height, hint.height())
         return y + line_height - rect.y() + margins.bottom()
+
 
 _TRACK_W = 34
 _TRACK_H = 19

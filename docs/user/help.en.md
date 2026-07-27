@@ -59,9 +59,8 @@ Right-click the praatMaar icon in the system tray:
 
 From **Modules** in the system tray you can turn extensions on or off and enable
 **incremental transcription**. Whisper then runs in the background while you
-record (interim text for modules/tools). On stop, the last interim text becomes
-the final transcript — faster, but the last seconds after that interim run may
-be missing.
+record (interim text for modules/tools). On stop, a final transcription always
+runs over the full recording so the trailing audio is not dropped.
 
 **Event journal:** every dictation cycle is appended as JSON lines to
 `%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). External
@@ -103,14 +102,21 @@ tray also has **Meeting Buddy ▸** with the same actions.
 
 During a meeting the transcript grows as a `.md` file under
 `%APPDATA%\praatMaar\meeting-buddy\transcripts\` (final text only; changeable
-in Properties). On stop you get a notification with the path.
+in Properties). On stop you get a notification with the path; the last audio
+buffer and pending transcription chunks are flushed first.
 
 ### Local LLM, live summary, and agenda review
 
 Optional (off by default): enable **Local LLM** under **Modules**. It uses
-[Ollama](https://ollama.com/) with a local Qwen model. Module actions let you
-check status, open install help, and download the model. Without a ready Local
-LLM, Meeting Buddy stays on heuristic hints.
+[Ollama](https://ollama.com/). Under **Properties** choose:
+
+- **Default (local Ollama):** `http://127.0.0.1:11434` + model `qwen2.5:7b`
+- **Custom Ollama server:** same Ollama API, different base URL (host + port) and
+  model name — useful for a heavier model on this machine or on the LAN
+
+Module actions let you check status, open install help, and download the model
+(local `ollama pull`). Without a ready Local LLM, Meeting Buddy stays on
+heuristic hints.
 
 With Local LLM ready, turn on live summary and agenda review in Meeting Buddy
 **Properties** (off by default):

@@ -219,10 +219,10 @@ def test_stop_attempts_every_cleanup_step_and_always_clears_state(
     orchestrator.stop()
 
     assert calls == [
+        "stop_capture",
+        "stop_stt",
         "unsubscribe_stt",
         "unsubscribe_capture",
-        "stop_stt",
-        "stop_capture",
         "log",
         "ui",
     ]

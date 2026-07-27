@@ -42,3 +42,21 @@ def test_read_window_retains_overlap_for_next_chunk() -> None:
     assert second is not None
     assert second.start_ms == 2_500
     assert second.samples[0] == 40_000
+
+
+def test_read_remaining_returns_tail() -> None:
+    buf = RingBuffer(max_duration_s=10, sample_rate=16_000)
+    buf.write(np.arange(5_000, dtype=np.float32), start_ms=100)
+    tail = buf.read_remaining(min_samples=1)
+    assert tail is not None
+    assert tail.start_ms == 100
+    assert tail.samples.size == 5_000
+    assert buf.available_samples == 0
+    assert buf.read_remaining(min_samples=1) is None
+
+
+def test_read_remaining_respects_min_samples() -> None:
+    buf = RingBuffer(max_duration_s=10, sample_rate=16_000)
+    buf.write(np.zeros(100, dtype=np.float32), start_ms=0)
+    assert buf.read_remaining(min_samples=101) is None
+    assert buf.available_samples == 100

@@ -120,6 +120,21 @@ class RingBuffer:
             self._start_ms += round(consumed * 1000 / self._sample_rate)
         return BufferedWindow(start_ms=start_ms, samples=samples)
 
+    def read_remaining(self, *, min_samples: int = 1) -> BufferedWindow | None:
+        """Leest alle resterende samples (voor flush bij stop)."""
+
+        if min_samples < 1:
+            raise ValueError("min_samples moet minstens 1 zijn")
+        with self._lock:
+            if self._samples.size < min_samples:
+                return None
+            start_ms = self._start_ms
+            samples = self._samples.copy()
+            duration_ms = round(int(samples.size) * 1000 / self._sample_rate)
+            self._samples = np.empty(0, dtype=np.float32)
+            self._start_ms = start_ms + duration_ms
+        return BufferedWindow(start_ms=start_ms, samples=samples)
+
 
 @dataclass
 class _CaptureState:
@@ -291,8 +306,35 @@ class AudioCaptureEngine:
         worker = state.worker
         if worker is not None and worker is not threading.current_thread():
             worker.join(timeout=2)
+        # Laatste (partiële) chunk vóór CaptureStopped, zodat STT die nog meekrijgt.
+        self._flush_tail_chunk(state)
         self._set_status(state, CaptureStatus.STOPPED)
         self._publish(state, CaptureStopped(session_id=session_id, reason="user"))
+
+    def _flush_tail_chunk(self, state: _CaptureState) -> None:
+        """Emit residual buffer audio beyond the retained overlap window."""
+
+        overlap_samples = SAMPLE_RATE * CHUNK_OVERLAP_MS // 1000
+        # Alleen flushen als er audio ná de overlap-retain staat (nieuw eindstuk).
+        window = state.buffer.read_remaining(min_samples=overlap_samples + 1)
+        if window is None:
+            return
+        duration_ms = round(int(window.samples.size) * 1000 / SAMPLE_RATE)
+        chunk = AudioChunk(
+            session_id=state.session_id,
+            chunk_id=str(uuid.uuid4()),
+            start_ms=window.start_ms,
+            end_ms=window.start_ms + duration_ms,
+            sample_rate=SAMPLE_RATE,
+            pcm_f32=window.samples.astype("<f4", copy=False).tobytes(),
+        )
+        self._publish(state, AudioChunkReceived(chunk=chunk))
+        log.info(
+            "Capture flush bij stop: %sms–%sms (sessie %s)",
+            chunk.start_ms,
+            chunk.end_ms,
+            state.session_id,
+        )
 
     def get_status(self, session_id: str) -> CaptureStatus:
         return self._require_session(session_id).status
