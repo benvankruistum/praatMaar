@@ -95,8 +95,9 @@ def summary_points(text: str, *, limit: int = 3) -> list[str]:
     ]
     if len(lines) > 1:
         return lines[:limit]
-    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", cleaned) if part.strip()]
-    return sentences[:limit] if sentences else [cleaned]
+    base = lines[0] if lines else cleaned
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", base) if part.strip()]
+    return sentences[:limit] if sentences else [base]
 
 
 class _StatusDot(QWidget):
@@ -487,11 +488,19 @@ class MeetingBuddyOverlay:
         self.window.deleteLater()
 
     @staticmethod
-    def _clear_layout(layout: QVBoxLayout) -> None:
+    def _clear_layout(layout: Any) -> None:
         while layout.count():
             item = layout.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+                continue
+            child = item.layout()
+            if child is not None:
+                # Rows added via addLayout() hold their own widgets; clear those
+                # too, otherwise they stay parented and pile up on every update.
+                MeetingBuddyOverlay._clear_layout(child)
+                child.deleteLater()
 
     def _render_topics(self, topics: Sequence[Topic]) -> None:
         self._clear_layout(self._topics_body)
@@ -539,13 +548,7 @@ class MeetingBuddyOverlay:
 
     def _render_summary(self, summary: str, *, enabled: bool = False) -> None:
         self._summary_text = (summary or "").strip()
-        while self._summary_bullets.count():
-            item = self._summary_bullets.takeAt(0)
-            if item.layout() is not None:
-                self._clear_layout(item.layout())
-                item.layout().deleteLater()
-            elif item.widget() is not None:
-                item.widget().deleteLater()
+        self._clear_layout(self._summary_bullets)
         if not enabled:
             self._summary_col.hide()
             return
