@@ -38,7 +38,7 @@ Aandachtspunten, nog niet als distributie-build geverifieerd:
 - **Modules:** in-process uitbreidingen + event-journal (`modules/`, tray **Modules**);
   inbox-spiegel; optionele incrementele transcriptie tijdens opname
   ([ADR-0003](adr/0003-hybrid-module-system.md))
-- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.1.0`; volgende `v0.2.0`)
+- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.2.0`; volgende `v0.3.0`)
 
 ## Experimentele modules
 
@@ -91,7 +91,7 @@ Gatekeeper (zie roadmap).
 
 ## Open / roadmap
 
-1. Tag **v0.2.0** na merge van `release/v0.2.0` (Windows Setup/zip via Actions);
+1. Tag **v0.3.0** na merge van `feat/pyside6-ui` (PR #34) (Windows Setup/zip via Actions);
    macOS `.app` handmatig of later via CI (signing later).
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
 2. macOS: eventuele Gatekeeper/signing-check op een schone Mac zonder TCC-dev-host.
