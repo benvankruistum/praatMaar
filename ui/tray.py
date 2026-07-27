@@ -21,6 +21,7 @@ import i18n
 from indicator import RecordingState
 from modules._contract import ModuleAction, PraatMaarModule
 from ui.app import ensure_app
+from ui.marshal import ui_dispatch
 from ui.theme import TOKENS
 
 _STATE_COLORS: dict[RecordingState, tuple[int, int, int, int]] = {
@@ -197,8 +198,12 @@ class TrayIcon:
         self._icons = {state: _make_icon(color) for state, color in _STATE_COLORS.items()}
         self._menu = self._build_menu()
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
-        self._icon = QSystemTrayIcon(_to_qicon(self._icons[RecordingState.IDLE]))
-        self._icon.setContextMenu(self._menu)
+        # Zonder desktop-tray géén QSystemTrayIcon construeren: op headless/
+        # tray-loze sessies crasht de native tray-backend (access violation).
+        self._icon: QSystemTrayIcon | None = None
+        if self._tray_available:
+            self._icon = QSystemTrayIcon(_to_qicon(self._icons[RecordingState.IDLE]))
+            self._icon.setContextMenu(self._menu)
         self._fallback_window = None if self._tray_available else self._build_fallback_window()
         self._apply_icon_and_title()
 
@@ -268,7 +273,8 @@ class TrayIcon:
     def _replace_menu(self) -> None:
         old_menu = self._menu
         self._menu = self._build_menu()
-        self._icon.setContextMenu(self._menu)
+        if self._icon is not None:
+            self._icon.setContextMenu(self._menu)
         if self._fallback_window is not None:
             button = self._fallback_window.findChild(QToolButton)
             if button is not None:
@@ -280,13 +286,14 @@ class TrayIcon:
             self._on_module_action(module_id, action_id)
 
     def start(self) -> None:
-        if self._tray_available:
+        if self._icon is not None:
             self._icon.show()
         elif self._fallback_window is not None:
             self._fallback_window.show()
 
     def stop(self) -> None:
-        self._icon.hide()
+        if self._icon is not None:
+            self._icon.hide()
         if self._fallback_window is not None:
             self._fallback_window.close()
 
@@ -295,7 +302,9 @@ class TrayIcon:
     ) -> None:
         self._attention = active
         self._attention_tooltip_key = tooltip_key
-        self._apply_icon_and_title()
+        # Kan vanaf een workerthread komen (mic-fout op de hotkey-thread);
+        # het icoon bijwerken hoort op de GUI-thread.
+        ui_dispatch(self._apply_icon_and_title)
 
     def _tooltip_for(self) -> str:
         return i18n.t(self._attention_tooltip_key) if self._attention else _tooltip(self._state)
@@ -305,10 +314,15 @@ class TrayIcon:
         return _draw_attention_badge(base) if self._attention else base
 
     def _apply_icon_and_title(self) -> None:
+        if self._icon is None:
+            if self._fallback_window is not None:
+                self._fallback_window.setWindowIcon(_to_qicon(self._icon_for(self._state)))
+                self._fallback_window.setToolTip(self._tooltip_for())
+            return
         self._icon.setIcon(_to_qicon(self._icon_for(self._state)))
         self._icon.setToolTip(self._tooltip_for())
 
     def set_state(self, state: RecordingState, mode: str = "toggle") -> None:
         del mode
         self._state = state
-        self._apply_icon_and_title()
+        ui_dispatch(self._apply_icon_and_title)

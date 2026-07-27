@@ -13,10 +13,16 @@ weet dus niet meer van `%APPDATA%` af.
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
 import host
+
+# Saves kunnen van meerdere threads komen (main-thread bij instellingen/pill
+# slepen; transcriptie-thread bij stembestemmingscommando's). Eén tmp-pad +
+# replace is alleen atomisch als er niet parallel geschreven wordt.
+_save_lock = threading.Lock()
 
 
 def config_dir() -> Path:
@@ -72,7 +78,8 @@ def save_config(settings: dict[str, Any]) -> None:
     target = config_path()
     tmp = target.with_name(target.name + ".tmp")
 
-    with tmp.open("w", encoding="utf-8") as handle:
-        json.dump(settings, handle, indent=2, ensure_ascii=False)
+    with _save_lock:
+        with tmp.open("w", encoding="utf-8") as handle:
+            json.dump(settings, handle, indent=2, ensure_ascii=False)
 
-    tmp.replace(target)
+        tmp.replace(target)

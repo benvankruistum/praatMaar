@@ -290,14 +290,19 @@ class Opnamesessie:
         destination_command: str | None = None,
         destination_name: str | None = None,
         source: str = "live",
+        session_id: str | None = None,
     ) -> None:
-        if self._emit_event is None or self._session_id is None:
+        # Expliciete session_id: afrondingspaden (transcribe-worker, early
+        # returns) emitten met het id van hún cyclus, ook als er inmiddels
+        # een nieuwe cyclus gestart is die self._session_id verving.
+        sid = session_id if session_id is not None else self._session_id
+        if self._emit_event is None or sid is None:
             return
 
         self._emit_event(
             CycleEvent(
                 type=event_type,
-                session_id=self._session_id,
+                session_id=sid,
                 transcript=transcript,
                 path=path,
                 destination=destination,
@@ -310,6 +315,18 @@ class Opnamesessie:
                 source=source,
             )
         )
+
+    def _clear_session_id(self, session_id: str | None) -> None:
+        """Wist het sessie-id alleen als het nog bij déze cyclus hoort.
+
+        Onvoorwaardelijk ``self._session_id = None`` clobberde het id van een
+        cyclus die direct na de vorige gestart was; diens events vielen dan
+        stil (guard in ``_event``).
+        """
+
+        with self._lock:
+            if self._session_id == session_id:
+                self._session_id = None
 
     def _stop_incremental_worker(self, *, wait: bool = True) -> None:
         stop = self._incremental_stop
@@ -555,9 +572,10 @@ class Opnamesessie:
             self._recording = True
             self._recording_started_at = time.monotonic()
             self._session_id = str(uuid.uuid4())
+            session_id = self._session_id
             self._last_partial_transcript = None
 
-        self._event(CycleEventType.CYCLE_STARTED)
+        self._event(CycleEventType.CYCLE_STARTED, session_id=session_id)
 
         # UI meteen rood — vóór incremental-worker en eventuele (her)open van de stream.
         self._reset_levels()
@@ -582,9 +600,9 @@ class Opnamesessie:
             if self._on_user_error is not None:
                 self._on_user_error(message)
             self._notify(RecordingState.ERROR)
-            self._event(CycleEventType.CYCLE_ERROR, error=message)
-            self._event(CycleEventType.CYCLE_IDLE)
-            self._session_id = None
+            self._event(CycleEventType.CYCLE_ERROR, error=message, session_id=session_id)
+            self._event(CycleEventType.CYCLE_IDLE, session_id=session_id)
+            self._clear_session_id(session_id)
             return
 
         print()
@@ -626,7 +644,7 @@ class Opnamesessie:
             self._recording = False
             started_at = self._recording_started_at
             self._recording_started_at = None
-            session_id = self._session_id or ""
+            session_id = self._session_id
 
         duration = 0.0
         if started_at is not None:
@@ -643,8 +661,8 @@ class Opnamesessie:
             self._notify(RecordingState.IDLE)
             print(i18n.t("rec.too_short"))
             self._release_stream_if_cold()
-            self._event(CycleEventType.CYCLE_IDLE)
-            self._session_id = None
+            self._event(CycleEventType.CYCLE_IDLE, session_id=session_id)
+            self._clear_session_id(session_id)
             self.on_ready()
             return
 
@@ -662,8 +680,8 @@ class Opnamesessie:
             # Vaak een dode warme stream na Bluetooth reconnect — heropen bij
             # de volgende start i.p.v. dezelfde zombie te hergebruiken.
             self.refresh_input_device()
-            self._event(CycleEventType.CYCLE_IDLE)
-            self._session_id = None
+            self._event(CycleEventType.CYCLE_IDLE, session_id=session_id)
+            self._clear_session_id(session_id)
             self.on_ready()
             return
 
@@ -681,7 +699,7 @@ class Opnamesessie:
             self._last_partial_transcript = None
 
         timing = CycleTiming(
-            session_id=session_id,
+            session_id=session_id or "",
             path="full",
             record_s=duration,
             stop_at=stop_at,
@@ -706,8 +724,9 @@ class Opnamesessie:
             self._recording_started_at = None
             self._audio_chunks.clear()
             self._last_partial_transcript = None
+            session_id = self._session_id
 
-        self._event(CycleEventType.CYCLE_CANCELLED)
+        self._event(CycleEventType.CYCLE_CANCELLED, session_id=session_id)
         self._notify(RecordingState.CANCELLED)
 
         self._stop_incremental_worker(wait=False)
@@ -716,8 +735,8 @@ class Opnamesessie:
         print(i18n.t("rec.cancelled"))
         print(i18n.t("rec.cancelled_detail"))
         self._release_stream_if_cold()
-        self._event(CycleEventType.CYCLE_IDLE)
-        self._session_id = None
+        self._event(CycleEventType.CYCLE_IDLE, session_id=session_id)
+        self._clear_session_id(session_id)
         self.on_ready()
 
     def create_temporary_wav(self, chunks: list[Any]) -> Path:
@@ -893,6 +912,10 @@ class Opnamesessie:
                         print(i18n.t("rec.temp_delete_warn", error=exc))
 
             timing.log()
+            # Vanaf _processing=False kan een nieuwe cyclus starten met een
+            # nieuw session_id; alles hieronder werkt daarom expliciet met
+            # het id van déze cyclus en wist het alleen als het nog klopt.
+            session_id = timing.session_id or None
             with self._lock:
                 self._processing = False
 
@@ -902,7 +925,8 @@ class Opnamesessie:
                     CycleEventType.CYCLE_ERROR,
                     error=error_message,
                     recovery_path=str(recovery_kept) if recovery_kept is not None else None,
+                    session_id=session_id,
                 )
-            self._event(CycleEventType.CYCLE_IDLE)
-            self._session_id = None
+            self._event(CycleEventType.CYCLE_IDLE, session_id=session_id)
+            self._clear_session_id(session_id)
             self.on_ready()
