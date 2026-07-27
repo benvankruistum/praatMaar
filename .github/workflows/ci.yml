@@ -50,8 +50,6 @@ jobs:
         # Draai Qt headless: de niet-interactieve Windows-runner heeft geen
         # system-tray-sessie, waardoor QSystemTrayIcon in de tray-tests een
         # native access violation gaf (pytest stierf zonder samenvatting).
-        # TIJDELIJK: -v -s + faulthandler om de crashende test te vinden.
         env:
           QT_QPA_PLATFORM: offscreen
-          PYTHONFAULTHANDLER: "1"
-        run: python -m pytest -v -s -p no:cacheprovider
+        run: python -m pytest -q
