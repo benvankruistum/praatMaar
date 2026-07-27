@@ -47,4 +47,9 @@ jobs:
           python -m pip install -r requirements.txt pytest==9.1.1
 
       - name: Run tests
+        # Draai Qt headless: de niet-interactieve Windows-runner heeft geen
+        # system-tray-sessie, waardoor QSystemTrayIcon in de tray-tests een
+        # native access violation gaf (pytest stierf zonder samenvatting).
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: python -m pytest -q
