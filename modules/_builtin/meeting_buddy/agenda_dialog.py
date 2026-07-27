@@ -275,12 +275,21 @@ class _AgendaDialog(QDialog):
         except OSError:
             return None
 
-    def _populate_library(self) -> None:
-        while self._lib_layout.count():
-            item = self._lib_layout.takeAt(0)
+    @staticmethod
+    def _clear_layout(layout: Any) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
+                continue
+            child = item.layout()
+            if child is not None:
+                _AgendaDialog._clear_layout(child)
+                child.deleteLater()
+
+    def _populate_library(self) -> None:
+        self._clear_layout(self._lib_layout)
         heading_keys = {"recent": "recent", "all": "all_agendas"}
         for section_id, paths in library_sections(
             recent=list_recent(self._app_dir), all_agendas=list_agendas(self._app_dir)

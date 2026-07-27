@@ -11,15 +11,15 @@ Houd deze plekken **gelijk** (zonder `v`-prefix, behalve de git-tag):
 
 | Plek | Voorbeeld |
 |------|-----------|
-| `pyproject.toml` → `version` | `0.2.0` |
-| `version_info.txt` (File/ProductVersion) | `0.2.0` / `(0, 2, 0, 0)` |
-| `installer/praatMaar.iss` fallback `#define MyAppVersion` | `0.2.0` |
-| `scripts/build-windows.ps1` default `-Version` | `0.2.0` |
-| Git-tag | `v0.2.0` |
-| `CHANGELOG.md` | sectie `[0.2.0] - YYYY-MM-DD`, `[Unreleased]` leegmaken |
+| `pyproject.toml` → `version` | `0.3.0` |
+| `version_info.txt` (File/ProductVersion) | `0.3.0` / `(0, 2, 0, 0)` |
+| `installer/praatMaar.iss` fallback `#define MyAppVersion` | `0.3.0` |
+| `scripts/build-windows.ps1` default `-Version` | `0.3.0` |
+| Git-tag | `v0.3.0` |
+| `CHANGELOG.md` | sectie `[0.3.0] - YYYY-MM-DD`, `[Unreleased]` leegmaken |
 
-Huidige **gepubliceerde** release: **v0.1.0**. Deze branch cut **v0.2.0**
-(CHANGELOG-sectie `[0.2.0]`); tag na merge + bevestiging.
+Huidige **gepubliceerde** release: **v0.1.0**. Deze branch cut **v0.3.0**
+(CHANGELOG-sectie `[0.3.0]`); tag na merge + bevestiging.
 
 ### Checklist vóór een tag
 
@@ -55,13 +55,13 @@ Het Whisper-model zit **niet** in de bundle; eerste start downloadt het.
 3. Alles in één keer (versie expliciet meegeven):
 
    ```powershell
-   .\scripts\build-windows.ps1 -Version 0.2.0
+   .\scripts\build-windows.ps1 -Version 0.3.0
    ```
 
    Of alleen de app-map:
 
    ```powershell
-   .\scripts\build-windows.ps1 -Version 0.2.0 -SkipInstaller
+   .\scripts\build-windows.ps1 -Version 0.3.0 -SkipInstaller
    ```
 
 Output: `release\` (zip + setup) en `dist\praatMaar\`.
@@ -77,8 +77,8 @@ Push een versie-tag; Actions bouwt op `windows-latest` en zet Setup.exe + zip
 op de release-pagina:
 
 ```powershell
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 Of: Actions → **Release** → Run workflow (handmatig, vul versie in zonder `v`).

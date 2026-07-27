@@ -21,6 +21,42 @@ def test_summary_points_empty() -> None:
     assert summary_points("   ") == []
 
 
+def test_summary_points_strips_bullet_on_single_line() -> None:
+    assert summary_points("- Only point") == ["Only point"]
+
+
+def test_overlay_rerender_does_not_accumulate_rows() -> None:
+    # Regression: _render_topics/_render_questions add rows via addLayout; the
+    # clear step must free those nested widgets so repeated update() calls don't
+    # stack stale dot+label widgets.
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay, _StatusDot
+    from modules._builtin.meeting_buddy.state import MeetingState, Topic, TopicStatus
+    from ui.app import ensure_app
+
+    app = ensure_app([])
+    topics = (
+        Topic("1", "A", TopicStatus.OPEN),
+        Topic("2", "B", TopicStatus.SEQUENTIAL),
+        Topic("3", "C", TopicStatus.CONFIRMED),
+    )
+    state = MeetingState("s", 1, topics, (), (), (), ())
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0.0,
+        on_dismiss=lambda _i: None,
+        on_confirm=lambda _i: None,
+        on_reconnect=lambda: None,
+    )
+    for _ in range(3):
+        overlay.update(state, capture_status="active", transcription_status="active")
+    # The running event loop frees deleteLater()'d widgets continuously; flush
+    # the DeferredDelete queue here so the test observes the same result.
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    app.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert len(overlay._topics.findChildren(_StatusDot)) == len(topics)
+
+
 def _hint(hint_id: str, priority: int, *, status: HintStatus = HintStatus.ACTIVE) -> Hint:
     return Hint(
         id=hint_id,

@@ -1,6 +1,6 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-07-23.
+Laatst bijgewerkt: 2026-07-27.
 
 ## Ondersteund
 
@@ -8,7 +8,21 @@ Laatst bijgewerkt: 2026-07-23.
 |----------|--------|
 | Windows 10/11 | Ondersteund (primair doel) |
 | macOS | Ondersteund (Apple Silicon; runtime geverifieerd) |
-| Linux | Niet ondersteund |
+| Linux | Experimenteel (X11; AppImage) — zie noot hieronder |
+
+### Linux (experimenteel)
+
+De Qt-UI, host-seam (`host/_linux`: paste via `xdotool`/`ydotool`, XDG-mappen,
+flock single-instance, `.desktop`-autostart), systeemvak met venster-fallback,
+microfoon-capture (PortAudio) en `xdg-open` voor mappen werken op Linux/**X11**.
+Aandachtspunten, nog niet als distributie-build geverifieerd:
+
+- **Wayland:** globale sneltoetsen (pynput) en het niet-focus-stelende overlay
+  zijn onbetrouwbaar; gebruik een **X11**-sessie.
+- **Klembord:** vereist `xclip`/`xsel` voor pyperclip; anders valt de app terug
+  op het Qt-klembord.
+- **Meeting Buddy-meetinggeluid** (WASAPI-loopback) is Windows-only; op Linux
+  alleen microfoon.
 
 ## Werkt op Windows
 
@@ -24,7 +38,7 @@ Laatst bijgewerkt: 2026-07-23.
 - **Modules:** in-process uitbreidingen + event-journal (`modules/`, tray **Modules**);
   inbox-spiegel; optionele incrementele transcriptie tijdens opname
   ([ADR-0003](adr/0003-hybrid-module-system.md))
-- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.1.0`; volgende `v0.2.0`)
+- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.2.0`; volgende `v0.3.0`)
 
 ## Experimentele modules
 
@@ -77,7 +91,7 @@ Gatekeeper (zie roadmap).
 
 ## Open / roadmap
 
-1. Tag **v0.2.0** na merge van `release/v0.2.0` (Windows Setup/zip via Actions);
+1. Tag **v0.3.0** na merge van `feat/pyside6-ui` (PR #34) (Windows Setup/zip via Actions);
    macOS `.app` handmatig of later via CI (signing later).
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
 2. macOS: eventuele Gatekeeper/signing-check op een schone Mac zonder TCC-dev-host.
