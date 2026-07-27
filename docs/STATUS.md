@@ -1,6 +1,6 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-07-23.
+Laatst bijgewerkt: 2026-07-27.
 
 ## Ondersteund
 
@@ -8,7 +8,21 @@ Laatst bijgewerkt: 2026-07-23.
 |----------|--------|
 | Windows 10/11 | Ondersteund (primair doel) |
 | macOS | Ondersteund (Apple Silicon; runtime geverifieerd) |
-| Linux | Niet ondersteund |
+| Linux | Experimenteel (X11; AppImage) — zie noot hieronder |
+
+### Linux (experimenteel)
+
+De Qt-UI, host-seam (`host/_linux`: paste via `xdotool`/`ydotool`, XDG-mappen,
+flock single-instance, `.desktop`-autostart), systeemvak met venster-fallback,
+microfoon-capture (PortAudio) en `xdg-open` voor mappen werken op Linux/**X11**.
+Aandachtspunten, nog niet als distributie-build geverifieerd:
+
+- **Wayland:** globale sneltoetsen (pynput) en het niet-focus-stelende overlay
+  zijn onbetrouwbaar; gebruik een **X11**-sessie.
+- **Klembord:** vereist `xclip`/`xsel` voor pyperclip; anders valt de app terug
+  op het Qt-klembord.
+- **Meeting Buddy-meetinggeluid** (WASAPI-loopback) is Windows-only; op Linux
+  alleen microfoon.
 
 ## Werkt op Windows
 
