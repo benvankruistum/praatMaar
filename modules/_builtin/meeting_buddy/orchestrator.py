@@ -55,6 +55,7 @@ class MeetingOrchestrator:
         self._config = load_meeting_buddy_config(app_dir)
         self._observer = observer
         self._lock = RLock()
+        self._stopping = False
         self._sessions = CapabilitySessionController(
             capabilities=capabilities,
             config=self._config,
@@ -78,6 +79,9 @@ class MeetingOrchestrator:
             capabilities=capabilities,
             settings=self._agenda_review_settings(),
             on_review=self._on_agenda_review,
+            # Zelfde tijdbasis als de hint-engine (elapsed_s), anders worden
+            # LLM-vragen met epoch-created_at permanent onderdrukt.
+            clock=self._elapsed_s,
         )
         self._capabilities = capabilities
 
@@ -202,25 +206,37 @@ class MeetingOrchestrator:
 
     def stop(self) -> Path | None:
         with self._lock:
-            if self._sessions.binding is None:
+            if self._sessions.binding is None or self._stopping:
                 return self._last_transcript_path
+            self._stopping = True
             duration_ms = int(self._elapsed_s() * 1000)
-            try:
-                self._sessions.stop(duration_ms=duration_ms)
-            except Exception:
-                pass
-            try:
-                self._ui.notify(self._state, force=True)
-            except Exception:
-                pass
-            path = self._finalize_transcript_journal()
-            try:
-                self._sessions.clear()
-            finally:
-                self._live_summary.reset()
-                self._agenda_review.reset()
-                self._clear_running_state()
-            return path
+
+        # Buiten de lock: het stoppen van capture/STT flusht de wachtrij en
+        # de STT-drain-thread levert die deltas synchroon af aan on_stt_event,
+        # dat deze lock neemt. Met de lock vast ontstond een circulaire wait
+        # (drain_lock <-> _lock): UI bevroor 120s en hing daarna permanent.
+        try:
+            self._sessions.stop(duration_ms=duration_ms)
+        except Exception:
+            pass
+
+        try:
+            with self._lock:
+                try:
+                    self._ui.notify(self._state, force=True)
+                except Exception:
+                    pass
+                path = self._finalize_transcript_journal()
+                try:
+                    self._sessions.clear()
+                finally:
+                    self._live_summary.reset()
+                    self._agenda_review.reset()
+                    self._clear_running_state()
+                return path
+        finally:
+            with self._lock:
+                self._stopping = False
 
     def on_stt_event(self, event: object) -> None:
         final_text: str | None = None

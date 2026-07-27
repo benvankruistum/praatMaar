@@ -159,6 +159,9 @@ class IncrementalSpeechToText:
             with self._lock:
                 state.queue.clear()
                 state.status = TranscriptionStatus.IDLE
+                # Gestopte sessies hielden handler-referenties (orchestrator,
+                # overlay-ketens) voor eeuwig vast — geheugenlek per meeting.
+                state.handlers.clear()
 
     def get_status(self, session_id: str) -> TranscriptionStatus:
         return self._require_session(session_id).status

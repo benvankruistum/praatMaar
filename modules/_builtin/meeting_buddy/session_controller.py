@@ -173,6 +173,9 @@ class CapabilitySessionController:
                 capture=self._capture,
                 config={
                     "max_whisper_queue_duration_s": self._config.max_whisper_queue_duration_s,
+                    # Zelfde config als start(): zonder taal valt Whisper
+                    # midden in de meeting terug op auto-detectie.
+                    "language": self._speech_language(),
                 },
             )
             self._binding = MeetingSessionBinding(

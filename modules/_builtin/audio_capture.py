@@ -36,6 +36,9 @@ CHUNK_OVERLAP_MS = 800
 MAX_BUFFER_DURATION_S = 30.0
 MAX_LOOPBACK_RECONNECT_ATTEMPTS = 4
 LOOPBACK_RECONNECT_BACKOFF_S = (0.5, 1.0, 2.0, 4.0)
+# Als één mix-bron zóveel achterloopt levert de andere structureel niets
+# (starvation): val terug op mic-only en begrens het buffergeheugen.
+_STARVATION_LIMIT_SAMPLES = SAMPLE_RATE * 5
 
 log = logging.getLogger("praatmaar.audio_capture")
 
@@ -310,6 +313,10 @@ class AudioCaptureEngine:
         self._flush_tail_chunk(state)
         self._set_status(state, CaptureStatus.STOPPED)
         self._publish(state, CaptureStopped(session_id=session_id, reason="user"))
+        with self._lock:
+            # Handler-referenties loslaten: gestopte sessies blijven in
+            # _sessions staan en hielden anders de hele keten vast.
+            state.handlers.clear()
 
     def _flush_tail_chunk(self, state: _CaptureState) -> None:
         """Emit residual buffer audio beyond the retained overlap window."""
@@ -346,6 +353,10 @@ class AudioCaptureEngine:
             state = self._require_session(session_id)
             if state.status not in {CaptureStatus.STOPPED, CaptureStatus.ERROR}:
                 self.stop_session(session_id)
+            else:
+                # ERROR-sessies konden streams open laten (zie _fail_capture
+                # historisch); bij afsluiten altijd best-effort sluiten.
+                self._close_streams(state)
 
     def _get_sounddevice(self) -> Any:
         if self._sounddevice is None:
@@ -403,14 +414,19 @@ class AudioCaptureEngine:
         if status:
             log.warning("Microfoonstatus voor sessie %s: %s", state.session_id, status)
         if getattr(status, "input_overflow", False):
-            gap_start_ms = round(state.captured_samples * 1000 / SAMPLE_RATE)
-            state.captured_samples += frames
+            # captured_samples wordt elders onder mix_lock gemuteerd
+            # (_flush_mixed_samples); hier ook, anders corrumpeert de
+            # tijdlijn bij gelijktijdige mic-/loopback-callbacks.
+            with state.mix_lock:
+                gap_start_ms = round(state.captured_samples * 1000 / SAMPLE_RATE)
+                state.captured_samples += frames
+                gap_end_ms = round(state.captured_samples * 1000 / SAMPLE_RATE)
             self._publish(
                 state,
                 CaptureGap(
                     session_id=state.session_id,
                     start_ms=gap_start_ms,
-                    end_ms=round(state.captured_samples * 1000 / SAMPLE_RATE),
+                    end_ms=gap_end_ms,
                     reason="input_overflow",
                 ),
             )
@@ -449,6 +465,17 @@ class AudioCaptureEngine:
             self._flush_mixed_samples(state)
 
     def _flush_mixed_samples(self, state: _CaptureState) -> None:
+        # Starvation-guard: levert één bron structureel niets (WASAPI-loopback
+        # zonder renderende audio, device-glitch zonder disconnect), dan mixt
+        # de lus niets en groeit de andere pending-buffer onbegrensd — de
+        # meeting lijkt actief maar er stroomt geen audio naar STT.
+        if state.loopback_enabled and state.mic_pending.size > _STARVATION_LIMIT_SAMPLES:
+            if state.loopback_pending.size == 0:
+                self._disable_loopback(state, reason="loopback levert geen data (starved)")
+        if state.loopback_pending.size > _STARVATION_LIMIT_SAMPLES:
+            # Clock-drift/mic-uitval: begrens het geheugen, laat het oudste los.
+            state.loopback_pending = state.loopback_pending[-_STARVATION_LIMIT_SAMPLES:]
+
         while True:
             if state.loopback_enabled:
                 count = min(state.mic_pending.size, state.loopback_pending.size)
@@ -503,10 +530,23 @@ class AudioCaptureEngine:
         stream = state.loopback_stream
         state.loopback_stream = None
         if stream is not None:
-            try:
-                stream.stop()
-            finally:
-                stream.close()
+            # Kan vanuit de callback van deze stream zelf aangeroepen worden;
+            # PortAudio staat stop() vanuit de eigen callback niet toe
+            # (deadlock-/crashrisico). Sluit daarom op een aparte thread.
+            def _close_stream() -> None:
+                try:
+                    stream.stop()
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
+
+            threading.Thread(
+                target=_close_stream, name="loopback-stream-close", daemon=True
+            ).start()
         if reason:
             log.warning(
                 "Loopback uitgeschakeld voor sessie %s: %s",
@@ -560,6 +600,12 @@ class AudioCaptureEngine:
             self._try_start_loopback_stream(state, sounddevice, state.capture_options)
             if state.loopback_stream is not None:
                 state.loopback_stream.start()
+                if state.stop_event.is_set():
+                    # stop_session gaf de join-timeout op terwijl wij in
+                    # device-resolutie zaten; zonder deze check bleef een nét
+                    # gestarte stream voor eeuwig open (stream-lek).
+                    self._close_streams(state)
+                    return
                 state.loopback_reconnect_attempts = 0
                 self._set_status(state, CaptureStatus.ACTIVE)
                 log.info("Loopback hersteld voor sessie %s", state.session_id)
@@ -584,6 +630,9 @@ class AudioCaptureEngine:
             if state.status in {CaptureStatus.ERROR, CaptureStatus.STOPPED}:
                 return
             state.stop_event.set()
+        # Ook bij een fout de OS-streams sluiten: anders blijft bijv. de
+        # loopback-stream open tot de gebruiker handmatig stopt/herverbindt.
+        self._close_streams(state)
         self._set_status(state, CaptureStatus.ERROR, message)
         self._publish(state, CaptureStopped(session_id=state.session_id, reason="error"))
 
@@ -673,7 +722,10 @@ class AudioCaptureEngine:
                     device = default[1]
                 else:
                     device = sounddevice.default.device[1]
-            if device is None:
+            # sounddevice geeft -1 (niet None) terug als er geen default
+            # output is; query_devices(-1) zou dan een misleidende
+            # PortAudioError geven.
+            if device is None or (isinstance(device, int) and device < 0):
                 raise RuntimeError("No default output device for loopback capture.")
             info = sounddevice.query_devices(device)
             channels = int(info.get("max_input_channels") or info.get("max_output_channels") or 2)

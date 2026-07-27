@@ -18,6 +18,9 @@ from modules.capabilities.semantic_analysis import (
 
 log = logging.getLogger(__name__)
 
+# Begrens het transcript dat integraal de prompt in gaat (±30 min spreken).
+_MAX_BUFFER_CHARS = 24_000
+
 
 @dataclass
 class LiveSummarySettings:
@@ -73,6 +76,10 @@ class LiveSummaryCoordinator:
             if not self._settings.enabled:
                 return
             self._buffer = f"{self._buffer} {chunk}".strip()
+            if len(self._buffer) > _MAX_BUFFER_CHARS:
+                # Lange meetings: begrens de prompt (context-overflow) en het
+                # geheugen; de vorige samenvatting draagt de oudere context.
+                self._buffer = self._buffer[-_MAX_BUFFER_CHARS:]
             self._chars_since += len(chunk)
             should = self._should_run_unlocked(now=now if now is not None else time.monotonic())
             if not should:
@@ -142,6 +149,10 @@ class LiveSummaryCoordinator:
                 self._on_summary(text)
         except Exception:
             log.exception("Live summary analyse mislukt")
+            with self._lock:
+                # Backoff: anders start elke final-chunk (±8s) een nieuwe
+                # worker die tegen dezelfde fout aanloopt (Ollama down).
+                self._last_run_at = time.monotonic()
         finally:
             with self._lock:
                 self._busy = False

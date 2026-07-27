@@ -268,6 +268,12 @@ class MeetingBuddyModule:
         loopback_active: bool | None = None,
         loopback_requested: bool = True,
     ) -> None:
+        if not self.is_session_active:
+            # Gequeuede update die ná stop_meeting binnenkomt: negeren, anders
+            # herschept _show_overlay_update een zombie-overlay (blijvend
+            # always-on-top venster met verouderde status).
+            self._sync_recording_pill(capture_status)
+            return
         self._sync_recording_pill(capture_status)
         self._show_overlay_update(
             state,

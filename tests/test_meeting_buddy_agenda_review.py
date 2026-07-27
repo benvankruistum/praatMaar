@@ -139,3 +139,46 @@ def test_provider_agenda_review_json(monkeypatch) -> None:
     assert result.data["phase"] == "body"
     assert result.data["topic_updates"][0]["status"] == "treated"
     assert result.data["questions"]
+
+
+def test_run_analyze_uses_meeting_clock_for_created_at() -> None:
+    # Regression: created_at kreeg epoch-tijd (time.time() ~ 1.7e9) terwijl de
+    # hint-engine met meeting-seconden (elapsed_s) rekent — age werd dan
+    # extreem negatief en LLM-vragen leverden nooit een hint op.
+    from modules.capabilities.semantic_analysis import (
+        CAPABILITY_ID,
+        CONTRACT_VERSION,
+        AnalysisResult,
+    )
+
+    class FakeProvider:
+        def is_ready(self) -> bool:
+            return True
+
+        def analyze(self, request: AnalysisRequest) -> AnalysisResult:
+            return AnalysisResult(
+                kind=KIND_AGENDA_REVIEW,
+                text="",
+                data={"phase": "body", "questions": ["Wat is de deadline?"]},
+            )
+
+    caps = CapabilityRegistry()
+    caps.register(CAPABILITY_ID, FakeProvider(), "local-llm", CONTRACT_VERSION)
+
+    reviewed: list[MeetingState] = []
+    coord = AgendaReviewCoordinator(
+        capabilities=caps,
+        settings=AgendaReviewSettings(enabled=True),
+        on_review=reviewed.append,
+        clock=lambda: 42.0,
+    )
+    state = replace(MeetingState.empty("m1"), meeting_phase=MeetingPhase.BODY)
+    coord._run_analyze(
+        [LabeledFinal(text="Wat is de deadline?", speaker_role=SpeakerRole.OTHER)],
+        state,
+        "nl",
+    )
+
+    assert reviewed, "on_review is niet aangeroepen"
+    question = reviewed[-1].questions[0]
+    assert question.created_at == 42.0

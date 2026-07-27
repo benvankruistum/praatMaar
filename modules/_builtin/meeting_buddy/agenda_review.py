@@ -50,10 +50,14 @@ class AgendaReviewCoordinator:
         capabilities: CapabilityRegistry,
         settings: AgendaReviewSettings,
         on_review: OnReview | None = None,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self._capabilities = capabilities
         self._settings = settings
         self._on_review = on_review
+        # Meeting-klok (seconden sinds start): created_at moet in dezelfde
+        # tijdbasis staan als elapsed_s waarmee de hint-engine rekent.
+        self._clock = clock if clock is not None else time.time
         self._lock = Lock()
         self._buffer: list[LabeledFinal] = []
         self._chars_since = 0
@@ -190,7 +194,7 @@ class AgendaReviewCoordinator:
                     labeled_parts=labeled_parts,
                 ),
             }
-            updated = self.apply_review_result(state, data, now_s=time.time())
+            updated = self.apply_review_result(state, data, now_s=self._clock())
             with self._lock:
                 self._chars_since = 0
                 self._last_run_at = time.monotonic()
@@ -198,6 +202,10 @@ class AgendaReviewCoordinator:
                 self._on_review(updated)
         except Exception:
             log.exception("Agenda review analyse mislukt")
+            with self._lock:
+                # Backoff: zonder reset start elke final-chunk (±8s) opnieuw
+                # een worker die tegen dezelfde fout aanloopt (Ollama down).
+                self._last_run_at = time.monotonic()
         finally:
             with self._lock:
                 self._busy = False

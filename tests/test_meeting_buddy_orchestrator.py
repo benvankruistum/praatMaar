@@ -549,3 +549,76 @@ def test_concurrent_callbacks_do_not_raise(tmp_path: Path) -> None:
         )
     )
     assert orchestrator.state.version >= 1
+
+
+def test_stop_does_not_hold_lock_while_stopping_sessions(tmp_path: Path) -> None:
+    """Regression (deadlock): tijdens stop flusht capture een tail-chunk; de
+    STT-drain-thread levert die delta synchroon af aan on_stt_event, dat
+    orchestrator._lock neemt. Hield stop() die lock vast tijdens
+    sessions.stop(), dan ontstond een circulaire wait (UI bevroor)."""
+
+    import threading
+
+    from modules.capabilities.continuous_capture import AudioChunk
+
+    capabilities = CapabilityRegistry()
+    capture = FakeContinuousCapture()
+
+    delivered = threading.Event()
+
+    class TailFlushingStt(FakeSpeechToText):
+        def stop_session(self, session_id: str) -> None:
+            # Simuleer de drain-thread die tijdens de stop-flush nog een
+            # finale delta publiceert en daarop wácht (zoals productie:
+            # _drain_queue houdt drain_lock vast tot de handler klaar is).
+            chunk = AudioChunk(
+                session_id="capture",
+                chunk_id="tail",
+                start_ms=0,
+                end_ms=100,
+                sample_rate=16000,
+                pcm_f32=b"",
+            )
+            drain = threading.Thread(target=lambda: self._emit_delta(session_id, chunk))
+            drain.start()
+            drain.join(timeout=5)
+            if drain.is_alive():
+                # Handler blokkeert op orchestrator._lock → deadlock-situatie.
+                return
+            delivered.set()
+            super().stop_session(session_id)
+
+    stt = TailFlushingStt(text_for_chunk=lambda _chunk: "tail flush")
+    capabilities.register(CAP_CAPTURE, capture, "audio-capture", 1)
+    capabilities.register(CAP_STT, stt, "speech-to-text", 1)
+
+    orchestrator = MeetingOrchestrator(
+        capabilities=capabilities,
+        app_dir=tmp_path,
+        observer=RecordingObserver(),
+    )
+    orchestrator.start()
+
+    stopper_done = threading.Event()
+
+    def _stop() -> None:
+        orchestrator.stop()
+        stopper_done.set()
+
+    stopper = threading.Thread(target=_stop, daemon=True)
+    stopper.start()
+    assert stopper_done.wait(timeout=10), "orchestrator.stop() hangt (deadlock)"
+    assert delivered.is_set(), "tail-delta is nooit afgeleverd tijdens stop"
+
+
+def test_finish_reconnect_keeps_speech_language(tmp_path: Path) -> None:
+    # Regression: het reconnect-pad herstartte STT zonder "language" —
+    # Whisper viel dan midden in de meeting terug op taalauto-detectie.
+    capabilities, _capture, stt = _capabilities()
+    orchestrator = MeetingOrchestrator(capabilities=capabilities, app_dir=tmp_path)
+    orchestrator.start()
+
+    orchestrator.reconnect_capture()
+
+    assert len(stt.start_configs) == 2
+    assert stt.start_configs[1].get("language") == "nl"
