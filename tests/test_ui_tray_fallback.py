@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from PySide6.QtWidgets import QSystemTrayIcon
+from PySide6.QtWidgets import QSystemTrayIcon, QToolButton
 
 from ui.app import ensure_app
 from ui.tray import TrayIcon
@@ -24,5 +24,13 @@ def test_tray_fallback_exposes_menu_and_state() -> None:
 
     assert tray._fallback_window is not None
     tray.set_state(tray._state)
-    tray.popup_menu(10, 10)
+
+    # Verifieer dat het menu bereikbaar is zonder een live popup te tonen:
+    # QMenu.popup() opent een top-level native menu, wat op de niet-interactieve
+    # Windows CI-runner een access violation geeft (ook onder offscreen).
+    assert tray.context_menu_entries()
+    button = tray._fallback_window.findChild(QToolButton)
+    assert button is not None
+    assert button.menu() is not None
+
     tray.stop()
