@@ -136,18 +136,20 @@ def test_stop_logs_cycle_timing(
     frames = int(sess.sample_rate * 0.2)
     sd.last_callback(np.zeros((frames, 1), dtype=np.float32), frames, None, None)
     time.sleep(0.05)
+
+    # Deterministisch wachten op het cycluseinde: on_ready draait ná
+    # timing.log() in het finally-blok, dus daarna staat de print vast in
+    # de captured output (eerder: sleep(0.05) hopen dat de print landde).
+    import threading
+
+    cycle_done = threading.Event()
+    sess.on_ready = cycle_done.set
     sess.stop_and_transcribe()
 
-    deadline = time.monotonic() + 5.0
-    while time.monotonic() < deadline:
-        if any(e.type == CycleEventType.TRANSCRIPT_SAVED for e in events):
-            break
-        time.sleep(0.01)
-    else:
-        raise AssertionError("transcript niet opgeslagen")
-
-    # Laat de finally-print landen (timing.log na save-event).
-    time.sleep(0.05)
+    assert cycle_done.wait(timeout=30), "dicteercyclus niet afgerond"
+    assert any(e.type == CycleEventType.TRANSCRIPT_SAVED for e in events), (
+        "transcript niet opgeslagen"
+    )
     out = capsys.readouterr().out
     assert "cycle.timing" in out
     assert "path=full" in out

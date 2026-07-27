@@ -314,15 +314,9 @@ def test_transcribe_pastes_and_copies(
     assert sd.last_callback is not None
     chunk = np.zeros((1600, 1), dtype=np.float32)
     sd.last_callback(chunk, 1600, None, None)
+    done = _install_cycle_done(session)
     session.stop_and_transcribe()
-
-    # Wacht tot de daemon-thread klaar is.
-    import time
-
-    for _ in range(50):
-        if not session.is_processing:
-            break
-        time.sleep(0.05)
+    assert done.wait(timeout=30), "dicteercyclus niet afgerond"
 
     assert not session.is_processing
     assert host.paste_calls == 1
@@ -330,13 +324,24 @@ def test_transcribe_pastes_and_copies(
     assert states[-1] == RecordingState.IDLE
 
 
-def _wait_for_processing(session: Opnamesessie) -> None:
-    import time
+def _install_cycle_done(session: Opnamesessie) -> threading.Event:
+    """Deterministische cycle-synchronisatie via het on_ready-seam.
 
-    for _ in range(50):
-        if not session.is_processing:
-            break
-        time.sleep(0.05)
+    on_ready draait als allerlaatste in het finally-blok van de
+    transcriptie-worker (ná _processing=False, notify(IDLE) en CYCLE_IDLE) —
+    dus na deze Event zijn álle asserts race-vrij. Vervangt de eerdere
+    2,5s-poll op is_processing die onder CI-load stil afliep (flaky).
+    """
+
+    done = threading.Event()
+    previous = session.on_ready
+
+    def _ready() -> None:
+        previous()
+        done.set()
+
+    session.on_ready = _ready
+    return done
 
 
 def _record_short_audio(session: Opnamesessie, sd: FakeSoundDevice) -> None:
@@ -345,8 +350,9 @@ def _record_short_audio(session: Opnamesessie, sd: FakeSoundDevice) -> None:
     assert sd.last_callback is not None
     chunk = np.zeros((1600, 1), dtype=np.float32)
     sd.last_callback(chunk, 1600, None, None)
+    done = _install_cycle_done(session)
     session.stop_and_transcribe()
-    _wait_for_processing(session)
+    assert done.wait(timeout=30), "dicteercyclus niet afgerond"
 
 
 def test_active_destination_without_auto_paste_skips_clipboard(
@@ -575,6 +581,7 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
     time.sleep(0.08)
 
     stop_done = threading.Event()
+    cycle_done = _install_cycle_done(sess)
 
     def _stop() -> None:
         sess.stop_and_transcribe()
@@ -595,3 +602,27 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
 
     release.set()
     assert stop_done.wait(timeout=2.0)
+    # Wacht op het échte cycluseinde: anders overleeft de finale transcribe-
+    # daemon de test en schrijft die ná teardown (buiten de monkeypatch om)
+    # transcripts weg — voorheen letterlijk in %APPDATA% van de gebruiker.
+    assert cycle_done.wait(timeout=10), "finale transcribe-worker niet afgerond"
+
+
+def test_event_accepts_explicit_session_id(session: Opnamesessie) -> None:
+    # Regression: de transcribe-worker emitte events via self._session_id,
+    # dat door een nét gestarte nieuwe cyclus al vervangen kon zijn.
+    from opnamesessie import CycleEventType
+
+    emitted: list[Any] = []
+    session._emit_event = emitted.append
+    session._session_id = "nieuw"
+    session._event(CycleEventType.CYCLE_IDLE, session_id="oud")
+    assert emitted[-1].session_id == "oud"
+
+
+def test_clear_session_id_does_not_clobber_newer_session(session: Opnamesessie) -> None:
+    session._session_id = "nieuw"
+    session._clear_session_id("oud")
+    assert session._session_id == "nieuw"
+    session._clear_session_id("nieuw")
+    assert session._session_id is None
