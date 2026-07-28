@@ -9,25 +9,17 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Added
 
-- **Local LLM-eigenschappen:** keuze tussen standaard Ollama
-  (`127.0.0.1:11434` + `qwen2.5:7b`) of een eigen Ollama-endpoint (basis-URL +
-  model) via Modules → Local LLM → Eigenschappen.
-
 ### Changed
 
 ### Fixed
 
-- **Incrementele transcriptie:** bij stop altijd een finale Whisper-run over de
-  hele buffer (niet langer de laatste partial als eindtekst). Voorkomt dat het
-  eindstuk ontbreekt wanneer de buffer groeit en partials achterlopen.
-- **Meeting Buddy / continuous STT:** bij stop wordt de capture-buffer geflusht
-  en de STT-wachtrij leeggedraaid (geen discard meer), zodat het eindstuk van
-  een meeting niet stil verdwijnt.
-
-## [0.3.0] - 2026-07-27
+## [0.3.0] - 2026-07-28
 
 ### Added
 
+- **Local LLM-eigenschappen:** keuze tussen standaard Ollama
+  (`127.0.0.1:11434` + `qwen2.5:7b`) of een eigen Ollama-endpoint (basis-URL +
+  model) via Modules → Local LLM → Eigenschappen.
 - **PySide6 (Qt 6) UI** voor Windows, macOS en Linux; de Tk-UI is
   uitgefaseerd ([ADR-0005](docs/adr/0005-ui-toolkit-pyside6.md)).
 - **Canvas-fidelity** voor alle schermen: status-pill (states P1–P6),
@@ -56,6 +48,41 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
   wrappen naar een tweede regel en de primaire knop is weer zichtbaar.
 - Overlay-rijen worden bij elke her-render correct vrijgegeven (geen
   widget-ophoping tijdens een meeting).
+- **Incrementele transcriptie:** bij stop altijd een finale Whisper-run over de
+  hele buffer (niet langer de laatste partial als eindtekst). Voorkomt dat het
+  eindstuk ontbreekt wanneer de buffer groeit en partials achterlopen.
+- **Meeting Buddy / continuous STT:** bij stop wordt de capture-buffer geflusht
+  en de STT-wachtrij leeggedraaid (geen discard meer), zodat het eindstuk van
+  een meeting niet stil verdwijnt.
+- **Meeting stoppen liep vast:** het stoppen van een meeting kon de app
+  blokkeren (eerst circa twee minuten geen reactie, daarna vastlopen) doordat
+  de stop op de laatste transcriptie wachtte terwijl die op de stop wachtte.
+- **Privacy/AVG:** transcript-inhoud wordt niet meer meegeschreven in het
+  event-journal (`events/events.jsonl` houdt alleen de tekstlengte bij) en het
+  logbestand `praatMaar.log` roteert boven 5 MB. Beide groeiden voorheen
+  onbeperkt, buiten de retentie die voor transcripts al gold.
+- **Sneltoets opnemen** werkt betrouwbaar: de opgenomen combinatie kon eerder
+  toetsen bevatten die nooit konden afgaan, en het opnemen kon de app laten
+  crashen.
+- Het tray-icoon en de status-pill worden altijd vanaf de juiste thread
+  bijgewerkt; op systemen zónder systeemvak start de app nu zonder crash.
+- **Meeting Buddy:** de overlay komt niet meer terug nadat een meeting is
+  gestopt; opnieuw verbinden houdt de gekozen spraaktaal aan; open vragen uit
+  de Local LLM-analyse leveren nu daadwerkelijk een hint op.
+- **Meetinggeluid:** levert de meetinggeluid-bron niets, dan valt de opname
+  netjes terug op alleen de microfoon (voorheen kon het transcript leeg blijven
+  en liep het geheugengebruik op).
+- **Local LLM:** statuscontroles wachten maximaal 5 seconden, zodat een
+  onbereikbaar endpoint het opstarten en de vensters niet meer laat bevriezen.
+- Een onbekende modelnaam in `config.json` valt terug op `small` in plaats van
+  een mislukte start.
+- Windows: de controle op "app draait al" is betrouwbaarder; macOS/Linux tonen
+  weer het PID van de draaiende instantie.
+- Opgenomen audio blijft niet meer in de tijdelijke map achter wanneer het
+  bewaren voor herstel mislukt.
+- Dialogen worden bij sluiten volledig vrijgegeven (geen geheugenopbouw bij
+  herhaald openen), en "map openen" meldt nu een fout in plaats van stil te
+  falen bij een offline netwerkmap.
 
 ## [0.2.0] - 2026-07-24
 
@@ -139,6 +166,7 @@ Eerste publieke Windows-release (tag `v0.1.0`).
 - Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
 - `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`
 
-[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/benvankruistum/praatMaar/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/benvankruistum/praatMaar/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/benvankruistum/praatMaar/releases/tag/v0.1.0
