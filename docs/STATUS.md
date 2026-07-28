@@ -1,6 +1,6 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-07-27.
+Laatst bijgewerkt: 2026-07-28.
 
 ## Ondersteund
 
@@ -38,7 +38,7 @@ Aandachtspunten, nog niet als distributie-build geverifieerd:
 - **Modules:** in-process uitbreidingen + event-journal (`modules/`, tray **Modules**);
   inbox-spiegel; optionele incrementele transcriptie tijdens opname
   ([ADR-0003](adr/0003-hybrid-module-system.md))
-- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.2.0`; volgende `v0.3.0`)
+- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.3.0`; volgende `v1.0.0`)
 
 ## Experimentele modules
 
@@ -91,9 +91,10 @@ Gatekeeper (zie roadmap).
 
 ## Open / roadmap
 
-1. Tag **v0.3.0** na merge van `feat/pyside6-ui` (PR #34) (Windows Setup/zip via Actions);
+1. **v0.3.0 uitbrengen:** tag gezet; Windows Setup/zip komt via Actions.
    macOS `.app` handmatig of later via CI (signing later).
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
+   Daarna: gebruikerstesten van 0.3.0, richting **1.0.0**.
 2. macOS: eventuele Gatekeeper/signing-check op een schone Mac zonder TCC-dev-host.
 3. Experimentele Local LLM + Meeting Buddy agenda-review: gebruikersvalidatie
    en polish. Zie [design](superpowers/specs/2026-07-23-local-llm-module-design.md).
