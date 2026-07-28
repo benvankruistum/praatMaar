@@ -84,3 +84,22 @@ def test_format_topic_line_marks_status() -> None:
     assert format_topic_line(sequential).startswith("●")
     assert format_topic_line(confirmed).startswith("✓")
     assert "Opening" in format_topic_line(open_topic)
+
+
+def test_late_ui_update_after_stop_does_not_recreate_overlay() -> None:
+    # Regression (zombie-overlay): een gequeuede UI-update die ná stop_meeting
+    # binnenkomt zag self._overlay is None en maakte een níeuwe overlay aan
+    # (blijvend always-on-top venster met verouderde status).
+    from modules._builtin.meeting_buddy.state import MeetingState
+
+    module = mb_module.MeetingBuddyModule()
+    assert module.is_session_active is False
+    assert module._overlay is None
+
+    module._apply_ui_update(
+        MeetingState.empty("s"),
+        capture_status=CaptureStatus.ACTIVE,
+        transcription_status=None,
+    )
+
+    assert module._overlay is None, "late update mag geen nieuwe overlay aanmaken"

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QRadioButton,
     QScrollArea,
@@ -593,10 +594,14 @@ class DestinationsDialog(QDialog):
         self.delete_button.clicked.connect(self._delete)
         self.active_button.clicked.connect(self._set_active)
         self.open_active.clicked.connect(self._open_active)
-        self.open_default.clicked.connect(
-            lambda: destinations.open_in_explorer(recovery.transcripts_dir())
-        )
+        self.open_default.clicked.connect(self._open_default)
         return frame
+
+    def _open_default(self) -> None:
+        try:
+            destinations.open_in_explorer(recovery.transcripts_dir())
+        except OSError as exc:
+            QMessageBox.critical(self, i18n.t("destinations.title"), str(exc))
 
     def _build_footer(self) -> QFrame:
         footer = QFrame()
@@ -715,7 +720,11 @@ class DestinationsDialog(QDialog):
         path = QLabel(item["path"])
         path.setObjectName("destPath")
         map_layout.addWidget(path)
-        if destinations.is_shared_location(item["path"]):
+        # Ook append_file toetsen: juist dáár wordt doorlopend
+        # transcript-inhoud in geappend.
+        if destinations.is_shared_location(item["path"]) or destinations.is_shared_location(
+            str(item.get("append_file") or "")
+        ):
             warning = _Glyph("triangle", TOKENS["amber_icon"], width=13, height=12)
             warning.setToolTip(i18n.t("destinations.shared_folder.tooltip"))
             map_layout.addWidget(warning)
@@ -876,7 +885,12 @@ class DestinationsDialog(QDialog):
         path = destinations.resolve_save_dir(
             self._active, self._destinations, recovery.transcripts_dir()
         )
-        destinations.open_in_explorer(path)
+        try:
+            destinations.open_in_explorer(path)
+        except OSError as exc:
+            # Offline share/verwijderde map: nette melding i.p.v. een stil
+            # falende knop (alleen een traceback in de log).
+            QMessageBox.critical(self, i18n.t("destinations.title"), str(exc))
 
     def _save(self) -> None:
         merged = dict(self._current)
@@ -915,3 +929,6 @@ def _clear_open_dialog(dialog: QDialog) -> None:
     global _open_dialog
     if _open_dialog is dialog:
         _open_dialog = None
+    # Ook de C++-widgetboom vrijgeven: de dialoog hangt onder de pill en bleef
+    # anders tot app-exit bestaan (accumulatie bij herhaald openen).
+    dialog.deleteLater()

@@ -147,3 +147,20 @@ def test_delete_custom_clears_active_and_shows_empty_state() -> None:
     dialog._delete()
     assert dialog._active is None
     assert not dialog.empty_state.isHidden()
+
+
+def test_shared_append_file_shows_warning_glyph() -> None:
+    # Regression: de gedeelde-locatie-waarschuwing keek alleen naar "path".
+    # Een lokale map met append_file op een netwerkshare kreeg geen driehoekje,
+    # terwijl daar doorlopend transcript-inhoud in wordt geappend.
+    from ui.dialogs.destinations import _Glyph
+
+    _app()
+    current = _current("Notulen Q3")
+    current["destinations"][0]["append_file"] = r"\server\gedeeld\notulen.txt"
+    dialog = DestinationsDialog(None, current, lambda _s: None)
+
+    triangles = [
+        glyph for glyph in dialog.findChildren(_Glyph) if getattr(glyph, "_shape", "") == "triangle"
+    ]
+    assert triangles, "verwacht een waarschuwingsdriehoekje voor de gedeelde append_file"

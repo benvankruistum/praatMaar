@@ -87,3 +87,31 @@ def test_ollama_error_on_bad_json(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     with pytest.raises(OllamaError):
         client.tags()
+
+
+def test_status_checks_use_short_timeout(monkeypatch) -> None:
+    # Regression: tags/is_ready deelden de chat-timeout van 120s; een
+    # onbereikbaar (custom) endpoint bevroor app-start en UI-thread.
+    import io
+    import json as json_mod
+
+    from modules._builtin.local_llm.ollama_client import OllamaClient
+
+    timeouts: list[float] = []
+
+    def fake_urlopen(req, timeout=None):
+        timeouts.append(timeout)
+
+        class _Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        return _Resp(json_mod.dumps({"models": []}).encode())
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    client = OllamaClient(timeout_s=120.0, status_timeout_s=5.0)
+    client.tags()
+    assert timeouts == [5.0]

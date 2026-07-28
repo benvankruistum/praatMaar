@@ -18,7 +18,24 @@ from typing import Any, TextIO, cast
 import host
 
 _LOG_NAME = "praatMaar.log"
+# AVG/retentie: de log bevat o.a. transcriptuitvoer (stdout-tee) en groeide
+# onbegrensd. Rotatie bij opstarten begrenst de bewaartermijn tot maximaal
+# twee bestanden van elk ~_MAX_LOG_BYTES.
+_MAX_LOG_BYTES = 5 * 1024 * 1024
 _configured = False
+
+
+def _rotate_if_oversized(path: Path) -> None:
+    """Roteert `praatMaar.log` naar `.1` zodra die te groot is (best-effort)."""
+
+    try:
+        if not path.exists() or path.stat().st_size <= _MAX_LOG_BYTES:
+            return
+        backup = path.with_name(path.name + ".1")
+        path.replace(backup)
+    except OSError:
+        # Rotatie mag opstarten nooit blokkeren; dan maar één run langer groot.
+        pass
 
 
 class _Tee:
@@ -97,6 +114,7 @@ def setup_logging() -> Path:
     directory = host.app_dir()
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / _LOG_NAME
+    _rotate_if_oversized(path)
 
     log_file = path.open("a", encoding="utf-8", errors="replace")
     log_file.write(f"\n--- praatMaar start {datetime.now().isoformat(timespec='seconds')} ---\n")

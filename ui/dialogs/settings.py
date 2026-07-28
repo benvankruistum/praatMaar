@@ -429,9 +429,11 @@ class SettingsDialog(QDialog):
         self.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
 
     def _capture_callback(self, event: str, key: Any) -> None:
+        # Aangeroepen vanaf de pynput-listenerthread; widgetwerk
+        # (_refresh_keycaps) moet op de GUI-thread gebeuren.
         token = hotkeys.key_to_token(key)
         if token is not None:
-            self._capture_token(event, token)
+            ui_dispatch(lambda: self._capture_token(event, token))
 
     def _capture_token(self, event: str, token: str) -> None:
         if event == "press":
@@ -446,27 +448,33 @@ class SettingsDialog(QDialog):
 
     def keyPressEvent(self, event: Any) -> None:
         if self._capture_active:
-            modifiers = event.modifiers()
-            for flag, token in (
-                (Qt.KeyboardModifier.ControlModifier, "ctrl"),
-                (Qt.KeyboardModifier.ShiftModifier, "shift"),
-                (Qt.KeyboardModifier.AltModifier, "alt"),
-                (Qt.KeyboardModifier.MetaModifier, "cmd"),
-            ):
-                if modifiers & flag:
+            # Met een actieve globale listener (pynput) is díe de enige
+            # tokenbron: Qt-tokens ("num_enter", event-text) wijken af van de
+            # pynput-vocabulaire, en dubbel voeden levert combinaties op die
+            # de listener nooit kan matchen. Qt onderdrukt hier alleen.
+            if self._set_capture is None:
+                modifiers = event.modifiers()
+                for flag, token in (
+                    (Qt.KeyboardModifier.ControlModifier, "ctrl"),
+                    (Qt.KeyboardModifier.ShiftModifier, "shift"),
+                    (Qt.KeyboardModifier.AltModifier, "alt"),
+                    (Qt.KeyboardModifier.MetaModifier, "cmd"),
+                ):
+                    if modifiers & flag:
+                        self._capture_token("press", token)
+                token = hotkeys.qt_key_to_token(event.key(), event.text())
+                if token is not None:
                     self._capture_token("press", token)
-            token = hotkeys.qt_key_to_token(event.key(), event.text())
-            if token is not None:
-                self._capture_token("press", token)
             event.accept()
             return
         super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event: Any) -> None:
         if self._capture_active:
-            token = hotkeys.qt_key_to_token(event.key(), event.text())
-            if token is not None:
-                self._capture_token("release", token)
+            if self._set_capture is None:
+                token = hotkeys.qt_key_to_token(event.key(), event.text())
+                if token is not None:
+                    self._capture_token("release", token)
             event.accept()
             return
         super().keyReleaseEvent(event)
@@ -640,3 +648,6 @@ def _clear_open_dialog(dialog: QDialog) -> None:
     global _open_dialog
     if _open_dialog is dialog:
         _open_dialog = None
+    # Ook de C++-widgetboom vrijgeven: de dialoog hangt onder de pill en bleef
+    # anders tot app-exit bestaan (accumulatie bij herhaald openen).
+    dialog.deleteLater()

@@ -31,3 +31,28 @@ def test_dialog_facades_accept_no_parent() -> None:
     open_help(None)
     assert len(QApplication.topLevelWidgets()) >= 4
     _close_dialogs()
+
+
+def test_closing_dialog_schedules_deletion() -> None:
+    # Regression: bij sluiten werd alleen de module-globale referentie gewist;
+    # de C++-widgetboom bleef als kind van de pill bestaan tot app-exit
+    # (N keer Instellingen openen = N dialoogbomen in het geheugen).
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    import ui.dialogs.settings as settings_mod
+    from ui.dialogs.settings import SettingsDialog
+
+    app = ensure_app([])
+    _close_dialogs()
+    open_settings_dialog(None, {}, lambda _settings: None)
+    dialog = settings_mod._open_dialog
+    assert isinstance(dialog, SettingsDialog)
+
+    dialog.close()
+    app.processEvents()
+    assert settings_mod._open_dialog is None
+
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    import shiboken6
+
+    assert not shiboken6.isValid(dialog), "dialoog moet na sluiten opgeruimd zijn"

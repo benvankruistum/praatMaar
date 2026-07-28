@@ -48,7 +48,10 @@ class WinHost:
         import ctypes
         from ctypes import wintypes
 
-        kernel32 = ctypes.windll.kernel32
+        # use_last_error=True + get_last_error(): ctypes zelf kan LastError
+        # tussentijds overschrijven, waardoor windll.kernel32.GetLastError()
+        # onbetrouwbaar is (tweede instantie zag dan 0 i.p.v. ALREADY_EXISTS).
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.CreateMutexW.restype = wintypes.HANDLE
         kernel32.CreateMutexW.argtypes = [
             wintypes.LPCVOID,
@@ -62,7 +65,7 @@ class WinHost:
             # instantie ten onrechte blokkeren.
             return True
 
-        if kernel32.GetLastError() == _ERROR_ALREADY_EXISTS:
+        if ctypes.get_last_error() == _ERROR_ALREADY_EXISTS:
             return False
 
         # Handle levend houden voor de procesduur; het OS geeft de mutex vrij zodra

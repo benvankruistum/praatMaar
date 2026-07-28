@@ -19,10 +19,18 @@ class OllamaClient:
     """Talks to Ollama's HTTP API on localhost (or a configured base URL)."""
 
     def __init__(
-        self, base_url: str = "http://127.0.0.1:11434", *, timeout_s: float = 120.0
+        self,
+        base_url: str = "http://127.0.0.1:11434",
+        *,
+        timeout_s: float = 120.0,
+        status_timeout_s: float = 5.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
+        # Statuschecks (tags/is_ready) draaien op app-start en op de
+        # UI-thread; met de chat-timeout van 120s bevroor de UI zolang een
+        # (custom) endpoint onbereikbaar was.
+        self.status_timeout_s = status_timeout_s
 
     def tags(self) -> list[str]:
         payload = self._get_json("/api/tags")
@@ -67,7 +75,7 @@ class OllamaClient:
 
     def _get_json(self, path: str) -> dict[str, Any]:
         req = urllib.request.Request(f"{self.base_url}{path}", method="GET")
-        return self._request_json(req)
+        return self._request_json(req, timeout_s=self.status_timeout_s)
 
     def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
         data = json.dumps(body).encode("utf-8")
@@ -77,11 +85,11 @@ class OllamaClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        return self._request_json(req)
+        return self._request_json(req, timeout_s=self.timeout_s)
 
-    def _request_json(self, req: urllib.request.Request) -> dict[str, Any]:
+    def _request_json(self, req: urllib.request.Request, *, timeout_s: float) -> dict[str, Any]:
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
                 raw = resp.read().decode("utf-8")
         except urllib.error.URLError as exc:
             raise OllamaError(f"Ollama niet bereikbaar ({self.base_url}): {exc}") from exc

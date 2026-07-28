@@ -125,7 +125,7 @@ HOTKEY_TOKENS: set[str] = set(hotkeys.DEFAULT_HOTKEY)
 # ---------------------------------------------------------
 _user_config = config.load_config()
 if "model" in _user_config:
-    MODEL_NAME = str(_user_config["model"])
+    MODEL_NAME = config.normalize_model_name(_user_config["model"])
 if "microphone_device" in _user_config:
     MICROPHONE_DEVICE = _user_config["microphone_device"]
 if "auto_paste" in _user_config:
@@ -771,6 +771,15 @@ def _report_user_error(message: str) -> None:
     indicator.call_on_main(show)
 
 
+def _modules_hold_audio_streams() -> bool:
+    """True als een module (Meeting Buddy-capture) eigen audiostreams open heeft.
+
+    PortAudio herinitialiseren zou die streams eronder wegtrekken.
+    """
+
+    return any(getattr(module, "is_session_active", False) for module in module_bus.modules)
+
+
 def _build_session() -> Opnamesessie:
     """Bouwt de Opnamesessie met de huidige config en geïnjecteerde seams."""
 
@@ -798,6 +807,7 @@ def _build_session() -> Opnamesessie:
         get_active_destination=lambda: ACTIVE_DESTINATION,
         on_user_error=_report_user_error,
         on_mic_ready=lambda: _set_mic_attention(False),
+        has_external_streams=_modules_hold_audio_streams,
         shared_whisper=shared_whisper,
     )
 

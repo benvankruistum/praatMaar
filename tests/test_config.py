@@ -32,3 +32,16 @@ def test_ensure_app_data_dirs_creates_standard_layout(tmp_path: Path, monkeypatc
     assert config.ensure_app_data_dirs() == tmp_path
     for name in ("transcripts", "recovery", "events", "inbox"):
         assert (tmp_path / name).is_dir()
+
+
+def test_normalize_model_name_falls_back_on_unknown() -> None:
+    # Hand-bewerkte config met typefout ("smal") liet Faster-Whisper het als
+    # HF-repo-id downloaden → splash-fout en de app startte niet.
+    from config import KNOWN_MODELS, normalize_model_name
+
+    assert normalize_model_name("small") == "small"
+    assert normalize_model_name(" Medium ") == "medium"
+    assert normalize_model_name("smal") == "small"
+    assert normalize_model_name("") == "small"
+    assert normalize_model_name(None) == "small"
+    assert "small" in KNOWN_MODELS
