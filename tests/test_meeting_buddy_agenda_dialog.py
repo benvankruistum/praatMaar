@@ -70,3 +70,33 @@ def test_show_agenda_dialog_cancel_returns_none(monkeypatch: pytest.MonkeyPatch)
         mode="start",
     )
     assert result is None
+
+
+def test_library_rerender_does_not_accumulate_widgets(tmp_path: Path) -> None:
+    # Zelfde bugklasse als in de overlay (recursieve _clear_layout): elke
+    # bibliotheek-refresh moet de vorige rijen vrijgeven, ook de geneste.
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QLabel
+
+    from modules._builtin.meeting_buddy.agenda_dialog import _AgendaDialog
+    from ui.app import ensure_app
+
+    app = ensure_app([])
+    (tmp_path / "agendas").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "agendas" / "overleg.md").write_text("# Overleg\n- Budget\n", encoding="utf-8")
+
+    dialog = _AgendaDialog(parent=None, agenda_text="", path=None, app_dir=tmp_path, mode="start")
+    try:
+        dialog._populate_library()
+        app.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        first = len(dialog._library_pane.findChildren(QLabel))
+
+        for _ in range(3):
+            dialog._populate_library()
+        app.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+        assert len(dialog._library_pane.findChildren(QLabel)) == first
+    finally:
+        dialog.close()

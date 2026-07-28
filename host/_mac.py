@@ -40,7 +40,10 @@ class MacHost:
         lock_path = self.app_dir() / "singleton.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
 
-        handle = lock_path.open("w")
+        # "a+" i.p.v. "w": open("w") truncat het bestand meteen — óók als een
+        # andere instantie de flock houdt (flock verhindert truncate niet).
+        # De PID-hint van de eigenaar bleef dan altijd leeg ("PID ?").
+        handle = lock_path.open("a+")
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:

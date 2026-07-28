@@ -25,6 +25,23 @@ import host
 _save_lock = threading.Lock()
 
 
+KNOWN_MODELS = ("base", "small", "medium")
+DEFAULT_MODEL = "small"
+
+
+def normalize_model_name(value: Any) -> str:
+    """Valideert de modelnaam uit config; onbekend → ``DEFAULT_MODEL``.
+
+    Zonder deze check probeerde Faster-Whisper een typefout (``"smal"``) als
+    HuggingFace-repo-id te downloaden; de app startte dan niet.
+    """
+
+    if value is None:
+        return DEFAULT_MODEL
+    name = str(value).strip().lower()
+    return name if name in KNOWN_MODELS else DEFAULT_MODEL
+
+
 def config_dir() -> Path:
     """De map voor gebruikersinstellingen (OS-conform, via de platform-seam)."""
 

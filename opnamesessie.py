@@ -135,6 +135,7 @@ class Opnamesessie:
         get_active_destination: Callable[[], str | None] | None = None,
         on_user_error: Callable[[str], None] | None = None,
         on_mic_ready: Callable[[], None] | None = None,
+        has_external_streams: Callable[[], bool] | None = None,
         shared_whisper: SharedWhisper | None = None,
     ) -> None:
         self.host = host
@@ -166,6 +167,9 @@ class Opnamesessie:
         self._get_active_destination = get_active_destination
         self._on_user_error = on_user_error
         self._on_mic_ready = on_mic_ready
+        # Modules (Meeting Buddy-capture) openen eigen InputStreams op dezelfde
+        # sounddevice-module; PortAudio herinitialiseren trekt die onder hen weg.
+        self._has_external_streams = has_external_streams
 
         self._lock = threading.RLock()
         self._recording = False
@@ -459,21 +463,40 @@ class Opnamesessie:
                 return
 
         _, sd, _ = self._require_audio()
-        # Bluetooth/hotplug: herenumereren vóór open (geen actieve stream hier).
-        refresh_portaudio(sd)
+        # Bluetooth/hotplug: herenumereren vóór open (geen eigen stream hier).
+        self._refresh_portaudio_if_safe(sd)
 
         device = self._resolve_input_device(sd)
         try:
             self._open_input_stream(sd, device)
         except Exception as first_exc:
             # Stale default (-1) of oude index: opnieuw enumereren + concrete mic.
-            refresh_portaudio(sd)
+            self._refresh_portaudio_if_safe(sd)
             device = self._resolve_input_device(sd)
             if device is None:
                 device = first_input_device_index(sd)
             if device is None:
                 raise first_exc
             self._open_input_stream(sd, device)
+
+    def _refresh_portaudio_if_safe(self, sd: Any) -> bool:
+        """Herenumereer PortAudio alleen als er app-breed geen streams open zijn.
+
+        ``refresh_portaudio`` doet ``_terminate()`` tot PortAudio uit is; met een
+        actieve module-stream (Meeting Buddy-capture op dezelfde sounddevice-
+        module) trekt dat die stream eronder weg — dode streams of een native
+        crash. Overslaan kost alleen hotplug-detectie voor deze start.
+        """
+
+        if self._has_external_streams is not None:
+            try:
+                if self._has_external_streams():
+                    return False
+            except Exception:
+                # Onbekende toestand: niet herinitialiseren (veilige kant).
+                return False
+        refresh_portaudio(sd)
+        return True
 
     def _open_input_stream(self, sd: Any, device: int | None) -> None:
         """Opent en start een InputStream; koppelt die aan de sessie."""
@@ -905,6 +928,12 @@ class Opnamesessie:
                             print(i18n.t("rec.recovery_saved", path=recovery_kept))
                         except OSError as exc:
                             print(i18n.t("rec.recovery_preserve_warn", error=exc))
+                            # Recovery-map vol/onbeschrijfbaar: laat de
+                            # opgenomen spraak niet in %TEMP% achter.
+                            try:
+                                os.remove(temporary_path)
+                            except OSError:
+                                pass
                 elif self.delete_temp_audio:
                     try:
                         os.remove(temporary_path)

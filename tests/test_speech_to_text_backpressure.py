@@ -49,19 +49,24 @@ def test_gap_when_busy_queue_exceeds_maximum_duration() -> None:
         capture=capture,
     )
 
-    for _ in range(4):
-        capture.emit_seconds(0.05)
+    try:
+        for _ in range(4):
+            capture.emit_seconds(0.05)
 
-    gaps = [event for event in events if isinstance(event, TranscriptGap)]
-    assert gaps
-    assert gaps[0].session_id == session.session_id
-    assert gaps[0].reason == "whisper_queue_overflow"
-    assert stt.get_status(session.session_id) == TranscriptionStatus.DELAYED
-    assert any(
-        isinstance(event, TranscriptionStatusChanged)
-        and event.status == TranscriptionStatus.DELAYED
-        for event in events
-    )
+        gaps = [event for event in events if isinstance(event, TranscriptGap)]
+        assert gaps
+        assert gaps[0].session_id == session.session_id
+        assert gaps[0].reason == "whisper_queue_overflow"
+        assert stt.get_status(session.session_id) == TranscriptionStatus.DELAYED
+        assert any(
+            isinstance(event, TranscriptionStatusChanged)
+            and event.status == TranscriptionStatus.DELAYED
+            for event in events
+        )
+    finally:
+        # Anders blijft de drain-thread tot procesende pollen en concurreert
+        # hij met latere tests om de GIL (flake-bron).
+        stt.shutdown()
 
 
 def test_session_config_overrides_default_queue_duration() -> None:
@@ -79,15 +84,18 @@ def test_session_config_overrides_default_queue_duration() -> None:
         config={"max_whisper_queue_duration_s": 0.1},
     )
 
-    for _ in range(4):
-        capture.emit_seconds(0.05)
+    try:
+        for _ in range(4):
+            capture.emit_seconds(0.05)
 
-    assert any(
-        isinstance(event, TranscriptGap)
-        and event.session_id == session.session_id
-        and event.reason == "whisper_queue_overflow"
-        for event in events
-    )
+        assert any(
+            isinstance(event, TranscriptGap)
+            and event.session_id == session.session_id
+            and event.reason == "whisper_queue_overflow"
+            for event in events
+        )
+    finally:
+        stt.shutdown()
 
 
 def test_available_whisper_emits_final_delta() -> None:
@@ -307,6 +315,9 @@ def test_stop_waits_for_capture_callback_and_suppresses_late_events() -> None:
         whisper=AlwaysBusyWhisper(),
         max_whisper_queue_duration_s=0.01,
         on_event=record_event,
+        # Korte flush-timeout: de volle 2s liet nauwelijks marge op de
+        # stopper-join hieronder (flake-bron op trage CI).
+        flush_busy_timeout_s=0.1,
     )
     capture_session = capture.start_session()
     session = stt.start_session(
@@ -316,18 +327,28 @@ def test_stop_waits_for_capture_callback_and_suppresses_late_events() -> None:
     events.clear()
 
     original_trim_queue = stt._trim_queue
+    # Asserts op een workerthread worden een warning i.p.v. een failure; vang
+    # ze op en laat de main-thread erover struikelen.
+    thread_errors: list[BaseException] = []
 
     def pause_after_stopping_check(state: object) -> list[TranscriptGap]:
-        callback_started.set()
-        deadline = time.monotonic() + 5
-        while time.monotonic() < deadline:
-            with stt._lock:
-                if getattr(state, "stopping", False):
-                    break
-            time.sleep(0.001)
-        else:
-            raise AssertionError("stop_session zette stopping niet binnen 5s")
-        assert finish_callback.wait(timeout=2)
+        try:
+            callback_started.set()
+            # Ruime failsafe: bij succes kost dit niets, en scheduling onder
+            # CI-load haalt geen krappe deadline meer.
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                with stt._lock:
+                    if getattr(state, "stopping", False):
+                        break
+                time.sleep(0.001)
+            else:
+                raise AssertionError("stop_session zette stopping niet binnen 30s")
+            if not finish_callback.wait(timeout=30):
+                raise AssertionError("finish_callback bleef 30s uit")
+        except BaseException as exc:  # noqa: BLE001 - doorgeven aan main-thread
+            thread_errors.append(exc)
+            raise
         return original_trim_queue(state)
 
     stt._trim_queue = pause_after_stopping_check
@@ -349,6 +370,7 @@ def test_stop_waits_for_capture_callback_and_suppresses_late_events() -> None:
         # Model blijft bezet → flush-busy-timeout (~2s) vóór stop terugkeert.
         stopper.join(timeout=5)
 
+    assert not thread_errors, f"fout op workerthread: {thread_errors[0]}"
     assert stop_done.is_set()
     assert late_events == []
     assert not any(isinstance(event, TranscriptGap) for event in events)

@@ -626,3 +626,22 @@ def test_clear_session_id_does_not_clobber_newer_session(session: Opnamesessie) 
     assert session._session_id == "nieuw"
     session._clear_session_id("nieuw")
     assert session._session_id is None
+
+
+def test_ensure_stream_skips_portaudio_refresh_when_modules_capture(
+    session: Opnamesessie, sd: FakeSoundDevice, monkeypatch
+) -> None:
+    # Regression: refresh_portaudio doet _terminate() tot PortAudio uit is —
+    # met een actieve Meeting Buddy-capture op dezelfde sounddevice-module
+    # trok dat die stream eronder weg (dode stream of native crash).
+    calls: list[int] = []
+    monkeypatch.setattr("opnamesessie.refresh_portaudio", lambda _sd: calls.append(1))
+
+    session._has_external_streams = lambda: True
+    session.start()
+    assert calls == []
+
+    session.stop_audio_stream()
+    session._has_external_streams = lambda: False
+    session._ensure_stream()
+    assert calls == [1]

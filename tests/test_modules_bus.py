@@ -63,3 +63,25 @@ def test_bus_dispatches_to_modules_and_journal(tmp_path: Path) -> None:
     lines = journal_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 1
     assert '"cycle.started"' in lines[0]
+
+
+def test_journal_redacts_transcript_content(tmp_path: Path) -> None:
+    # AVG: het journal is append-only zonder retentie; volledige transcripten
+    # (incl. persoonsgegevens) hoorden daar niet in. Alleen de lengte blijft.
+    import json
+
+    journal_path = tmp_path / "events.jsonl"
+    journal = EventJournal(path=journal_path)
+    journal.write(
+        CycleEvent(
+            type=CycleEventType.CYCLE_COMPLETED,
+            session_id="s1",
+            transcript="vertrouwelijke burgertekst",
+        )
+    )
+
+    line = journal_path.read_text(encoding="utf-8").strip()
+    data = json.loads(line)
+    assert "vertrouwelijke" not in line
+    assert data.get("transcript_chars") == len("vertrouwelijke burgertekst")
+    assert "transcript" not in data

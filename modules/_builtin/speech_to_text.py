@@ -70,9 +70,13 @@ class IncrementalSpeechToText:
         max_whisper_queue_duration_s: float = MAX_WHISPER_QUEUE_DURATION_S,
         transcribe_fn: TranscribeFn | None = None,
         on_event: SttEventHandler | None = None,
+        flush_busy_timeout_s: float = _FLUSH_BUSY_TIMEOUT_S,
     ) -> None:
         if max_whisper_queue_duration_s <= 0:
             raise ValueError("max_whisper_queue_duration_s moet groter dan nul zijn")
+        # Injecteerbaar zodat tests niet de volle 2s flush-timeout hoeven te
+        # verbranden (dat liet nauwelijks marge op de stopper-join).
+        self._flush_busy_timeout_s = flush_busy_timeout_s
         self._whisper = whisper
         self._default_max_queue_duration_s = max_whisper_queue_duration_s
         self._use_default_transcribe = transcribe_fn is None
@@ -221,7 +225,7 @@ class IncrementalSpeechToText:
                     if stopping:
                         if busy_since is None:
                             busy_since = now
-                        elif now - busy_since >= _FLUSH_BUSY_TIMEOUT_S:
+                        elif now - busy_since >= self._flush_busy_timeout_s:
                             with self._lock:
                                 dropped = len(state.queue)
                                 state.queue.clear()

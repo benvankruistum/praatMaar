@@ -335,3 +335,6 @@ def _clear_open_dialog(dialog: QDialog) -> None:
     global _open_dialog
     if _open_dialog is dialog:
         _open_dialog = None
+    # Ook de C++-widgetboom vrijgeven: de dialoog hangt onder de pill en bleef
+    # anders tot app-exit bestaan (accumulatie bij herhaald openen).
+    dialog.deleteLater()

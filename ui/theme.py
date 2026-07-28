@@ -5,11 +5,43 @@ from __future__ import annotations
 import os
 import tempfile
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QStandardPaths, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QApplication
 
 _check_icon_path: str | None = None
+
+
+def _icon_cache_dir() -> str:
+    """Per-gebruiker cachemap voor runtime-iconen.
+
+    Een vaste map in de gedeelde tempdir (``/tmp`` op Linux) kan van een
+    andere gebruiker zijn; dan faalt het schrijven en verdwijnen vinkje/
+    chevron stil. Het PID-loze pad blijft stabiel binnen één gebruiker.
+    """
+
+    base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.CacheLocation)
+    if not base:
+        base = tempfile.gettempdir()
+    return os.path.join(base, "praatMaar-ui")
+
+
+def _save_icon_atomically(image: QImage, name: str) -> str | None:
+    """Schrijft ``image`` atomisch (tmp + replace) en geeft het QSS-pad terug."""
+
+    try:
+        cache = _icon_cache_dir()
+        os.makedirs(cache, exist_ok=True)
+        out = os.path.join(cache, name)
+        # Uniek tmp-pad per proces: twee instanties (of tests) schreven
+        # anders hetzelfde bestand en konden een half PNG inlezen.
+        tmp = f"{out}.{os.getpid()}.tmp"
+        if not image.save(tmp):
+            return None
+        os.replace(tmp, out)
+        return out.replace("\\", "/")
+    except OSError:
+        return None
 
 
 def _checkbox_check_icon() -> str | None:
@@ -36,16 +68,8 @@ def _checkbox_check_icon() -> str | None:
     path.lineTo(12.0, 4.5)
     painter.drawPath(path)
     painter.end()
-    try:
-        cache = os.path.join(tempfile.gettempdir(), "praatMaar-ui")
-        os.makedirs(cache, exist_ok=True)
-        out = os.path.join(cache, "checkbox-check.png")
-        if image.save(out):
-            _check_icon_path = out.replace("\\", "/")
-            return _check_icon_path
-    except OSError:
-        return None
-    return None
+    _check_icon_path = _save_icon_atomically(image, "checkbox-check.png")
+    return _check_icon_path
 
 
 _chevron_icon_path: str | None = None
@@ -71,16 +95,8 @@ def _combo_chevron_icon() -> str | None:
     path.lineTo(9.0, 4.8)
     painter.drawPath(path)
     painter.end()
-    try:
-        cache = os.path.join(tempfile.gettempdir(), "praatMaar-ui")
-        os.makedirs(cache, exist_ok=True)
-        out = os.path.join(cache, "combo-chevron.png")
-        if image.save(out):
-            _chevron_icon_path = out.replace("\\", "/")
-            return _chevron_icon_path
-    except OSError:
-        return None
-    return None
+    _chevron_icon_path = _save_icon_atomically(image, "combo-chevron.png")
+    return _chevron_icon_path
 
 
 # Hex values from docs/design/canvas/praatMaar-ui.dc.html (#5a and family).

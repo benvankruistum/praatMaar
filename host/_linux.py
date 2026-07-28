@@ -57,13 +57,17 @@ class LinuxHost:
         import fcntl
 
         lock_path = self.app_dir() / "singleton.lock"
-        handle = lock_path.open("w")
+        # "a+" i.p.v. "w": open("w") truncat het bestand ook als een andere
+        # instantie de flock houdt (flock verhindert truncate niet).
+        handle = lock_path.open("a+")
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             handle.close()
             return False
 
+        handle.seek(0)
+        handle.truncate()
         handle.write(str(os.getpid()))
         handle.flush()
         self._lock = handle
