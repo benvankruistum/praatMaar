@@ -6,7 +6,7 @@ import os
 import tempfile
 
 from PySide6.QtCore import QStandardPaths, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPalette, QPen
 from PySide6.QtWidgets import QApplication
 
 _check_icon_path: str | None = None
@@ -169,16 +169,38 @@ def build_qss(
     return f"""
     {chevron}
     QWidget {{ color: {t["text"]}; font-size: 13px; }}
-    QDialog, QMainWindow {{ background: {t["surface"]}; }}
-    QLineEdit, QComboBox, QTextEdit {{
-        background: {t["surface"]}; border: 1px solid {t["border_strong"]};
+    QDialog, QMainWindow {{ background: {t["surface"]}; color: {t["text"]}; }}
+    QScrollArea, QScrollArea > QWidget > QWidget {{
+        background: {t["surface"]}; border: none;
+    }}
+    QTabWidget::pane {{
+        background: {t["surface"]}; border: none; border-top: 1px solid {t["border_subtle"]};
+    }}
+    QTabBar::tab {{
+        background: {t["page"]}; color: {t["muted"]}; border: none;
+        padding: 8px 14px; margin-right: 2px;
+    }}
+    QTabBar::tab:selected {{
+        background: {t["surface"]}; color: {t["text"]}; font-weight: 600;
+        border-bottom: 2px solid {t["accent"]};
+    }}
+    QTabBar::tab:hover:!selected {{ color: {t["text_secondary"]}; }}
+    QLineEdit, QComboBox, QTextEdit, QPlainTextEdit, QListWidget {{
+        background: {t["surface"]}; color: {t["text"]};
+        border: 1px solid {t["border_strong"]};
         border-radius: {t["radius_button"]}; padding: 5px 8px;
     }}
-    QLineEdit:focus, QComboBox:focus, QTextEdit:focus {{
+    QLineEdit:focus, QComboBox:focus, QTextEdit:focus, QPlainTextEdit:focus {{
         border-color: {t["accent"]};
     }}
+    QComboBox QAbstractItemView {{
+        background: {t["surface"]}; color: {t["text"]};
+        selection-background-color: {t["accent_soft"]}; selection-color: {t["text"]};
+        border: 1px solid {t["border_strong"]};
+    }}
     QPushButton {{
-        background: {t["surface"]}; border: 1px solid {t["border_strong"]};
+        background: {t["surface"]}; color: {t["text"]};
+        border: 1px solid {t["border_strong"]};
         border-radius: {t["radius_button"]}; padding: 6px 12px;
         min-height: 28px;
     }}
@@ -232,10 +254,13 @@ def build_qss(
         background: {t["surface_footer"]}; border-top: 1px solid {t["border_subtle"]};
     }}
     QFrame#settingsSection {{
-        border: none; border-top: 1px solid #F0F2F5;
+        border: none; border-top: 1px solid {t["row_divider"]};
     }}
     QLabel#fieldLabel {{
         color: {t["text_secondary"]}; font-size: 12.5px;
+    }}
+    QLabel#optionTitle {{
+        color: {t["text"]}; font-size: 12.5px;
     }}
     QLabel#hintLabel {{
         color: {t["muted_soft"]}; font-size: 11.5px;
@@ -247,7 +272,10 @@ def build_qss(
         color: {t["text_secondary"]}; font-size: 11.5px; font-weight: 600;
     }}
     QLabel#keycapPlus {{
-        color: #A9B2BD; font-size: 11px; padding: 0 2px;
+        color: {t["icon_muted"]}; font-size: 11px; padding: 0 2px;
+    }}
+    QCheckBox, QRadioButton {{
+        color: {t["text"]}; background: transparent; spacing: 8px;
     }}
     QCheckBox::indicator {{
         width: 16px; height: 16px; border-radius: 3px;
@@ -428,8 +456,47 @@ def build_qss(
     """
 
 
+def light_palette(tokens: dict[str, str] | None = None) -> QPalette:
+    """Build a light QPalette matching canvas tokens.
+
+    Qt 6 follows the OS colour scheme for unstyled roles. Without an explicit
+    light palette, Windows dark mode leaves dark Window/Base behind light QSS
+    text colours — unreadable labels in Instellingen and other dialogs.
+    """
+    t = tokens or TOKENS
+    palette = QPalette()
+    window = QColor(t["surface"])
+    text = QColor(t["text"])
+    muted = QColor(t["muted"])
+    accent = QColor(t["accent"])
+    page = QColor(t["page"])
+    palette.setColor(QPalette.ColorRole.Window, window)
+    palette.setColor(QPalette.ColorRole.WindowText, text)
+    palette.setColor(QPalette.ColorRole.Base, window)
+    palette.setColor(QPalette.ColorRole.AlternateBase, page)
+    palette.setColor(QPalette.ColorRole.Text, text)
+    palette.setColor(QPalette.ColorRole.Button, window)
+    palette.setColor(QPalette.ColorRole.ButtonText, text)
+    palette.setColor(QPalette.ColorRole.ToolTipBase, window)
+    palette.setColor(QPalette.ColorRole.ToolTipText, text)
+    palette.setColor(QPalette.ColorRole.PlaceholderText, muted)
+    palette.setColor(QPalette.ColorRole.Highlight, accent)
+    palette.setColor(QPalette.ColorRole.HighlightedText, QColor("white"))
+    palette.setColor(QPalette.ColorRole.Link, accent)
+    return palette
+
+
 def apply_theme(app: QApplication) -> None:
-    """Apply praatMaar's shared stylesheet to ``app``."""
+    """Apply praatMaar's shared light stylesheet + palette to ``app``.
+
+    Tokens are light-only (design MVP). Pin Qt's colour scheme so OS dark mode
+    cannot override unstyled backgrounds under light text colours.
+    """
+    hints = app.styleHints()
+    set_scheme = getattr(hints, "setColorScheme", None)
+    if callable(set_scheme):
+        set_scheme(Qt.ColorScheme.Light)
+    app.setPalette(light_palette())
     app.setStyleSheet(
         build_qss(check_icon=_checkbox_check_icon(), chevron_icon=_combo_chevron_icon())
     )
