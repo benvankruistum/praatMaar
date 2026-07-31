@@ -118,7 +118,7 @@ def _checkbox_with_hint(title: str, hint: str | None = None) -> tuple[QCheckBox,
     text_col.setSpacing(2)
     text_col.setContentsMargins(0, 0, 0, 0)
     title_label = QLabel(title)
-    title_label.setStyleSheet("font-size: 12.5px;")
+    title_label.setObjectName("optionTitle")
     text_col.addWidget(title_label)
     if hint:
         text_col.addWidget(_hint(hint))
