@@ -132,6 +132,10 @@ Meeting-Buddy-**Eigenschaften** ein (standardmäßig aus):
 - **Agenda-Review**: Statusleiter pro Agendapunkt und „Fragen von anderen“
   (experimentell; hängt von Sprechererkennung ab).
 
+Aktivieren Sie die Modul **Speaker Detection** (Module) für Gruppengespräche mit
+**einem Mikrofon**: praatMaar kennzeichnet lokal anonyme Sprecher (`spk_1`,
+`spk_2`, …), ohne zu bestimmen, wer Sie sind.
+
 Unter Windows kann Meeting Buddy neben dem Mikrofon optional **Meeting-Audio** vom
 gewählten Windows-Ausgabegerät per Loopback aufnehmen.
 

@@ -67,7 +67,7 @@ configuratie.
 | Module | Rol (kort) | Voorbeeldacties |
 |--------|------------|-----------------|
 | Inbox-spiegel | Kopieert opgeslagen transcripts naar inbox-map | — |
-| Speaker Detection | Sprekerrollen (ik/ander/onbekend) voor andere modules | — |
+| Speaker Detection | Sprekerlabels `spk_n` (single-mic clustering) of bron ME/OTHER | — |
 | Audio-opname | Continue mic (+ optioneel loopback) voor modules | — |
 | Spraak-naar-tekst | Live transcriptiedelta’s via gedeeld Whisper | — |
 | Meeting Buddy | Vergaderhints, agenda, overlay (experimenteel) | Start… / Start snel / Stop / Agenda / Eigenschappen |

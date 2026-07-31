@@ -51,6 +51,22 @@ def test_filter_questions_drops_me_matched_in_mixed_chunk() -> None:
     assert filter_questions_for_speaker_roles(qs, labeled_parts=parts) == ["Wie levert de cijfers?"]
 
 
+def test_format_labeled_transcript_prefers_speaker_id() -> None:
+    from modules._builtin.meeting_buddy.agenda_review import _format_labeled_transcript
+
+    text = _format_labeled_transcript(
+        [
+            LabeledFinal(
+                text="Hallo",
+                speaker_role=SpeakerRole.OTHER,
+                speaker_id="spk_1",
+            ),
+            LabeledFinal(text="Dag", speaker_role=SpeakerRole.UNKNOWN),
+        ]
+    )
+    assert text == "[spk_1] Hallo\n[unknown] Dag"
+
+
 def test_uses_llm_review_requires_enabled_and_ready() -> None:
     caps = CapabilityRegistry()
     coord = AgendaReviewCoordinator(

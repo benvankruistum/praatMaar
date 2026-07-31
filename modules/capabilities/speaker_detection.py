@@ -12,7 +12,7 @@ from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 CAPABILITY_ID = "audio.speaker_detection"
-CONTRACT_VERSION = 1
+CONTRACT_VERSION = 2
 
 
 class SpeakerRole(StrEnum):
@@ -22,20 +22,29 @@ class SpeakerRole(StrEnum):
 
 
 class AudioSource(StrEnum):
-    """Bronlabel voor v1 (geen echte diarization)."""
+    """Bronlabel voor source-mode (geen diarization)."""
 
     MICROPHONE = "microphone"
     SYSTEM = "system"
     UNKNOWN = "unknown"
 
 
+class LabelingMode(StrEnum):
+    """Hoe sprekers binnen een sessie gelabeld worden."""
+
+    SOURCE = "source"
+    CLUSTER = "cluster"
+
+
 @dataclass(frozen=True)
 class TranscriptSegment:
-    """Minimaal segment voor speaker-assignment (v1)."""
+    """Segment voor speaker-assignment."""
 
     text: str
     session_id: str
     source: AudioSource = AudioSource.UNKNOWN
+    start_ms: int | None = None
+    end_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -50,6 +59,17 @@ class SpeakerDetectionCapability(Protocol):
     def start_session(self, session_id: str) -> None: ...
 
     def observe_audio(self, session_id: str, source: AudioSource) -> None: ...
+
+    def observe_pcm(
+        self,
+        session_id: str,
+        pcm_f32: bytes,
+        start_ms: int,
+        end_ms: int,
+        sample_rate: int,
+    ) -> None: ...
+
+    def set_labeling_mode(self, session_id: str, mode: LabelingMode) -> None: ...
 
     def assign_speaker(self, segment: TranscriptSegment) -> SpeakerAssignment: ...
 

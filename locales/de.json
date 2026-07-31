@@ -231,7 +231,7 @@
   "modules.inbox_mirror.name": "Inbox-Spiegel",
   "modules.inbox_mirror.description": "Kopiert jedes gespeicherte Transkript in den Inbox-Ordner zur externen Verarbeitung.",
   "modules.speaker_detection.name": "Speaker Detection",
-  "modules.speaker_detection.description": "Bestimmt Sprecherrollen (ich/andere/unbekannt) anhand der Audioquelle; für andere Module über Capabilities verfügbar.",
+  "modules.speaker_detection.description": "Beschriftet Sprecher in Meetings (spk_1, spk_2, …) per lokalem Clustering mit einem Mikrofon; für andere Module über Capabilities verfügbar.",
   "modules.audio_capture.name": "Audioaufnahme",
   "modules.audio_capture.description": "Nimmt unter Windows Mikrofonaudio fortlaufend in Segmenten auf, solange ein Modul eine Aufnahmesitzung aktiv hält. Optional kann Meeting-Audio per WASAPI-Loopback gemischt werden (experimentell). Andere Module können diesen Stream für Live-Transkription nutzen. Kurze Diktieraufnahmen laufen davon getrennt.",
   "modules.speech_to_text.name": "Sprache-zu-Text",

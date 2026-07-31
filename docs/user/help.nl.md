@@ -130,6 +130,11 @@ en agenda-review aanzetten (standaard uit):
 - **Agenda-review**: statusladder per agendapunt en “vragen van anderen”
   (experimenteel; hangt af van speakerdetectie).
 
+Zet de module **Speaker Detection** aan (Modules) voor groepsgesprekken met
+**één microfoon**: praatMaar labelt dan lokaal anonieme sprekers (`spk_1`,
+`spk_2`, …) zonder te bepalen wie jij bent. Handig dicht bij de microfoon in
+een rustige ruimte; overlappende spraak blijft lastig.
+
 Op Windows kan Meeting Buddy naast je microfoon ook **meetinggeluid** opnemen van
 het gekozen Windows-uitvoerapparaat via loopback.
 
