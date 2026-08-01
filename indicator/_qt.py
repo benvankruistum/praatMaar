@@ -44,6 +44,7 @@ from ._contract import (
     NUM_BARS,
     PILL_BG,
     PILL_BG_ERROR,
+    POLL_INTERVAL_IDLE_MS,
     POLL_INTERVAL_MS,
     POSITION_LAST,
     READY_CUE_DURATION_MS,
@@ -186,6 +187,7 @@ class RecordingIndicator(QWidget):
                 self._hide_timer.start(CANCELLED_DURATION_MS)
             elif state == RecordingState.ERROR:
                 self._hide_timer.start(ERROR_DURATION_MS)
+        self._sync_timer_interval()
         self.update()
 
     def _transient_expired(self) -> None:
@@ -240,14 +242,41 @@ class RecordingIndicator(QWidget):
         self._hide_timer.start(max(0, int(duration_ms)))
         self.update()
 
+    _ANIMATED_STATES = (
+        RecordingState.PREPARING,
+        RecordingState.RECORDING,
+        RecordingState.TRANSCRIBING,
+    )
+
+    def _is_animated(self) -> bool:
+        """True zolang er iets beweegt dat een repaint per frame rechtvaardigt.
+
+        Idle, Geannuleerd en Mislukt staan stil: daar is 20 repaints per seconde
+        pure verspilling op een altijd-zichtbare HUD. Krijgt de ready-cue in een
+        latere slice zijn eenmalige ring, dan hoort die hier ook bij.
+        """
+
+        return self._state in self._ANIMATED_STATES
+
+    def _sync_timer_interval(self) -> None:
+        if self._timer is None:
+            return
+        wanted = POLL_INTERVAL_MS if self._is_animated() else POLL_INTERVAL_IDLE_MS
+        if self._timer.interval() != wanted:
+            self._timer.setInterval(wanted)
+
     def _tick(self) -> None:
         if self._stop_requested:
             self._stop()
             return
+        changed = False
         for state, mode, hint in drain_status_queue():
             self._apply_state(state, mode, hint)
+            changed = True
         self._frame += 1
-        if self.isVisible():
+        # Alleen schilderen als er iets beweegt of net iets veranderd is;
+        # _apply_state heeft bij een wissel zelf al update() aangeroepen.
+        if self.isVisible() and self._is_animated() and not changed:
             self.update()
 
     def run(self) -> None:

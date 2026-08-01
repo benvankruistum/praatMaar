@@ -35,6 +35,11 @@ INDICATOR_HEIGHT = 60
 WINDOW_ALPHA = 0.94
 MARGIN_FRACTION = 0.10
 POLL_INTERVAL_MS = 50
+# Statische states (Idle/Geannuleerd/Mislukt) animeren niets. De timer kan niet
+# volledig stoppen — hij drenkt óók de statuswachtrij waarmee worker-threads een
+# nieuwe state doorgeven — maar hij mag wél veel trager pollen en niet
+# herschilderen. Zie tests/test_indicator_idle_cpu.py.
+POLL_INTERVAL_IDLE_MS = 250
 CANCELLED_DURATION_MS = 2000
 ERROR_DURATION_MS = 4000
 READY_CUE_DURATION_MS = 4000
