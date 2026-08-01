@@ -16,6 +16,10 @@ your PC”: **More info** → **Run anyway**.
 `%APPDATA%\praatMaar\` (transcripts, recovery, inbox, logs). See also Privacy in
 the README.
 
+**Status & errors:** after loading you briefly see a ready pill with your hotkey.
+Microphone failures do not open a blocking dialog: the status pill and tray icon
+show what went wrong; the checklist lives in Settings.
+
 ## What are destinations?
 
 A **destination** is a name linked to a folder on your computer. When you dictate,

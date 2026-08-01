@@ -19,6 +19,8 @@ import win_identity
 from chunk_transcription import normalize_chunk_mode
 from indicator import (
     RecordingIndicator,
+    RecordingState,
+    notify_state,
 )
 from modules import (
     CapabilityRegistry,
@@ -762,28 +764,25 @@ def _refresh_mic_attention() -> None:
 
 
 def _report_user_error(message: str) -> None:
-    """Toont een gebruikersfout in een dialoog zodra de indicator-GUI bestaat."""
+    """Markeert tray-attention bij een gebruikersfout zonder focus te stelen.
 
+    De ERROR-pill (+ next-step-hint) komt van ``Opnamesessie`` via ``notify_state``.
+    De volledige checklist blijft beschikbaar via Instellingen / Help — niet via
+    een automatische modal op de hotkey-foutpad (FR-UX-01).
+    ``message`` is al geprint door de caller.
+    """
+
+    _ = message
     _set_mic_attention(True)
 
-    indicator = _indicator
-    if indicator is None:
-        # Te vroeg in de start (vóór pill/tray): alleen loggen, niet blokkeren.
-        return
 
-    def show() -> None:
-        from ui.dialogs.message import error
+def _signal_processing_busy() -> None:
+    """Zichtbare busy-feedback bij hotkey tijdens verwerking (FR-UX-03)."""
 
-        try:
-            error(
-                i18n.t("rec.start_failed_title"),
-                message,
-                parent=indicator,
-            )
-        except Exception:
-            pass
-
-    indicator.call_on_main(show)
+    notify_state(RecordingState.TRANSCRIBING, MODE)
+    tray = _tray
+    if tray is not None:
+        tray.signal_busy()
 
 
 def _modules_hold_audio_streams() -> bool:
@@ -897,6 +896,7 @@ def on_press(
         # Push-to-talk: ingedrukt houden neemt op; loslaten stopt (on_release).
         if is_processing:
             print("\n" + i18n.t("dictation.busy"))
+            _signal_processing_busy()
         elif not is_recording:
             print("\n" + i18n.t("dictation.ptt_started"))
             session.start()
@@ -912,6 +912,7 @@ def on_press(
             session.stop_and_transcribe()
         elif is_processing:
             print("\n" + i18n.t("dictation.busy"))
+            _signal_processing_busy()
         else:
             print("\n" + i18n.t("dictation.started_hotkey"))
             session.start()
@@ -1197,6 +1198,7 @@ def main() -> None:
             return
         if session.is_processing:
             print("\n" + i18n.t("dictation.busy"))
+            _signal_processing_busy()
             return
         if MODE == "ptt":
             print("\n" + i18n.t("dictation.ptt_started"))
@@ -1223,6 +1225,8 @@ def main() -> None:
     _indicator = indicator
     indicator.set_destination(ACTIVE_DESTINATION)
     indicator.set_hotkey_label(hotkeys.format_hotkey(HOTKEY_TOKENS))
+    # Eenmalige ready-cue na splash (niet bij elke settings-save).
+    indicator.show_ready_cue()
 
     global _ui_dispatch
     _ui_dispatch = indicator.call_on_main

@@ -730,6 +730,7 @@ class Opnamesessie:
 
             if self._processing:
                 print("\n" + i18n.t("rec.busy"))
+                self._notify(RecordingState.TRANSCRIBING, self.mode)
                 return
 
             self._audio_chunks = []
@@ -743,9 +744,9 @@ class Opnamesessie:
 
         self._event(CycleEventType.CYCLE_STARTED, session_id=session_id)
 
-        # UI meteen rood — vóór incremental-worker en eventuele (her)open van de stream.
+        # PREPARING tot de stream open is — geen false “Opname” (FR-UX-02).
         self._reset_levels()
-        self._notify(RecordingState.RECORDING, self.mode)
+        self._notify(RecordingState.PREPARING, self.mode)
 
         self._start_incremental_worker()
 
@@ -765,11 +766,17 @@ class Opnamesessie:
             print(message)
             if self._on_user_error is not None:
                 self._on_user_error(message)
-            self._notify(RecordingState.ERROR)
+            self._notify(
+                RecordingState.ERROR,
+                self.mode,
+                hint=i18n.t("state.error_mic_hint"),
+            )
             self._event(CycleEventType.CYCLE_ERROR, error=message, session_id=session_id)
             self._event(CycleEventType.CYCLE_IDLE, session_id=session_id)
             self._clear_session_id(session_id)
             return
+
+        self._notify(RecordingState.RECORDING, self.mode)
 
         print()
         print(i18n.t("rec.started"))
