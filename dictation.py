@@ -168,9 +168,7 @@ else:
 
 MODULES_CONFIG = sanitize_modules_config(_user_config.get("modules"))
 INCREMENTAL_TRANSCRIPTION = bool(_user_config.get("incremental_transcription", False))
-INCREMENTAL_CHUNK_MODE = normalize_chunk_mode(
-    _user_config.get("incremental_chunk_mode", "hybrid")
-)
+INCREMENTAL_CHUNK_MODE = normalize_chunk_mode(_user_config.get("incremental_chunk_mode", "hybrid"))
 try:
     INCREMENTAL_VAD_MS = max(0, int(_user_config.get("incremental_vad_ms", 2000)))
 except (TypeError, ValueError):
