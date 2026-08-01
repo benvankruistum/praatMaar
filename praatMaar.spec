@@ -41,6 +41,10 @@ _COLLECT = [
     "ui.dialogs",
 ]
 
+if sys.platform == "win32":
+    # WASAPI loopback (Meeting Buddy); PortAudio-DLL + submodules.
+    _COLLECT.append("pyaudiowpatch")
+
 if sys.platform == "darwin":
     _COLLECT.append("objc")
     _COLLECT.append("AppKit")
@@ -84,6 +88,7 @@ hiddenimports += [
     "i18n",
     "modules",
     "modules._builtin.audio_capture",
+    "modules._builtin.wasapi_loopback",
     "modules._builtin.speech_to_text",
     "modules._builtin.meeting_buddy",
     "modules.capabilities",
