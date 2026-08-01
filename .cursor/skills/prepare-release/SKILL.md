@@ -2,7 +2,7 @@
 name: prepare-release
 description: >-
   Prepares a new praatMaar version: bumps pyproject version, cuts CHANGELOG,
-  runs project /update-documentation and personal /code-review (Matt Pocock),
+  runs project /update-documentation, /code-review, and /release-readiness,
   then creates tag vX.Y.Z after user confirmation. Use for nieuwe versie,
   release, SemVer, or tag van praatMaar.
 disable-model-invocation: true
@@ -16,9 +16,10 @@ Always chain:
 
 1. `/update-documentation` (branch-delta + full-audit — all surfaces:
    help, locales, docstrings, markdown)
-2. `/code-review` (Matt Pocock — personal skill in `~/.cursor/skills/`)
+2. `/code-review` (project skill — praatMaar checklist vs merge-base/`main`)
 3. Version bump + CHANGELOG cut
-4. Tag **only** after explicit user OK
+4. `/release-readiness` — go/no-go with evidence (blockers cleared or waived)
+5. Tag **only** after explicit user OK
 
 Details: [release-checklist.md](release-checklist.md).
 
@@ -27,8 +28,8 @@ Details: [release-checklist.md](release-checklist.md).
 - Never commit/push on `main`. Branch: `release/vX.Y.Z`.
 - Never create/push a tag until the user confirms version + tagging.
 - No `--no-verify`, no force-push, no moving tags without asking.
-- If `/update-documentation` (this repo) or `/code-review` (personal) is
-  missing, stop and say so.
+- If `/update-documentation`, `/code-review`, or `/release-readiness` (this
+  repo’s `.cursor/skills/`) is missing, stop and say so.
 
 ## Process
 
@@ -58,6 +59,7 @@ Draft CHANGELOG notes for the cut in step 5.
 
 ### 4. `/code-review`
 
+Run the **project** skill (`.cursor/skills/code-review`).
 Fixed point = previous release tag, else `origin/main`.
 Present findings; fix or get waiver before bump/tag.
 
@@ -68,7 +70,12 @@ Present findings; fix or get waiver before bump/tag.
 3. Sync example versions in `docs/release-windows.md` / `docs/release-macos.md` / STATUS if hardcoded
 4. Commit when asked; push + `gh pr create`
 
-### 6. Tag (after merge + user OK)
+### 6. `/release-readiness`
+
+Run the project skill against the release ref / intended tag version.
+Resolve **Not ready** / **Insufficient evidence** before asking to tag.
+
+### 7. Tag (after merge + user OK)
 
 ```bash
 git checkout main && git pull origin main
@@ -79,6 +86,7 @@ git push origin vX.Y.Z   # only with confirmation
 Pushing `v*` triggers Windows Release Actions (`docs/release-windows.md`).
 macOS `.app` remains manual (`docs/release-macos.md`).
 
-### 7. Report
+### 8. Report
 
-Version, tag status, PR URL, docs files, review blockers, CI next steps.
+Version, tag status, PR URL, docs files, review blockers, release-readiness
+decision, CI next steps.

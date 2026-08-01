@@ -13,6 +13,12 @@ Details: [CONTRIBUTING.md](CONTRIBUTING.md) · Cursor-rule: `.cursor/rules/git-b
 
 Lint/format: `ruff check` + `ruff format` (CI enforced). Zie CONTRIBUTING.
 
+## Cursor subagents
+
+Specialist agents in `.cursor/agents/` (aanroepen met `/naam`).
+Index + ownership: [AGENTS.md](AGENTS.md) · shared rules:
+[docs/agents/shared-rules.md](docs/agents/shared-rules.md).
+
 ## Agent skills
 
 ### Project skills
@@ -23,6 +29,17 @@ In `.cursor/skills/` (deze repo):
 |-------|---------|
 | `/update-documentation` | Docs sinds branch / full-audit: help, locales, docstrings, markdown |
 | `/prepare-release` | Nieuwe versie: docs + `/code-review` + tag (na bevestiging) |
+| `/feature-specification` | Feature-idee → product-spec (scope, AC, ownership) vóór implementatie |
+| `/repository-orientation` | Repo/architectuur/terminologie begrijpen vóór design, build of review |
+| `/agent-handoff` | Zelfstandige opdracht voor een subagent zonder chat-context |
+| `/change-impact-analysis` | Blast radius vóór cross-cutting change (owners, privacy, tests, docs) |
+| `/architecture-decision` | ADR maken of reviewen (seams, privacy, platform, lastig terug te draaien) |
+| `/implementation-plan` | Goedgekeurde spec/ADR → geordende implementatieslices met tests/owners |
+| `/code-review` | Review vóór merge (seams, lifecycle, focus, audio, privacy, tests, docs) |
+| `/whisper-evaluation` | Faster-Whisper meten (fixtures: accuracy, latency, CPU/RAM, VAD, model) |
+| `/release-readiness` | Go/no-go vóór tag (tests, builds, installer, changelog, privacy, limits) |
+| `/privacy-security-review` | Privacy/security van een change (audio, logs, netwerk, deps, installer) |
+| `/ux-state-review` | Interaction states (idle→error), focus, keyboard, a11y, platform |
 
 ### Issue tracker
 
