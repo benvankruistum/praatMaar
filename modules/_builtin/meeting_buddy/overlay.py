@@ -174,9 +174,7 @@ class _SourceWaveforms(QWidget):
         layout.addWidget(self._canvas)
         layout.addWidget(self._warn)
 
-    def set_loopback_state(
-        self, *, loopback_active: bool | None, loopback_requested: bool
-    ) -> None:
+    def set_loopback_state(self, *, loopback_active: bool | None, loopback_requested: bool) -> None:
         self._loopback_active = loopback_active
         self._loopback_requested = loopback_requested
         self._canvas.set_loopback_live(loopback_active is True)
@@ -232,9 +230,7 @@ class _SourceWaveformCanvas(QWidget):
             color=QColor(COLOR_RECORDING),
             muted=False,
         )
-        meeting_color = (
-            QColor("#3D7AB5") if self._loopback_live else QColor(TOKENS["muted_soft"])
-        )
+        meeting_color = QColor("#3D7AB5") if self._loopback_live else QColor(TOKENS["muted_soft"])
         self._paint_row(
             painter,
             y=row_h,
@@ -274,9 +270,7 @@ class _SourceWaveformCanvas(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(track)
         track_h = max(6.0, height - 8)
-        painter.drawRoundedRect(
-            QRectF(x_left, y + (height - track_h) / 2, region, track_h), 4, 4
-        )
+        painter.drawRoundedRect(QRectF(x_left, y + (height - track_h) / 2, region, track_h), 4, 4)
 
         padded = [0.0] * (self._bars - len(levels)) + levels[-self._bars :]
         slot = region / self._bars
