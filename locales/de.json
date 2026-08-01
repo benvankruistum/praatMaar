@@ -212,7 +212,7 @@
   "destinations.error.select_first": "Wählen Sie zuerst ein Ziel in der Liste.",
   "destinations.error.default_readonly": "Die Standardzeile kann nicht bearbeitet oder gelöscht werden. Klicken Sie auf Aktiv, um dorthin zurückzukehren.",
   "modules.title": "praatMaar — Module",
-  "modules.intro": "Erweiterungen ein- oder ausschalten. Alle Diktierzyklus-Ereignisse werden auch ins Event-Journal (events/events.jsonl) geschrieben — für externe Tools.",
+  "modules.intro": "Erweiterungen ein- oder ausschalten. Diktierzyklus-Ereignisse gehen ins Event-Journal (events/events.jsonl) für externe Tools — ohne vollständigen Transkripttext (nur Länge/Metadaten).",
   "modules.intro_short": "Module sind eingebaute Erweiterungen. Schalten Sie ein, was Sie brauchen; alles läuft lokal.",
   "modules.incremental": "Inkrementelle Transkription (Chunk-Pipeline während Aufnahme)",
   "modules.incremental_title": "Inkrementelle Transkription",

@@ -12,8 +12,15 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 - **WASAPI-loopback** voor Meeting Buddy via `pyaudiowpatch` (Windows): echte
   per-uitvoer capture i.p.v. Stereo Mix / niet-werkende sounddevice-loopback;
   mee in `requirements.txt`, `pyproject.toml` en de Windows PyInstaller-spec.
+- **v1.0.0 support-scope** productbesluit (Windows core primair; MB/LLM
+  experimenteel; unsigned; macOS vanuit bron) —
+  [spec](docs/superpowers/specs/2026-08-01-v1-support-scope-product.md).
 
 ### Changed
+
+- Docs honesty: STATUS/README/Help/SECURITY/CONTEXT/ADR-0003 en locales
+  afgestemd op PySide6/`indicator._qt`, journal zonder transcripttekst, en de
+  v1.0-platformmatrix.
 
 ### Fixed
 

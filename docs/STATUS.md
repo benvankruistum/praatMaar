@@ -1,13 +1,19 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-07-28.
+Laatst bijgewerkt: 2026-08-01.
+
+**v1.0.0-scope (Accepted):** Windows core-dictation is de primaire belofte;
+Meeting Buddy / Local LLM / chunk-transcriptie blijven experimenteel opt-in;
+Windows unsigned (SmartScreen documenteren); macOS = vanuit bron / runtime,
+geen Gatekeeper-distributiebelofte in 1.0. Zie
+[2026-08-01-v1-support-scope-product.md](superpowers/specs/2026-08-01-v1-support-scope-product.md).
 
 ## Ondersteund
 
 | Platform | Status |
 |----------|--------|
-| Windows 10/11 | Ondersteund (primair doel) |
-| macOS | Ondersteund (Apple Silicon; runtime geverifieerd) |
+| Windows 10/11 | **Ondersteund (primair)** — Setup/portable (unsigned) |
+| macOS Apple Silicon | **Vanuit bron / runtime geverifieerd** — geen signed `.app`-belofte in v1.0 |
 | Linux | Experimenteel (X11; AppImage) — zie noot hieronder |
 
 ### Linux (experimenteel)
@@ -24,21 +30,22 @@ Aandachtspunten, nog niet als distributie-build geverifieerd:
 - **Meeting Buddy-meetinggeluid** (WASAPI-loopback) is Windows-only; op Linux
   alleen microfoon.
 
-## Werkt op Windows
+## Werkt op Windows (core / v1.0-belofte)
 
 - Dicteercyclus (opname → Faster-Whisper → klembord/plakken)
-- Status-pill zonder focus te stelen (`indicator._win`)
-- Systeemvak: Instellingen, Bestemmingen, Modules, Help (`tray.py`, dialogen)
+- Status-pill zonder focus te stelen (`indicator._qt` + Win32 no-activate flags)
+- Systeemvak: Instellingen, Bestemmingen, Modules, Help (PySide6-dialogen)
 - Meertaligheid UI + spraak (`nl`/`en`/`de`)
 - Sticky bestemmingen (transcript naar gekozen map)
-- Laadscherm met model-downloadvoortgang (`splash.py`)
+- Laadscherm met model-downloadvoortgang (`ui/splash.py`)
 - Herstel: transcripts + recovery-audio (`recovery.py`); beheer + opnieuw
   transcriberen via sectie **Herstel-audio** in Instellingen
 - Platform-seam: paste, autostart, app-dir, single-instance (`host/`)
-- **Modules:** in-process uitbreidingen + event-journal (`modules/`, tray **Modules**);
-  inbox-spiegel; optionele incrementele transcriptie tijdens opname
+- **Modules:** in-process uitbreidingen + event-journal (`modules/`, tray
+  **Modules**); inbox-spiegel; optionele incrementele/chunk-transcriptie
   ([ADR-0003](adr/0003-hybrid-module-system.md))
-- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.3.0`; volgende `v1.0.0`)
+- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.3.0`; richting
+  **v1.0.0** volgens scope-spec hierboven)
 
 ## Experimentele modules
 
@@ -64,17 +71,20 @@ experimenteel) — zie
 Zonder Local LLM blijft Meeting Buddy bij heuristische hints. Zie ook het
 [MVP-design](superpowers/specs/2026-07-19-meeting-buddy-mvp-design.md) en
 [handoff loopback/Teams](HANDOFF-meeting-buddy-teams-loopback.md).
+Handmatige Teams-acceptatie (`docs/teams-loopback-acceptance.md`) is nog open —
+geen “Teams werkt altijd”-claim in v1.0.
 
 ## macOS
 
-Geïmplementeerd én runtime-geverifieerd op Apple Silicon (macOS 26.x):
+Geïmplementeerd én runtime-geverifieerd op Apple Silicon (vanuit bron,
+`python dictation.py`):
 
 - `host._mac` — Cmd+V, Application Support, LaunchAgent, flock
 - Tray op main thread (`TrayIcon.owns_main_thread` + `run()`)
-- Native overlay-indicator (`indicator._mac`, NSPanel / ADR-0002)
-- UI-polish (fonts, Control/Option/Command-labels, settings-teksten)
-- Instellingen in apart Tk-proces (voorkomt Cocoa/Tk SIGABRT bij sluiten); idem
-  Bestemmingen, Modules en Help
+- Status-pill via gedeelde Qt-HUD (`indicator._qt`; native NSPanel-pad
+  historisch ADR-0002 — shipping UI is PySide6)
+- Instellingen / Bestemmingen / Modules / Help in-process via PySide6
+  ([ADR-0005](adr/0005-ui-toolkit-pyside6.md))
 - TCC: Microfoon + Toegankelijkheid verplicht —
   [macos-permissions.md](macos-permissions.md)
 - Build-docs: [release-macos.md](release-macos.md), `packaging/macos/entitlements.plist`
@@ -88,18 +98,18 @@ Op een echte Mac (arm64), vanuit bron (`python dictation.py` via Cursor):
 - [x] Dicteercyclus: hotkey → opname → Faster-Whisper → klembord + plakken
 - [x] Unit-smoke: host/mac_input/indicator/hotkeys/settings (23 tests)
 
-Nog niet formeel als distributie-build geverifieerd: gesigneerde `.app` /
-Gatekeeper (zie roadmap).
+**Buiten v1.0.0-belofte:** gesigneerde `.app` / Gatekeeper op een schone Mac
+(zie roadmap).
 
 ## Open / roadmap
 
-1. **v0.3.0 uitbrengen:** tag gezet; Windows Setup/zip komt via Actions.
-   macOS `.app` handmatig of later via CI (signing later).
+1. **Docs honesty + UX state-review** (dicteercyclus) richting v1.0.0.
+2. **v1.0.0 uitbrengen** wanneer `/release-readiness` groen is voor Windows
+   core (Setup/zip via Actions). macOS `.app`/signing later.
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
-   Daarna: gebruikerstesten van 0.3.0, richting **1.0.0**.
-2. macOS: eventuele Gatekeeper/signing-check op een schone Mac zonder TCC-dev-host.
-3. Experimentele Local LLM + Meeting Buddy agenda-review: gebruikersvalidatie
-   en polish. Zie [design](superpowers/specs/2026-07-23-local-llm-module-design.md).
+3. Meeting Buddy: Teams-loopback-acceptatie afronden vóór eventuele graduation.
+4. Experimentele Local LLM + agenda-review: gebruikersvalidatie (blijft
+   experimenteel tot dan).
 
 ## Historische handoffs
 

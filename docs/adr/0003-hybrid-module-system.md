@@ -74,6 +74,15 @@ Zie [docs/modules-integration.md](../modules-integration.md) (extern) en
 - ADR-0001 (`host`) en ADR-0002 (indicator) blijven ongewijzigd; modules zijn
   een feature-seam naast de platform-seam, niet erin.
 
+## Aanvulling (2026-08-01) — journal zonder transcripttekst
+
+Sinds 0.3.0 schrijft `EventJournal` **geen** volledige transcripttekst meer naar
+`events.jsonl`. Velden als `transcript` worden omgezet naar
+`transcript_chars` (lengte). Gevolgregel hierboven over “journal bevat
+transcripttekst” is **verouderd**; behandel nog wel `transcripts/`, `inbox/`,
+`recovery/` en meetingjournals als gevoelige data. Zie CHANGELOG 0.3.0 en
+[v1.0-scope](../superpowers/specs/2026-08-01-v1-support-scope-product.md).
+
 ## Implementatiestatus (2026-07-19)
 
 Geïmplementeerd op branch `feat/modules`; merge via PR naar `main` volgt.

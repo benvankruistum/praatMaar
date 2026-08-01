@@ -1,5 +1,21 @@
 # praatMaar — Help
 
+## Aan de slag
+
+1. Start praatMaar (tray-icoon verschijnt na het laden van het model).
+2. Zet de cursor in een tekstveld.
+3. Start/stop dicteren met de sneltoets (standaard
+   `Ctrl+Shift+Alt+Spatie`; zie Instellingen).
+4. Tekst wordt lokaal getranscribeerd en — afhankelijk van je instellingen —
+   geplakt of alleen opgeslagen.
+
+**Windows-installatie:** downloads zijn niet digitaal ondertekend. Bij
+“Windows beschermde je pc”: **Meer info** → **Toch uitvoeren**.
+
+**Privacy (kort):** spraak-naar-tekst gebeurt lokaal. Gevoelige bestanden staan
+onder `%APPDATA%\praatMaar\` (transcripts, recovery, inbox, logs). Zie ook
+Privacy in de README.
+
 ## Wat zijn bestemmingen?
 
 Een **bestemming** is een naam gekoppeld aan een map op je computer. Als je dicteert,
@@ -71,7 +87,10 @@ twee LED’s of een knip door stilte of door het tijdvenster kwam.
 **Event-journal:** elke dicteercyclus wordt als JSON-regels weggeschreven in
 `%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). Externe
 programma's kunnen dat bestand volgen zonder praatMaar aan te passen. Elk event
-heeft een `session_id`, `type` (bijv. `transcript.saved`) en metadata.
+heeft een `session_id`, `type` (bijv. `transcript.saved`) en metadata. De
+**volledige transcripttekst staat niet** in het journal — wel o.a. de lengte
+(`transcript_chars`). Transcriptbestanden zelf staan in `transcripts\` of je
+bestemmingsmap.
 
 **Inbox-spiegel** (standaard aan): kopieert elk opgeslagen transcript naar
 `%APPDATA%\praatMaar\inbox\` — handig als vaste “drop zone” voor scripts.

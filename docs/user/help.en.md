@@ -1,5 +1,21 @@
 # praatMaar — Help
 
+## Getting started
+
+1. Start praatMaar (a tray icon appears after the model loads).
+2. Place the cursor in a text field.
+3. Start/stop dictation with the hotkey (default `Ctrl+Shift+Alt+Space`; see
+   Settings).
+4. Text is transcribed locally and — depending on your settings — pasted or
+   only saved.
+
+**Windows installers** are not code-signed. If Windows shows “Windows protected
+your PC”: **More info** → **Run anyway**.
+
+**Privacy (short):** speech-to-text runs locally. Sensitive files live under
+`%APPDATA%\praatMaar\` (transcripts, recovery, inbox, logs). See also Privacy in
+the README.
+
 ## What are destinations?
 
 A **destination** is a name linked to a folder on your computer. When you dictate,
@@ -69,7 +85,10 @@ show whether a cut came from silence or from the time window.
 **Event journal:** every dictation cycle is appended as JSON lines to
 `%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). External
 programs can watch that file without modifying praatMaar. Each event has a
-`session_id`, `type` (e.g. `transcript.saved`), and metadata.
+`session_id`, `type` (e.g. `transcript.saved`), and metadata. The journal does
+**not** store full transcript text — it records length (`transcript_chars`) and
+other metadata. Transcript files themselves live under `transcripts\` or your
+destination folder.
 
 **Inbox mirror** (on by default): copies each saved transcript to
 `%APPDATA%\praatMaar\inbox\` — a fixed drop zone for scripts.

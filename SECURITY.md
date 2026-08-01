@@ -15,11 +15,12 @@ praatMaar is een **lokale** dicteertool op Windows. Relevant voor security revie
 | Microfoon | Opname via `sounddevice` zolang de dicteercyclus loopt. |
 | Toetsenbord | Globale hotkey-listener (`pynput`) — ziet toetsaanslagen om de sneltoets te herkennen. |
 | Klembord | Zet getranscribeerde tekst op het klembord en simuleert plakken (`Ctrl+V`). |
-| Schijf | `%APPDATA%\praatMaar\` — config, transcripts, recovery-audio, logbestand. |
+| Schijf | `%APPDATA%\praatMaar\` — config, transcripts, recovery-audio, event-journal (`events.jsonl` zonder volle transcripttekst; wel metadata/`transcript_chars`), inbox-kopieën, logbestand. |
 | Autostart | Optioneel via Windows Run-registry (`host.set_autostart`). |
+| Installer | Windows Setup/portable zijn **niet** Authenticode-gesigneerd (bewuste indie/OSS-keuze); SmartScreen kan waarschuwen. |
 
-Transcripts en recovery-WAV’s zijn **niet versleuteld**. Behandel de
-AppData-map als gevoelige gebruikersdata.
+Transcripts, recovery-WAV’s, inbox-kopieën en meetingjournals zijn **niet
+versleuteld**. Behandel de AppData-map als gevoelige gebruikersdata.
 
 ## Een kwetsbaarheid melden
 

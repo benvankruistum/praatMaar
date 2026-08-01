@@ -5,10 +5,11 @@ een sneltoets, transcribeert lokaal met
 [Faster-Whisper](https://github.com/SYSTRAN/faster-whisper)
 (geen cloud-API) en plakt de tekst in het actieve invoerveld.
 
-> **Platform:** Windows 10/11 is primair ondersteund. **macOS** (Apple Silicon)
-> gebruikt een PySide6/Qt 6-shell voor tray, dialoogvensters en status-pill —
-> runtime geverifieerd —
-> zie [docs/STATUS.md](docs/STATUS.md).
+> **Platform:** Windows 10/11 is **primair ondersteund** (Setup/portable;
+> unsigned — SmartScreen: Meer info → Toch uitvoeren). **macOS** (Apple Silicon)
+> is **vanuit bron / runtime geverifieerd** (PySide6-shell); geen
+> Gatekeeper-distributiebelofte in v1.0 — zie [docs/STATUS.md](docs/STATUS.md)
+> en [v1.0-scope](docs/superpowers/specs/2026-08-01-v1-support-scope-product.md).
 
 ## Vereisten
 
@@ -96,11 +97,12 @@ dialoogvensters en de status-pill.
 Sneltoets, modus (toggle of push-to-talk), microfoon en model zijn aanpasbaar
 via **Instellingen** in het systeemvak-menu. **Bestemmingen** beheren sticky
 opslagmappen (naam + pad; wisselen met stem via exacte naam). **Modules**
-schakelt uitbreidingen in/uit en incrementele transcriptie; alle dicteercycli
-worden ook gelogd in `events/events.jsonl` voor externe tools. **Help** opent
-lokale gebruikersdocumentatie (nl/en/de). Experimenteel op Windows: **Meeting
-Buddy** (meetingoverlay + transcript) en optioneel **Local LLM** (Ollama/Qwen
-lokaal; standaard uit) voor live samenvatting en agenda-review.
+schakelt uitbreidingen in/uit en incrementele transcriptie; dicteercyclus-
+events worden gelogd in `events/events.jsonl` (zonder volledige transcripttekst)
+voor externe tools. **Help** opent lokale gebruikersdocumentatie (nl/en/de).
+Experimenteel op Windows: **Meeting Buddy** (meetingoverlay + transcript) en
+optioneel **Local LLM** (Ollama/Qwen lokaal; standaard uit) voor live
+samenvatting en agenda-review.
 
 ## Privacy
 
@@ -116,7 +118,9 @@ lokaal; standaard uit) voor live samenvatting en agenda-review.
   - macOS: `~/Library/Application Support/praatMaar/`
   - `config.json`, `transcripts\`, `recovery\`, `events\` (dicteercyclus-log),
     `inbox\` (module-kopieën), `praatMaar.log`
-  - Het event-journal bevat transcripttekst in JSON-regels; behandel als gevoelige data.
+  - Het event-journal (`events.jsonl`) bevat **geen** volledige transcripttekst —
+    wel o.a. `transcript_chars` (lengte) en metadata; behandel AppData toch als
+    gevoelige data (transcripts/, recovery/, inbox/, meetingjournals).
 
 Zie ook [SECURITY.md](SECURITY.md).
 
@@ -129,7 +133,8 @@ Zie ook [SECURITY.md](SECURITY.md).
 
 - Windows: [docs/release-windows.md](docs/release-windows.md) (versie-checklist + tag)
 - macOS: [docs/release-macos.md](docs/release-macos.md)
-- Changelog: [CHANGELOG.md](CHANGELOG.md) — cut `v0.2.0`; nieuw werk onder Unreleased
+- Changelog: [CHANGELOG.md](CHANGELOG.md) — gepubliceerd `v0.3.0`; richting
+  `v1.0.0` onder Unreleased / scope-spec
 
 ```text
 pyinstaller praatMaar.spec --clean
