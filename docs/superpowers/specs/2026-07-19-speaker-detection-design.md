@@ -74,9 +74,9 @@ Detectie-fouten (onbekende bron, ontbrekende sessie, provider-exception) →
 | Versie | Inhoud |
 |--------|--------|
 | V1 | Capability + brongebaseerd ME/OTHER/UNKNOWN |
-| V2 | Speaker clustering |
-| V3 | Diarization |
-| V4 | Optionele persoonsidentificatie |
+| V2 | Single-mic clustering (`spk_n`, geen ME) — zie [2026-07-31-single-mic-diarization-design.md](2026-07-31-single-mic-diarization-design.md) |
+| V3 | Zwaardere diarization (optioneel) |
+| V4 | Optionele persoonsidentificatie / enrollment |
 
 ## Acceptatiecriteria
 

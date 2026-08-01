@@ -20,7 +20,11 @@ from modules.capabilities.speaker_detection import (
     SpeakerRole,
     TranscriptSegment,
 )
-from modules.capabilities.speech_to_text import TranscriptDeltaReceived, TranscriptionStatus
+from modules.capabilities.speech_to_text import (
+    TranscriptDelta,
+    TranscriptDeltaReceived,
+    TranscriptionStatus,
+)
 
 from .agenda_review import AgendaReviewCoordinator, AgendaReviewSettings, LabeledFinal
 from .binding import MeetingSessionBinding
@@ -257,7 +261,7 @@ class MeetingOrchestrator:
                     if self._journal is not None:
                         self._journal.append_final(event.delta.text)
                     final_text = event.delta.text
-                    labeled = self._label_final(event.delta.text, binding.meeting_session_id)
+                    labeled = self._label_final(event.delta, binding.meeting_session_id)
 
                 version_before = self._state.version
                 hints_before = self._state.emitted_hints
@@ -385,7 +389,8 @@ class MeetingOrchestrator:
             language=i18n.ui_language(),
         )
 
-    def _label_final(self, text: str, meeting_session_id: str) -> LabeledFinal:
+    def _label_final(self, delta: TranscriptDelta, meeting_session_id: str) -> LabeledFinal:
+        text = delta.text
         provider = self._capabilities.get(SPEAKER_DETECTION_ID)
         if provider is None:
             return LabeledFinal(text=text, speaker_role=SpeakerRole.UNKNOWN)
@@ -398,9 +403,15 @@ class MeetingOrchestrator:
                     text=text,
                     session_id=meeting_session_id,
                     source=source,
+                    start_ms=delta.start_ms,
+                    end_ms=delta.end_ms,
                 )
             )
-            return LabeledFinal(text=text, speaker_role=assignment.role)
+            return LabeledFinal(
+                text=text,
+                speaker_role=assignment.role,
+                speaker_id=assignment.speaker_id,
+            )
         except Exception:
             log.exception("Speaker label failed")
             return LabeledFinal(text=text, speaker_role=SpeakerRole.UNKNOWN)

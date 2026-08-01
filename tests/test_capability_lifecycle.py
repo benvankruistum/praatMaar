@@ -65,6 +65,19 @@ class _FailingProvider:
     def observe_audio(self, session_id: str, source: AudioSource) -> None:
         pass
 
+    def observe_pcm(
+        self,
+        session_id: str,
+        pcm_f32: bytes,
+        start_ms: int,
+        end_ms: int,
+        sample_rate: int,
+    ) -> None:
+        pass
+
+    def set_labeling_mode(self, session_id: str, mode: object) -> None:
+        pass
+
     def assign_speaker(self, segment: TranscriptSegment) -> SpeakerAssignment:
         raise RuntimeError("boom")
 

@@ -12,11 +12,21 @@ from modules.capabilities.continuous_capture import (
     CONTRACT_VERSION as CAPTURE_CONTRACT_VERSION,
 )
 from modules.capabilities.continuous_capture import (
+    AudioChunkReceived,
     CaptureGap,
     CaptureStatus,
     CaptureStatusChanged,
 )
 from modules.capabilities.registry import CapabilityRegistry
+from modules.capabilities.speaker_detection import (
+    CAPABILITY_ID as CAP_SPEAKER,
+)
+from modules.capabilities.speaker_detection import (
+    CONTRACT_VERSION as SPEAKER_CONTRACT_VERSION,
+)
+from modules.capabilities.speaker_detection import (
+    LabelingMode,
+)
 from modules.capabilities.speech_to_text import (
     CAPABILITY_ID as CAP_STT,
 )
@@ -49,6 +59,7 @@ class CapabilitySessionController:
         self._observer = observer
         self._capture: Any = None
         self._stt: Any = None
+        self._speaker: Any = None
         self._binding: MeetingSessionBinding | None = None
         self._capture_status = CaptureStatus.IDLE
         self._transcription_status = TranscriptionStatus.IDLE
@@ -116,7 +127,19 @@ class CapabilitySessionController:
         self._binding = binding
         self._capture_status = capture.get_status(capture_session.session_id)
         self._transcription_status = stt.get_status(transcription_session.session_id)
+        self._start_speaker_session(meeting_session_id)
         return binding
+
+    def _start_speaker_session(self, meeting_session_id: str) -> None:
+        speaker = self._capabilities.get(
+            CAP_SPEAKER,
+            minimum_contract_version=SPEAKER_CONTRACT_VERSION,
+        )
+        self._speaker = speaker
+        if speaker is None:
+            return
+        speaker.start_session(meeting_session_id)
+        speaker.set_labeling_mode(meeting_session_id, LabelingMode.CLUSTER)
 
     def subscribe(
         self,
@@ -217,6 +240,7 @@ class CapabilitySessionController:
         self._binding = None
         self._capture = None
         self._stt = None
+        self._speaker = None
         self._capture_status = CaptureStatus.IDLE
         self._transcription_status = TranscriptionStatus.IDLE
         self._loopback_active = None
@@ -226,6 +250,9 @@ class CapabilitySessionController:
 
         binding = self._binding
         if binding is None:
+            return False
+        if isinstance(event, AudioChunkReceived):
+            self._feed_speaker_pcm(event.chunk)
             return False
         if isinstance(event, CaptureStatusChanged):
             if event.session_id != binding.capture_session_id:
@@ -330,6 +357,11 @@ class CapabilitySessionController:
             self._stt.stop_session(binding.transcription_session_id)
         except Exception:
             pass
+        if self._speaker is not None:
+            try:
+                self._speaker.stop_session(binding.meeting_session_id)
+            except Exception:
+                pass
         if self._on_stt_event is not None:
             try:
                 self._stt.unsubscribe(binding.transcription_session_id, self._on_stt_event)
@@ -340,6 +372,22 @@ class CapabilitySessionController:
                 self._capture.unsubscribe(binding.capture_session_id, self._on_capture_status)
             except Exception:
                 pass
+
+    def _feed_speaker_pcm(self, chunk: object) -> None:
+        speaker = self._speaker
+        binding = self._binding
+        if speaker is None or binding is None:
+            return
+        try:
+            speaker.observe_pcm(
+                binding.meeting_session_id,
+                chunk.pcm_f32,
+                chunk.start_ms,
+                chunk.end_ms,
+                chunk.sample_rate,
+            )
+        except Exception:
+            pass
 
     def _require_binding(self) -> MeetingSessionBinding:
         if self._binding is None:

@@ -125,6 +125,10 @@ With Local LLM ready, turn on live summary and agenda review in Meeting Buddy
 - **Agenda review**: status ladder per agenda item and “questions from others”
   (experimental; depends on speaker detection).
 
+Enable the **Speaker Detection** module (Modules) for **single-microphone**
+group conversations: praatMaar locally labels anonymous speakers (`spk_1`,
+`spk_2`, …) without identifying who you are.
+
 On Windows, Meeting Buddy can also capture **meeting audio** from the chosen
 Windows output device via loopback, mixed with your microphone.
 

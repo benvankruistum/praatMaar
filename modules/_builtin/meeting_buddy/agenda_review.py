@@ -39,6 +39,7 @@ class AgendaReviewSettings:
 class LabeledFinal:
     text: str
     speaker_role: SpeakerRole = SpeakerRole.UNKNOWN
+    speaker_id: str | None = None
 
 
 class AgendaReviewCoordinator:
@@ -300,8 +301,13 @@ class AgendaReviewCoordinator:
 def _format_labeled_transcript(parts: list[LabeledFinal]) -> str:
     lines = []
     for part in parts:
-        role = part.speaker_role.value if isinstance(part.speaker_role, SpeakerRole) else "unknown"
-        lines.append(f"[{role}] {part.text.strip()}")
+        if part.speaker_id:
+            label = part.speaker_id
+        elif isinstance(part.speaker_role, SpeakerRole):
+            label = part.speaker_role.value
+        else:
+            label = "unknown"
+        lines.append(f"[{label}] {part.text.strip()}")
     return "\n".join(lines)
 
 

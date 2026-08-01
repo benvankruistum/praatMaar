@@ -231,7 +231,7 @@
   "modules.inbox_mirror.name": "Inbox-spiegel",
   "modules.inbox_mirror.description": "Kopieert elk opgeslagen transcript naar de inbox-map voor externe verwerking.",
   "modules.speaker_detection.name": "Speaker Detection",
-  "modules.speaker_detection.description": "Bepaalt sprekerrollen (ik/ander/onbekend) op basis van audiobron; beschikbaar voor andere modules via capabilities.",
+  "modules.speaker_detection.description": "Labelt sprekers in meetings (spk_1, spk_2, …) via lokale clustering op één microfoon; beschikbaar voor andere modules via capabilities.",
   "modules.audio_capture.name": "Audio-opname",
   "modules.audio_capture.description": "Neemt op Windows continu microfoonaudio op in segmenten, zolang een module een opnamesessie actief houdt. Optioneel kan ook meetinggeluid via WASAPI-loopback worden gemixt (experimenteel). Andere modules kunnen die stream gebruiken voor live transcriptie. Korte dicteer-opnames lopen los hiervan.",
   "modules.speech_to_text.name": "Spraak-naar-tekst",

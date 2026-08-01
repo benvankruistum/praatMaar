@@ -36,6 +36,7 @@ from modules.capabilities.speaker_detection import (
 )
 from modules.capabilities.speaker_detection import (
     AudioSource,
+    LabelingMode,
     SpeakerAssignment,
     SpeakerDetectionCapability,
     SpeakerRole,
@@ -77,6 +78,7 @@ __all__ = [
     "SemanticAnalysisCapability",
     "SPEAKER_DETECTION_CAPABILITY_ID",
     "SPEECH_TO_TEXT_CAPABILITY_ID",
+    "LabelingMode",
     "SpeakerAssignment",
     "SpeakerDetectionCapability",
     "SpeakerRole",
