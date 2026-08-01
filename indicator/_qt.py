@@ -25,6 +25,9 @@ from ui.overlay_flags import apply_hud_window_flags
 from ._contract import (
     CANCELLED_DURATION_MS,
     COLOR_CANCELLED,
+    COLOR_CHUNK_LED_FIXED,
+    COLOR_CHUNK_LED_IDLE,
+    COLOR_CHUNK_LED_VAD,
     COLOR_ERROR,
     COLOR_ERROR_LABEL,
     COLOR_MEETING_DOT,
@@ -47,6 +50,7 @@ from ._contract import (
     WINDOW_ALPHA,
     DestinationPillModel,
     RecordingState,
+    chunk_led_snapshot,
     clamp_indicator_xy,
     destination_display_name,
     drain_status_queue,
@@ -446,8 +450,9 @@ class RecordingIndicator(QWidget):
         )
         stop = self._stop_rect()
         tag_left = self._draw_mode_tag(painter, stop.left() - 10)
+        leds_right = self._paint_chunk_leds(painter, tag_left - 8)
         self._paint_waveform(
-            painter, QColor(COLOR_RECORDING), label_x + label_w + 12, tag_left - 10
+            painter, QColor(COLOR_RECORDING), label_x + label_w + 12, leds_right - 8
         )
 
         painter.setPen(Qt.NoPen)
@@ -503,6 +508,25 @@ class RecordingIndicator(QWidget):
             Qt.AlignVCenter | Qt.AlignLeft,
             combined,
         )
+        return int(left)
+
+    def _paint_chunk_leds(self, painter: QPainter, right_x: int) -> int:
+        """Twee LCD-LED’s (VAD + tijd); retourneert linker rand voor de waveform."""
+
+        enabled, vad_on, fixed_on = chunk_led_snapshot()
+        if not enabled:
+            return right_x
+
+        diameter = 7.0
+        gap = 6.0
+        width = diameter * 2 + gap
+        left = right_x - width
+        y = self._CY - diameter / 2
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(COLOR_CHUNK_LED_VAD if vad_on else COLOR_CHUNK_LED_IDLE))
+        painter.drawEllipse(QRectF(left, y, diameter, diameter))
+        painter.setBrush(QColor(COLOR_CHUNK_LED_FIXED if fixed_on else COLOR_CHUNK_LED_IDLE))
+        painter.drawEllipse(QRectF(left + diameter + gap, y, diameter, diameter))
         return int(left)
 
     def _paint_waveform(

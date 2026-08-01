@@ -12,25 +12,31 @@ from typing import Any
 
 from ._contract import (
     RecordingState,
+    chunk_led_snapshot,
     notify_state,
     push_level,
     push_loopback_level,
     push_mic_level,
     reset_levels,
     reset_source_levels,
+    set_chunk_leds_enabled,
     set_transcription_progress,
+    signal_chunk_trigger,
 )
 
 __all__ = [
     "RecordingState",
     "RecordingIndicator",
+    "chunk_led_snapshot",
     "notify_state",
     "push_level",
     "push_mic_level",
     "push_loopback_level",
     "reset_levels",
     "reset_source_levels",
+    "set_chunk_leds_enabled",
     "set_transcription_progress",
+    "signal_chunk_trigger",
 ]
 
 
