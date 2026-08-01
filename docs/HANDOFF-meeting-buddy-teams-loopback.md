@@ -24,20 +24,24 @@ Werktaal: **Nederlands**.
 - **Microfoon** = eigen stem
 - Beide → STT → hints / meeting state
 
-**Huidige pipeline (al op `main`):**
+**Huidige pipeline (WASAPI via PyAudioWPatch, branch `cursor/wasapi-loopback`):**
 
 ```text
 Teams → Windows output device
-         └─ WASAPI loopback ──┐
-                               ├─ mix (50/50) → chunks → speech-to-text → Meeting Buddy
-Microfoon (config.json) ──────┘
+         └─ WASAPI loopback (pyaudiowpatch) ──┐
+                                               ├─ mix → chunks → speech-to-text → Meeting Buddy
+Microfoon (config.json / sounddevice) ────────┘
 ```
+
+`sounddevice` 0.5.x heeft geen `WasapiSettings(loopback=True)`; Stereo Mix is
+geen betrouwbare vervanging. Device-lijst in Eigenschappen komt uit
+WASAPI-loopback-endpoints (Bluetooth ontbreekt vaak).
 
 Config defaults (`modules/defaults/meeting-buddy.yaml`):
 
 ```yaml
-enable_loopback: true
-loopback_device: null   # null = Windows-default output
+enable_loopback: false
+loopback_device: null   # null = Windows-default WASAPI loopback
 ```
 
 Meeting Buddy geeft dit door in `MeetingOrchestrator._capture_config()`.

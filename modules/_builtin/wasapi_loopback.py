@@ -81,10 +81,13 @@ def resolve_loopback_device_info(
 ) -> dict[str, Any]:
     """Resolve configured index (or default) to a loopback device info dict."""
 
-    import pyaudiowpatch as pyaudio
-
     owns = pyaudio_instance is None
-    pa = pyaudio_instance if pyaudio_instance is not None else pyaudio.PyAudio()
+    if owns:
+        import pyaudiowpatch as pyaudio
+
+        pa = pyaudio.PyAudio()
+    else:
+        pa = pyaudio_instance
     try:
         if loopback_device is None:
             return dict(pa.get_default_wasapi_loopback())

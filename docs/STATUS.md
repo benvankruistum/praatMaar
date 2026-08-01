@@ -53,10 +53,12 @@ Aandachtspunten, nog niet als distributie-build geverifieerd:
   (standaard uit; Modules: statuscontrole, installatiehulp, model-download)
 
 Deze Meeting Buddy-MVP is experimenteel. Op Windows neemt Meeting Buddy naast
-de microfoon optioneel meetinggeluid op via WASAPI-loopback (standaard aan).
-De overlay toont of loopback actief is; device-keuze en transcriptmap staan in
-**Eigenschappen**. Live samenvatting en agenda-review vereisen module
-`local-llm` met een klaar Ollama-model (standaard uit; experimenteel) — zie
+de microfoon optioneel meetinggeluid op via **WASAPI-loopback** (`pyaudiowpatch`;
+standaard uit in defaults, aan te zetten in Eigenschappen). Bluetooth-uitvoer
+heeft vaak geen loopback. De overlay toont of loopback actief is; device-keuze
+en transcriptmap staan in **Eigenschappen**. Live samenvatting en agenda-review
+vereisen module `local-llm` met een klaar Ollama-model (standaard uit;
+experimenteel) — zie
 [ADR-0004](adr/0004-local-first-inference.md) en
 [local-llm design](superpowers/specs/2026-07-23-local-llm-module-design.md).
 Zonder Local LLM blijft Meeting Buddy bij heuristische hints. Zie ook het
