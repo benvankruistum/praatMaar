@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from typing import Any
 
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt, QTimer
@@ -48,9 +49,12 @@ from ._contract import (
     POLL_INTERVAL_MS,
     POSITION_LAST,
     READY_CUE_DURATION_MS,
+    STOP_BUTTON_SIZE,
     SUBTLE_COLOR,
     TAG_TEXT_COLOR,
     TEXT_COLOR,
+    WAVEFORM_BAR_MAX_HEIGHT,
+    WAVEFORM_BAR_WIDTH,
     WAVEFORM_GAIN,
     WINDOW_ALPHA,
     DestinationPillModel,
@@ -59,6 +63,7 @@ from ._contract import (
     clamp_indicator_xy,
     destination_display_name,
     drain_status_queue,
+    elapsed_label,
     get_transcription_progress,
     normalize_indicator_position,
     preset_indicator_xy,
@@ -109,6 +114,7 @@ class RecordingIndicator(QWidget):
         self._dest_pill = DestinationPillModel()
         self._stop_requested = False
         self._hotkey_label: str | None = None
+        self._recording_started_at: float | None = None
 
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_INTERVAL_MS)
@@ -178,6 +184,10 @@ class RecordingIndicator(QWidget):
 
         if state == RecordingState.RECORDING:
             self._dest_pill.on_recording_started()
+            if self._recording_started_at is None:
+                self._recording_started_at = time.monotonic()
+        else:
+            self._recording_started_at = None
 
         if state == RecordingState.IDLE:
             self._apply_idle_visibility()
@@ -307,7 +317,21 @@ class RecordingIndicator(QWidget):
         return QRect(INDICATOR_WIDTH - _RIGHT_PAD - _BTN * 2 - 10, _BTN_Y, _BTN, _BTN)
 
     def _stop_rect(self) -> QRect:
-        return QRect(INDICATOR_WIDTH - _RIGHT_PAD - _BTN, _BTN_Y, _BTN, _BTN)
+        size = STOP_BUTTON_SIZE
+        return QRect(
+            INDICATOR_WIDTH - _RIGHT_PAD - size,
+            (INDICATOR_HEIGHT - size) // 2,
+            size,
+            size,
+        )
+
+    def _elapsed_seconds(self) -> int:
+        """Looptijd van de huidige opname; 0 zodra er niet opgenomen wordt."""
+
+        started = self._recording_started_at
+        if started is None or self._state != RecordingState.RECORDING:
+            return 0
+        return max(0, int(time.monotonic() - started))
 
     def _control_rect(self) -> QRect:
         if self._state == RecordingState.RECORDING:
@@ -552,16 +576,34 @@ class RecordingIndicator(QWidget):
 
     def _paint_recording(self, painter: QPainter) -> None:
         self._pulse_dot(painter, self._LEFT, 11.0, QColor(COLOR_RECORDING_DOT))
-        painter.setPen(QColor(TEXT_COLOR))
-        painter.setFont(self._font(14, bold=True))
         label = state_label(RecordingState.RECORDING)
-        label_w = painter.fontMetrics().horizontalAdvance(label)
         label_x = self._LEFT + 11 + 10
+
+        # Label + looptijd als twee regels (canvas 04). De looptijd staat in de
+        # state-kleur-neutrale subtint, zodat de rode stip het enige "live"-
+        # signaal blijft.
+        painter.setFont(self._font(13, bold=True))
+        label_w = painter.fontMetrics().horizontalAdvance(label)
+        elapsed = elapsed_label(self._elapsed_seconds())
+        painter.setFont(self._font(11))
+        elapsed_w = painter.fontMetrics().horizontalAdvance(elapsed)
+        text_w = max(label_w, elapsed_w)
+
+        painter.setPen(QColor(COLOR_RECORDING_DOT))
+        painter.setFont(self._font(13, bold=True))
         painter.drawText(
-            QRect(label_x, 0, label_w + 4, INDICATOR_HEIGHT),
+            QRect(label_x, 12, text_w + 4, 18),
             Qt.AlignVCenter | Qt.AlignLeft,
             label,
         )
+        painter.setPen(QColor(SUBTLE_COLOR))
+        painter.setFont(self._font(11))
+        painter.drawText(
+            QRect(label_x, 30, text_w + 4, 16),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            elapsed,
+        )
+        label_w = text_w
         stop = self._stop_rect()
         tag_left = self._draw_mode_tag(painter, stop.left() - 10)
         leds_right = self._paint_chunk_leds(painter, tag_left - 8)
@@ -569,13 +611,13 @@ class RecordingIndicator(QWidget):
             painter, QColor(COLOR_RECORDING), label_x + label_w + 12, leds_right - 8
         )
 
+        # Canvas 04/10: gevulde knop 36×36 radius 12 met wit vierkant 12×12 —
+        # leest als knop, niet als vlak.
         painter.setPen(Qt.NoPen)
-        halo = QColor(COLOR_RECORDING)
-        halo.setAlpha(41)
-        painter.setBrush(halo)
-        painter.drawEllipse(stop)
         painter.setBrush(QColor(COLOR_RECORDING))
-        square = 11.0
+        painter.drawRoundedRect(QRectF(stop), 12, 12)
+        painter.setBrush(QColor("#FFFFFF"))
+        square = 12.0
         painter.drawRoundedRect(
             QRectF(
                 stop.center().x() - square / 2 + 1,
@@ -583,8 +625,8 @@ class RecordingIndicator(QWidget):
                 square,
                 square,
             ),
-            2,
-            2,
+            3,
+            3,
         )
 
     def _draw_mode_tag(self, painter: QPainter, right_x: int) -> int:
@@ -668,8 +710,8 @@ class RecordingIndicator(QWidget):
         levels = snapshot_levels()
         padded = [0.0] * (NUM_BARS - len(levels)) + levels[-NUM_BARS:]
         slot = region / NUM_BARS
-        bar_width = 2.0
-        max_half = 10.0
+        bar_width = WAVEFORM_BAR_WIDTH
+        max_half = WAVEFORM_BAR_MAX_HEIGHT / 2.0
         painter.setPen(Qt.NoPen)
         painter.setBrush(color)
         for index, level in enumerate(padded):

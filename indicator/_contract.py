@@ -45,6 +45,11 @@ ERROR_DURATION_MS = 4000
 READY_CUE_DURATION_MS = 4000
 NUM_BARS = 18
 WAVEFORM_GAIN = 9.0
+# Canvas 1a: 18 staven, 3 px breed, tot 24 px hoog (radius 2).
+WAVEFORM_BAR_WIDTH = 3.0
+WAVEFORM_BAR_MAX_HEIGHT = 24.0
+# Canvas 04/10: de stopknop is een gevulde knop van 36×36; dismiss blijft 32.
+STOP_BUTTON_SIZE = 36
 
 # Pill-positiemodi (opgeslagen in config.json).
 POSITION_TOP = "boven-midden"
@@ -189,6 +194,21 @@ def transcribing_label(percent: int | None) -> str:
     if percent is None:
         return i18n.t("state.transcribing")
     return i18n.t("state.transcribing_progress", percent=int(percent))
+
+
+def elapsed_label(seconds: float) -> str:
+    """Looptijd voor de opname-pill: ``mm:ss``, met uren zodra die er zijn.
+
+    Tabular-nums in de paint zorgt dat er niets verspringt terwijl de teller
+    loopt (canvas 1a, type-sectie).
+    """
+
+    total = max(0, int(seconds))
+    minutes, secs = divmod(total, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
 
 
 def transcription_percent(position_seconds: float, duration_seconds: float) -> int:
