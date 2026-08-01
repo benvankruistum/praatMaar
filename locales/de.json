@@ -344,7 +344,7 @@
   "modules.meeting_buddy.settings.section.storage": "Speicherung",
   "modules.meeting_buddy.settings.section.summary": "Zusammenfassung",
   "modules.meeting_buddy.settings.loopback_title": "Meeting-Audio aufnehmen",
-  "modules.meeting_buddy.settings.loopback_desc": "Windows-Loopback: nimmt auch die anderen Teilnehmer auf.",
+  "modules.meeting_buddy.settings.loopback_desc": "WASAPI-Loopback: nimmt auch die anderen Teilnehmer vom gewählten Ausgabegerät auf (Bluetooth oft nicht verfügbar).",
   "modules.meeting_buddy.settings.output_device": "Ausgabegerät",
   "modules.meeting_buddy.settings.transcript_label": "Transkriptordner",
   "modules.meeting_buddy.settings.summary_every": "Alle",

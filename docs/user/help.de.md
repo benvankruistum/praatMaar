@@ -141,7 +141,9 @@ Aktivieren Sie die Modul **Speaker Detection** (Module) für Gruppengespräche m
 `spk_2`, …), ohne zu bestimmen, wer Sie sind.
 
 Unter Windows kann Meeting Buddy neben dem Mikrofon optional **Meeting-Audio** vom
-gewählten Windows-Ausgabegerät per Loopback aufnehmen.
+gewählten Windows-Ausgabegerät per **WASAPI-Loopback** aufnehmen (nicht Stereo Mix).
+Wählen Sie dasselbe Gerät, über das Teams/Zoom abspielt. Bluetooth hat oft keinen
+Loopback-Endpunkt — bevorzugen Sie Lautsprecher oder HDMI/Monitor-Ausgang.
 
 Für Teams-Anrufe:
 

@@ -134,7 +134,9 @@ group conversations: praatMaar locally labels anonymous speakers (`spk_1`,
 `spk_2`, …) without identifying who you are.
 
 On Windows, Meeting Buddy can also capture **meeting audio** from the chosen
-Windows output device via loopback, mixed with your microphone.
+Windows output device via **WASAPI loopback** (not Stereo Mix), mixed with your
+microphone. Pick the same device Teams/Zoom is playing through. Bluetooth often
+has no loopback endpoint — prefer speakers or an HDMI/monitor output.
 
 For Teams calls:
 

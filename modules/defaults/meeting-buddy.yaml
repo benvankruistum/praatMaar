@@ -22,9 +22,9 @@ min_hint_confidence: 0.5
 max_whisper_queue_duration_s: 180
 max_audio_buffer_duration_s: 240
 
-# Meeting-geluid via WASAPI loopback — standaard uit: sounddevice 0.5.x
-# ondersteunt de loopback-flag nog niet (high-level API). Zet aan in
-# Eigenschappen als Stereo Mix beschikbaar is, of wanneer WASAPI loopback werkt.
+# Meeting-geluid via WASAPI-loopback (PyAudioWPatch op Windows). Standaard uit;
+# zet aan in Eigenschappen en kies het uitvoerapparaat waarop de meeting speelt.
+# Bluetooth heeft vaak geen loopback-endpoint.
 enable_loopback: false
 loopback_device: null
 
