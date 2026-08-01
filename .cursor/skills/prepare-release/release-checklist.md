@@ -18,6 +18,7 @@
 - [ ] Branch `release/vX.Y.Z`; not on `main`
 - [ ] `/update-documentation` (delta + full-audit: help, locales, docstrings, markdown)
 - [ ] `/code-review` vs previous tag / `main`; blockers handled
+- [ ] `/release-readiness` → Ready to tag (or Ready with waivers)
 - [ ] CI / tests green
 - [ ] CHANGELOG cut; `[Unreleased]` empty
 - [ ] User confirmed version + tag push
