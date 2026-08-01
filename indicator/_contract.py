@@ -50,6 +50,10 @@ WAVEFORM_BAR_WIDTH = 3.0
 WAVEFORM_BAR_MAX_HEIGHT = 24.0
 # Canvas 04/10: de stopknop is een gevulde knop van 36×36; dismiss blijft 32.
 STOP_BUTTON_SIZE = 36
+# Canvas 05: 4 px voortgangsbalk in de tekstkolom (radius 2), niet als draad
+# over de volle capsulebreedte.
+PROGRESS_BAR_HEIGHT = 4
+PROGRESS_TRACK_COLOR = "#2C3138"
 
 # Pill-positiemodi (opgeslagen in config.json).
 POSITION_TOP = "boven-midden"

@@ -48,6 +48,8 @@ from ._contract import (
     POLL_INTERVAL_IDLE_MS,
     POLL_INTERVAL_MS,
     POSITION_LAST,
+    PROGRESS_BAR_HEIGHT,
+    PROGRESS_TRACK_COLOR,
     READY_CUE_DURATION_MS,
     STOP_BUTTON_SIZE,
     SUBTLE_COLOR,
@@ -324,6 +326,31 @@ class RecordingIndicator(QWidget):
             size,
             size,
         )
+
+    def _progress_bar_rect(self) -> QRect | None:
+        """Balk in de tekstkolom; None als er niets te tonen valt.
+
+        Alleen tijdens TRANSCRIBEREN én met een bekend percentage: bij
+        onbekende duur blijven de marching dots het indeterminate-signaal.
+        """
+
+        if self._state != RecordingState.TRANSCRIBING:
+            return None
+        if get_transcription_progress() is None:
+            return None
+        left = self._LEFT + 13 + 10
+        # Zelfde rechtergrens als de tekstkolom in _paint_transcribing: tag
+        # (~64 px) + marching dots (18 px) + tussenruimte.
+        right = INDICATOR_WIDTH - 16 - 64 - 8 - 18 - 10
+        width = right - left
+        if width <= 0:
+            return None
+        return QRect(left, 36, width, PROGRESS_BAR_HEIGHT)
+
+    @staticmethod
+    def _progress_fill_width(rect: QRect, percent: int) -> float:
+        ratio = max(0, min(100, int(percent))) / 100.0
+        return rect.width() * ratio
 
     def _elapsed_seconds(self) -> int:
         """Looptijd van de huidige opname; 0 zodra er niet opgenomen wordt."""
@@ -731,44 +758,49 @@ class RecordingIndicator(QWidget):
         start = (self._frame * 12) % 360
         painter.drawArc(arc, int(-start * 16), int(300 * 16))
 
-        x = self._LEFT + diameter + 10
-        painter.setPen(QColor(TEXT_COLOR))
-        painter.setFont(self._font(14, bold=True))
-        label = state_label(RecordingState.TRANSCRIBING)
-        label_w = painter.fontMetrics().horizontalAdvance(label)
-        painter.drawText(
-            QRect(x, 0, label_w + 4, INDICATOR_HEIGHT), Qt.AlignVCenter | Qt.AlignLeft, label
-        )
-        x += label_w + 8
-
         percent = get_transcription_progress()
-        if percent is not None:
-            percent_text = f"{percent} %"
-            painter.setPen(QColor(COLOR_TRANSCRIBING_TEXT))
-            percent_w = painter.fontMetrics().horizontalAdvance(percent_text)
-            painter.drawText(
-                QRect(x, 0, percent_w + 4, INDICATOR_HEIGHT),
-                Qt.AlignVCenter | Qt.AlignLeft,
-                percent_text,
-            )
-            x += percent_w + 10
-        self._paint_marching_dots(painter, x)
-        self._draw_mode_tag(painter, INDICATOR_WIDTH - 16)
+        bar = self._progress_bar_rect()
 
+        # Rechts eerst: tag en dots bepalen waar de tekstkolom mag eindigen.
+        tag_left = self._draw_mode_tag(painter, INDICATOR_WIDTH - 16)
+        dots_left = tag_left - 8 - 18
+        self._paint_marching_dots(painter, dots_left)
+
+        column_left = self._LEFT + diameter + 10
+        column_right = dots_left - 10
+        label = state_label(RecordingState.TRANSCRIBING)
+
+        # Met balk staan label en percentage op één regel bóven de balk; zonder
+        # balk (onbekende duur) blijft de regel verticaal gecentreerd.
+        row_y, row_h = (14, 18) if bar is not None else (0, INDICATOR_HEIGHT)
+        painter.setPen(QColor(TEXT_COLOR))
+        painter.setFont(self._font(13, bold=True))
+        painter.drawText(
+            QRect(column_left, row_y, max(0, column_right - column_left), row_h),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            label,
+        )
         if percent is not None:
-            clip = QPainterPath()
-            clip.addRoundedRect(
-                QRectF(0.5, 0.5, INDICATOR_WIDTH - 1.0, INDICATOR_HEIGHT - 1.0),
-                INDICATOR_HEIGHT / 2,
-                INDICATOR_HEIGHT / 2,
+            painter.setPen(QColor(COLOR_TRANSCRIBING_TEXT))
+            painter.setFont(self._font(12, bold=True))
+            painter.drawText(
+                QRect(column_left, row_y, max(0, column_right - column_left), row_h),
+                Qt.AlignVCenter | Qt.AlignRight,
+                f"{percent} %",
             )
-            painter.setClipPath(clip)
-            thread = QColor(COLOR_TRANSCRIBING)
-            thread.setAlphaF(0.85)
+
+        bar = self._progress_bar_rect()
+        if bar is not None and percent is not None:
             painter.setPen(Qt.NoPen)
-            painter.setBrush(thread)
-            painter.drawRect(QRectF(0, INDICATOR_HEIGHT - 2, INDICATOR_WIDTH * percent / 100.0, 2))
-            painter.setClipping(False)
+            painter.setBrush(QColor(PROGRESS_TRACK_COLOR))
+            radius = PROGRESS_BAR_HEIGHT / 2.0
+            painter.drawRoundedRect(QRectF(bar), radius, radius)
+            filled = self._progress_fill_width(bar, percent)
+            if filled > 0:
+                painter.setBrush(QColor(COLOR_TRANSCRIBING))
+                painter.drawRoundedRect(
+                    QRectF(bar.left(), bar.top(), filled, bar.height()), radius, radius
+                )
 
     def _paint_marching_dots(self, painter: QPainter, x: float) -> None:
         active = (self._frame // 4) % 3
