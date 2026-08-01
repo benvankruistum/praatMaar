@@ -60,10 +60,14 @@ Rechtsklick auf das praatMaar-Symbol im Infobereich:
 ## Module und externe Tools
 
 Unter **Module** im Infobereich schalten Sie Erweiterungen ein oder aus und
-aktivieren optional **inkrementelle Transkription**. Whisper läuft dann bereits
-während der Aufnahme im Hintergrund (Zwischentext für Module/Tools). Beim Stoppen
-folgt immer eine finale Transkription der gesamten Aufnahme, damit das Ende nicht
-fehlt.
+aktivieren optional **inkrementelle Transkription**. Whisper läuft während der
+Aufnahme nur über **neue Audioabschnitte** (feste Zeit, Stille/VAD oder hybrid).
+Beim Stoppen werden die Texte zusammengefügt plus das letzte offene Stück —
+ohne die gesamte Aufnahme erneut zu transkribieren.
+
+An **Chunk-Nähten** können Wörter manchmal doppelt oder abgeschnitten sein;
+kurze Überlappung mildert das, aber nicht immer vollständig. Auf der Status-Pill
+zeigen zwei LEDs, ob ein Schnitt durch Stille oder durch das Zeitfenster kam.
 
 **Event-Journal:** jeder Diktierzyklus wird als JSON-Zeilen nach
 `%APPDATA%\praatMaar\events\events.jsonl` geschrieben (macOS: Application Support).

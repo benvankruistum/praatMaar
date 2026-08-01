@@ -16,6 +16,7 @@ import hotkeys
 import i18n
 import recovery
 import win_identity
+from chunk_transcription import normalize_chunk_mode
 from indicator import (
     RecordingIndicator,
 )
@@ -167,6 +168,19 @@ else:
 
 MODULES_CONFIG = sanitize_modules_config(_user_config.get("modules"))
 INCREMENTAL_TRANSCRIPTION = bool(_user_config.get("incremental_transcription", False))
+INCREMENTAL_CHUNK_MODE = normalize_chunk_mode(
+    _user_config.get("incremental_chunk_mode", "hybrid")
+)
+try:
+    INCREMENTAL_VAD_MS = max(0, int(_user_config.get("incremental_vad_ms", 2000)))
+except (TypeError, ValueError):
+    INCREMENTAL_VAD_MS = 2000
+try:
+    INCREMENTAL_CHUNK_SECONDS = float(_user_config.get("incremental_chunk_seconds", 30.0))
+except (TypeError, ValueError):
+    INCREMENTAL_CHUNK_SECONDS = 30.0
+if INCREMENTAL_CHUNK_SECONDS <= 0:
+    INCREMENTAL_CHUNK_SECONDS = 30.0
 
 shared_whisper = SharedWhisper()
 capability_registry = CapabilityRegistry()
@@ -570,6 +584,9 @@ def _user_config_dict() -> dict[str, Any]:
         "destinations": DESTINATIONS,
         "active_destination": ACTIVE_DESTINATION,
         "incremental_transcription": INCREMENTAL_TRANSCRIPTION,
+        "incremental_chunk_mode": INCREMENTAL_CHUNK_MODE,
+        "incremental_vad_ms": INCREMENTAL_VAD_MS,
+        "incremental_chunk_seconds": INCREMENTAL_CHUNK_SECONDS,
         "modules": modules_config_for_settings(MODULES_CONFIG),
     }
 
@@ -796,6 +813,9 @@ def _build_session() -> Opnamesessie:
         mode=MODE,
         warm_microphone=WARM_MICROPHONE,
         incremental_transcription=INCREMENTAL_TRANSCRIPTION,
+        incremental_chunk_mode=INCREMENTAL_CHUNK_MODE,
+        incremental_vad_ms=INCREMENTAL_VAD_MS,
+        incremental_chunk_seconds=INCREMENTAL_CHUNK_SECONDS,
         emit_event=_emit_cycle_event,
         wait_until_modifiers_clear=wait_until_modifier_keys_released,
         on_ready=print_ready_message,
@@ -957,6 +977,9 @@ def current_settings() -> dict[str, Any]:
         "destinations": list(DESTINATIONS),
         "active_destination": ACTIVE_DESTINATION,
         "incremental_transcription": INCREMENTAL_TRANSCRIPTION,
+        "incremental_chunk_mode": INCREMENTAL_CHUNK_MODE,
+        "incremental_vad_ms": INCREMENTAL_VAD_MS,
+        "incremental_chunk_seconds": INCREMENTAL_CHUNK_SECONDS,
         "modules": modules_config_for_settings(MODULES_CONFIG),
     }
 
@@ -976,6 +999,7 @@ def apply_settings(
     global MODEL_NAME, MICROPHONE_DEVICE, AUTO_PASTE, INDICATOR_POSITION, INDICATOR_XY
     global MODE, HOTKEY_TOKENS, LANGUAGE, WARM_MICROPHONE
     global DESTINATIONS, ACTIVE_DESTINATION, MODULES_CONFIG, INCREMENTAL_TRANSCRIPTION
+    global INCREMENTAL_CHUNK_MODE, INCREMENTAL_VAD_MS, INCREMENTAL_CHUNK_SECONDS
 
     from indicator._contract import (
         POSITION_LAST,
@@ -1038,6 +1062,20 @@ def apply_settings(
 
     if "incremental_transcription" in new_settings:
         INCREMENTAL_TRANSCRIPTION = bool(new_settings["incremental_transcription"])
+    if "incremental_chunk_mode" in new_settings:
+        INCREMENTAL_CHUNK_MODE = normalize_chunk_mode(new_settings["incremental_chunk_mode"])
+    if "incremental_vad_ms" in new_settings:
+        try:
+            INCREMENTAL_VAD_MS = max(0, int(new_settings["incremental_vad_ms"]))
+        except (TypeError, ValueError):
+            pass
+    if "incremental_chunk_seconds" in new_settings:
+        try:
+            value = float(new_settings["incremental_chunk_seconds"])
+            if value > 0:
+                INCREMENTAL_CHUNK_SECONDS = value
+        except (TypeError, ValueError):
+            pass
     if "modules" in new_settings:
         MODULES_CONFIG = sanitize_modules_config(new_settings["modules"])
         _reload_modules()
@@ -1051,6 +1089,9 @@ def apply_settings(
     session.language = LANGUAGE
     session.warm_microphone = WARM_MICROPHONE
     session.incremental_transcription = INCREMENTAL_TRANSCRIPTION
+    session.incremental_chunk_mode = INCREMENTAL_CHUNK_MODE
+    session.incremental_vad_ms = INCREMENTAL_VAD_MS
+    session._incremental_chunk_seconds = INCREMENTAL_CHUNK_SECONDS
     if old_mic != MICROPHONE_DEVICE:
         session.refresh_input_device()
     elif old_warm and not WARM_MICROPHONE:

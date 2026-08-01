@@ -7,18 +7,22 @@ from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 import i18n
+from chunk_transcription import normalize_chunk_mode
 from modules._contract import module_actions
 from modules.registry import all_builtin_modules, modules_config_for_settings
 from ui.app import ensure_app
@@ -98,8 +102,10 @@ class ModulesDialog(QDialog):
 
         self._incremental_box = QFrame()
         self._incremental_box.setObjectName("incrementalBox")
-        inc_layout = QHBoxLayout(self._incremental_box)
-        inc_layout.setContentsMargins(12, 10, 12, 10)
+        inc_outer = QVBoxLayout(self._incremental_box)
+        inc_outer.setContentsMargins(12, 10, 12, 10)
+        inc_outer.setSpacing(10)
+        inc_layout = QHBoxLayout()
         inc_layout.setSpacing(9)
         self._incremental = ToggleSwitch()
         self._incremental.setChecked(bool(current.get("incremental_transcription", False)))
@@ -114,6 +120,70 @@ class ModulesDialog(QDialog):
         inc_text.addWidget(inc_hint)
         inc_layout.addLayout(inc_text, 1)
         inc_layout.addWidget(self._incremental, 0, Qt.AlignmentFlag.AlignTop)
+        inc_outer.addLayout(inc_layout)
+
+        opts = QHBoxLayout()
+        opts.setSpacing(12)
+        mode_col = QVBoxLayout()
+        mode_col.setSpacing(4)
+        mode_label = QLabel(i18n.t("modules.incremental_mode"))
+        mode_label.setStyleSheet(f"color: {TOKENS['muted']}; font-size: 11.5px;")
+        self._chunk_mode = QComboBox()
+        for value, key in (
+            ("hybrid", "modules.incremental_mode.hybrid"),
+            ("fixed", "modules.incremental_mode.fixed"),
+            ("vad", "modules.incremental_mode.vad"),
+        ):
+            self._chunk_mode.addItem(i18n.t(key), value)
+        mode_idx = self._chunk_mode.findData(
+            normalize_chunk_mode(current.get("incremental_chunk_mode", "hybrid"))
+        )
+        self._chunk_mode.setCurrentIndex(mode_idx if mode_idx >= 0 else 0)
+        mode_col.addWidget(mode_label)
+        mode_col.addWidget(self._chunk_mode)
+        opts.addLayout(mode_col, 1)
+
+        vad_col = QVBoxLayout()
+        vad_col.setSpacing(4)
+        vad_label = QLabel(i18n.t("modules.incremental_vad_ms"))
+        vad_label.setStyleSheet(f"color: {TOKENS['muted']}; font-size: 11.5px;")
+        self._vad_ms = QSpinBox()
+        self._vad_ms.setRange(200, 10000)
+        self._vad_ms.setSingleStep(100)
+        self._vad_ms.setSuffix(" ms")
+        try:
+            self._vad_ms.setValue(max(200, int(current.get("incremental_vad_ms", 2000))))
+        except (TypeError, ValueError):
+            self._vad_ms.setValue(2000)
+        vad_col.addWidget(vad_label)
+        vad_col.addWidget(self._vad_ms)
+        opts.addLayout(vad_col, 1)
+
+        chunk_col = QVBoxLayout()
+        chunk_col.setSpacing(4)
+        chunk_label = QLabel(i18n.t("modules.incremental_chunk_seconds"))
+        chunk_label.setStyleSheet(f"color: {TOKENS['muted']}; font-size: 11.5px;")
+        self._chunk_seconds = QDoubleSpinBox()
+        self._chunk_seconds.setRange(5.0, 600.0)
+        self._chunk_seconds.setSingleStep(5.0)
+        self._chunk_seconds.setDecimals(0)
+        self._chunk_seconds.setSuffix(" s")
+        try:
+            self._chunk_seconds.setValue(
+                max(5.0, float(current.get("incremental_chunk_seconds", 30.0)))
+            )
+        except (TypeError, ValueError):
+            self._chunk_seconds.setValue(30.0)
+        chunk_col.addWidget(chunk_label)
+        chunk_col.addWidget(self._chunk_seconds)
+        opts.addLayout(chunk_col, 1)
+        inc_outer.addLayout(opts)
+
+        seam = QLabel(i18n.t("modules.incremental_seam_note"))
+        seam.setWordWrap(True)
+        seam.setStyleSheet(f"color: {TOKENS['muted']}; font-size: 11.5px;")
+        inc_outer.addWidget(seam)
+
         body_layout.addWidget(self._incremental_box)
         self._sync_incremental_style()
 
@@ -173,6 +243,9 @@ class ModulesDialog(QDialog):
         self._incremental_box.setObjectName("incrementalBoxOn" if on else "incrementalBox")
         self._incremental_box.style().unpolish(self._incremental_box)
         self._incremental_box.style().polish(self._incremental_box)
+        self._chunk_mode.setEnabled(on)
+        self._vad_ms.setEnabled(on)
+        self._chunk_seconds.setEnabled(on)
 
     def _module_card(self, module: Any, enabled: bool) -> QFrame:
         card = QFrame()
@@ -277,6 +350,9 @@ class ModulesDialog(QDialog):
         updated = {
             **self._settings,
             "incremental_transcription": self._incremental.isChecked(),
+            "incremental_chunk_mode": normalize_chunk_mode(self._chunk_mode.currentData()),
+            "incremental_vad_ms": int(self._vad_ms.value()),
+            "incremental_chunk_seconds": float(self._chunk_seconds.value()),
             "modules": {
                 module_id: {"enabled": check.isChecked()}
                 for module_id, check in self._module_checks.items()
