@@ -1,8 +1,9 @@
 # Design: incrementeel finaal uit laatste partial
 
 Datum: 2026-07-22  
-Status: **superseded** (2026-07-25) — bij stop opnieuw volle Whisper; anders mist
-het eindstuk (in de praktijk vaak ≫ interval zodra de buffer groeit).
+Status: **superseded** — eerst (2026-07-25) door “bij stop opnieuw volle Whisper”;
+daarna (2026-08-01) door de chunk-pipeline
+([2026-08-01-chunk-transcription-pipeline-design.md](2026-08-01-chunk-transcription-pipeline-design.md)).
 
 ## Probleem
 

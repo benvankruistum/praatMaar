@@ -7,11 +7,14 @@ import pytest
 from indicator import RecordingState, notify_state, push_level, reset_levels
 from indicator._contract import (
     DestinationPillModel,
+    chunk_led_snapshot,
     destination_display_name,
     drain_status_queue,
     push_loopback_level,
     push_mic_level,
     reset_source_levels,
+    set_chunk_leds_enabled,
+    signal_chunk_trigger,
     snapshot_levels,
     snapshot_loopback_levels,
     snapshot_mic_levels,
@@ -135,3 +138,23 @@ def test_mode_tag_meeting() -> None:
     from indicator._contract import mode_tag
 
     assert "meeting" in mode_tag("meeting").lower()
+
+
+def test_chunk_leds_disabled_ignore_triggers() -> None:
+    set_chunk_leds_enabled(False)
+    signal_chunk_trigger("vad")
+    signal_chunk_trigger("fixed")
+    assert chunk_led_snapshot() == (False, False, False)
+
+
+def test_chunk_leds_flash_on_trigger() -> None:
+    set_chunk_leds_enabled(True)
+    assert chunk_led_snapshot() == (True, False, False)
+    signal_chunk_trigger("vad")
+    enabled, vad_on, fixed_on = chunk_led_snapshot()
+    assert enabled and vad_on and not fixed_on
+    signal_chunk_trigger("fixed")
+    enabled, vad_on, fixed_on = chunk_led_snapshot()
+    assert enabled and vad_on and fixed_on
+    set_chunk_leds_enabled(False)
+    assert chunk_led_snapshot() == (False, False, False)

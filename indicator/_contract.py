@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 from collections import deque
 from enum import Enum, auto
+from typing import Literal
 
 
 class RecordingState(Enum):
@@ -114,6 +116,11 @@ COLOR_ERROR_LABEL = "#FF8F8B"
 COLOR_MEETING_TAG = "#0F6CBD"
 COLOR_MEETING_DOT = "#7FB1E0"  # meeting-tag stip op donker
 COLOR_MEETING_TEXT = "#BFD8EF"  # meeting-tag tekst op donker
+# Chunk-pipeline LED’s (LCD-stijl op de opname-pill).
+COLOR_CHUNK_LED_IDLE = MUTED_COLOR
+COLOR_CHUNK_LED_VAD = COLOR_MEETING_DOT
+COLOR_CHUNK_LED_FIXED = COLOR_TRANSCRIBING
+CHUNK_LED_HIT_SECONDS = 0.8
 
 STATE_LABEL_KEYS = {
     RecordingState.RECORDING: "state.recording",
@@ -218,6 +225,47 @@ _mic_levels: deque[float] = deque(maxlen=NUM_BARS)
 _loopback_levels: deque[float] = deque(maxlen=NUM_BARS)
 _progress_lock = threading.Lock()
 _transcription_progress: int | None = None
+_chunk_led_lock = threading.Lock()
+_chunk_leds_enabled = False
+_chunk_vad_until = 0.0
+_chunk_fixed_until = 0.0
+
+
+def set_chunk_leds_enabled(enabled: bool) -> None:
+    """Toon of verberg de chunk-trigger-LED’s op de opname-pill."""
+
+    global _chunk_leds_enabled, _chunk_vad_until, _chunk_fixed_until
+    with _chunk_led_lock:
+        _chunk_leds_enabled = bool(enabled)
+        if not _chunk_leds_enabled:
+            _chunk_vad_until = 0.0
+            _chunk_fixed_until = 0.0
+
+
+def signal_chunk_trigger(reason: Literal["vad", "fixed"] | str) -> None:
+    """Laat de bijbehorende LED kort oplichten (VAD of tijdvenster)."""
+
+    global _chunk_vad_until, _chunk_fixed_until
+    until = time.monotonic() + CHUNK_LED_HIT_SECONDS
+    with _chunk_led_lock:
+        if not _chunk_leds_enabled:
+            return
+        if reason == "vad":
+            _chunk_vad_until = until
+        elif reason == "fixed":
+            _chunk_fixed_until = until
+
+
+def chunk_led_snapshot() -> tuple[bool, bool, bool]:
+    """(enabled, vad_lit, fixed_lit) — veilig vanaf de GUI-pollthread."""
+
+    now = time.monotonic()
+    with _chunk_led_lock:
+        return (
+            _chunk_leds_enabled,
+            _chunk_vad_until > now,
+            _chunk_fixed_until > now,
+        )
 
 
 def notify_state(state: RecordingState, mode: str = "toggle") -> None:

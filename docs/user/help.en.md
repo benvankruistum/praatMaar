@@ -58,9 +58,13 @@ Right-click the praatMaar icon in the system tray:
 ## Modules and external tools
 
 From **Modules** in the system tray you can turn extensions on or off and enable
-**incremental transcription**. Whisper then runs in the background while you
-record (interim text for modules/tools). On stop, a final transcription always
-runs over the full recording so the trailing audio is not dropped.
+**incremental transcription**. Whisper then runs during recording only on **new
+audio chunks** (fixed time, silence/VAD, or hybrid). On stop those texts are
+joined plus the unfinished tail — without re-transcribing the whole recording.
+
+At **chunk boundaries** words can sometimes duplicate or be cut off; a short
+overlap mitigates this, but not always completely. On the status pill, two LEDs
+show whether a cut came from silence or from the time window.
 
 **Event journal:** every dictation cycle is appended as JSON lines to
 `%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). External

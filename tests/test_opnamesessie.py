@@ -562,6 +562,8 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         incremental_transcription=True,
         incremental_interval_seconds=0.05,
         incremental_min_seconds=0.01,
+        incremental_chunk_mode="fixed",
+        incremental_chunk_seconds=0.05,
         wait_until_modifiers_clear=lambda: None,
         on_ready=lambda: None,
         notify=lambda state, mode=None: states.append(state),

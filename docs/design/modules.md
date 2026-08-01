@@ -43,7 +43,8 @@ Titel: **praatMaar — Modules**
 | Zone | Inhoud |
 |------|--------|
 | Intro | Korte uitleg + tip over event-journal (`events/events.jsonl`) — graag compacter dan nu |
-| Globale optie | Checkbox **Incrementele transcriptie** (tijdens dicteer-opname; bij stop altijd volle eindrun) |
+| Globale optie | Checkbox **Incrementele transcriptie** + knipmodus (vast/VAD/hybride),
+VAD-ms en chunk-seconden (chunk-pipeline; bij stop concatenatie + staart) |
 | Lijstheading | “Ingebouwde modules” |
 | Modulekaarten | Per module: naam, Ingeschakeld-toggle, beschrijving, optionele actieknoppen |
 | Footer | Annuleren · Opslaan |

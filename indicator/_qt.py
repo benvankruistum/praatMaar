@@ -25,6 +25,9 @@ from ui.overlay_flags import apply_hud_window_flags
 from ._contract import (
     CANCELLED_DURATION_MS,
     COLOR_CANCELLED,
+    COLOR_CHUNK_LED_FIXED,
+    COLOR_CHUNK_LED_IDLE,
+    COLOR_CHUNK_LED_VAD,
     COLOR_ERROR,
     COLOR_ERROR_LABEL,
     COLOR_MEETING_DOT,
@@ -47,6 +50,7 @@ from ._contract import (
     WINDOW_ALPHA,
     DestinationPillModel,
     RecordingState,
+    chunk_led_snapshot,
     clamp_indicator_xy,
     destination_display_name,
     drain_status_queue,
@@ -446,8 +450,9 @@ class RecordingIndicator(QWidget):
         )
         stop = self._stop_rect()
         tag_left = self._draw_mode_tag(painter, stop.left() - 10)
+        leds_right = self._paint_chunk_leds(painter, tag_left - 8)
         self._paint_waveform(
-            painter, QColor(COLOR_RECORDING), label_x + label_w + 12, tag_left - 10
+            painter, QColor(COLOR_RECORDING), label_x + label_w + 12, leds_right - 8
         )
 
         painter.setPen(Qt.NoPen)
@@ -502,6 +507,39 @@ class RecordingIndicator(QWidget):
             QRectF(left + pad, y, text_w + 2, height),
             Qt.AlignVCenter | Qt.AlignLeft,
             combined,
+        )
+        return int(left)
+
+    def _paint_chunk_leds(self, painter: QPainter, right_x: int) -> int:
+        """Twee LCD-iconen (◇ stilte, ⏱ tijd); retourneert linker rand voor waveform."""
+
+        enabled, vad_on, fixed_on = chunk_led_snapshot()
+        if not enabled:
+            return right_x
+
+        painter.setFont(self._font(13, bold=True))
+        metrics = painter.fontMetrics()
+        vad_glyph = "◇"
+        time_glyph = "⏱"
+        gap = 5
+        vad_w = metrics.horizontalAdvance(vad_glyph)
+        time_w = metrics.horizontalAdvance(time_glyph)
+        width = vad_w + gap + time_w
+        left = right_x - width
+        y = 0
+        h = INDICATOR_HEIGHT
+
+        painter.setPen(QColor(COLOR_CHUNK_LED_VAD if vad_on else COLOR_CHUNK_LED_IDLE))
+        painter.drawText(
+            QRect(int(left), y, vad_w + 2, h),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            vad_glyph,
+        )
+        painter.setPen(QColor(COLOR_CHUNK_LED_FIXED if fixed_on else COLOR_CHUNK_LED_IDLE))
+        painter.drawText(
+            QRect(int(left + vad_w + gap), y, time_w + 2, h),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            time_glyph,
         )
         return int(left)
 

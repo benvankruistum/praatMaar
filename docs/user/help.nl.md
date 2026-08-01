@@ -59,10 +59,14 @@ Rechtsklik op het praatMaar-icoon in het systeemvak:
 ## Modules en externe tools
 
 Via **Modules** in het systeemvak kun je uitbreidingen aan- of uitzetten en
-**incrementele transcriptie** inschakelen. Whisper draait dan al tijdens je
-opname op de achtergrond (tussentijdse tekst voor modules/tools). Bij stop volgt
-altijd nog een finale transcriptie over de hele opname, zodat het eindstuk niet
-ontbreekt.
+**incrementele transcriptie** inschakelen. Whisper draait dan tijdens de opname
+alleen over **nieuwe audiostukken** (vaste tijd, stilte/VAD, of hybride). Bij stop
+worden die teksten samengevoegd plus het laatste onaffe stuk — zonder de hele
+opname opnieuw te transcriberen.
+
+Op de **naad** tussen chunks kunnen soms woorden dubbel of afgekapt zijn; een
+korte overlap mitigeert dit, maar niet altijd volledig. Op de status-pill tonen
+twee LED’s of een knip door stilte of door het tijdvenster kwam.
 
 **Event-journal:** elke dicteercyclus wordt als JSON-regels weggeschreven in
 `%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). Externe
