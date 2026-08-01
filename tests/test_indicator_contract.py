@@ -24,6 +24,7 @@ from indicator._contract import (
 def test_recording_state_values() -> None:
     assert {s.name for s in RecordingState} == {
         "IDLE",
+        "PREPARING",
         "RECORDING",
         "TRANSCRIBING",
         "CANCELLED",
@@ -32,13 +33,56 @@ def test_recording_state_values() -> None:
 
 
 def test_notify_state_queues() -> None:
+    """Queue-items zijn (state, mode, hint); zonder hint → lege string."""
+
     drain_status_queue()
     notify_state(RecordingState.RECORDING, "toggle")
     notify_state(RecordingState.TRANSCRIBING, "ptt")
     items = drain_status_queue()
     assert items == [
-        (RecordingState.RECORDING, "toggle"),
-        (RecordingState.TRANSCRIBING, "ptt"),
+        (RecordingState.RECORDING, "toggle", ""),
+        (RecordingState.TRANSCRIBING, "ptt", ""),
+    ]
+
+
+def test_notify_state_carries_hint_on_error_and_preparing() -> None:
+    drain_status_queue()
+    notify_state(RecordingState.PREPARING, "toggle", hint="Model laden…")
+    notify_state(RecordingState.ERROR, "ptt", hint="Microfoon niet beschikbaar")
+    items = drain_status_queue()
+    assert items == [
+        (RecordingState.PREPARING, "toggle", "Model laden…"),
+        (RecordingState.ERROR, "ptt", "Microfoon niet beschikbaar"),
+    ]
+
+
+def test_notify_state_clears_hint_on_idle_and_active_states() -> None:
+    drain_status_queue()
+    notify_state(RecordingState.ERROR, "toggle", hint="Fout")
+    notify_state(RecordingState.IDLE, "toggle", hint="wordt genegeerd")
+    notify_state(RecordingState.PREPARING, "toggle", hint="Voorbereiden")
+    notify_state(RecordingState.RECORDING, "toggle", hint="ook genegeerd")
+    notify_state(RecordingState.ERROR, "toggle", hint="Fout 2")
+    notify_state(RecordingState.TRANSCRIBING, "toggle", hint="genegeerd")
+    items = drain_status_queue()
+    assert items == [
+        (RecordingState.ERROR, "toggle", "Fout"),
+        (RecordingState.IDLE, "toggle", ""),
+        (RecordingState.PREPARING, "toggle", "Voorbereiden"),
+        (RecordingState.RECORDING, "toggle", ""),
+        (RecordingState.ERROR, "toggle", "Fout 2"),
+        (RecordingState.TRANSCRIBING, "toggle", ""),
+    ]
+
+
+def test_notify_state_without_hint_is_compatible() -> None:
+    drain_status_queue()
+    notify_state(RecordingState.ERROR, "toggle")
+    notify_state(RecordingState.PREPARING, "meeting")
+    items = drain_status_queue()
+    assert items == [
+        (RecordingState.ERROR, "toggle", ""),
+        (RecordingState.PREPARING, "meeting", ""),
     ]
 
 
