@@ -34,7 +34,9 @@ from ._contract import (
     COLOR_MEETING_TEXT,
     COLOR_PREPARING,
     COLOR_RECORDING,
+    COLOR_RECORDING_DOT,
     COLOR_TRANSCRIBING,
+    COLOR_TRANSCRIBING_TEXT,
     ERROR_DURATION_MS,
     INDICATOR_HEIGHT,
     INDICATOR_WIDTH,
@@ -370,15 +372,20 @@ class RecordingIndicator(QWidget):
         return font
 
     def _border_color(self) -> QColor:
+        """1 px capsulerand; tint volgt de state-kleur (canvas 1a)."""
+
         state = self._state
-        if state == RecordingState.RECORDING:
-            return QColor(255, 92, 87, 61)
-        if state == RecordingState.PREPARING:
-            return QColor(184, 160, 120, 51)
-        if state == RecordingState.TRANSCRIBING:
-            return QColor(255, 176, 32, 61)
-        if state == RecordingState.ERROR:
-            return QColor(255, 107, 107, 87)
+        tinted = {
+            RecordingState.RECORDING: (COLOR_RECORDING, 90),
+            RecordingState.PREPARING: (COLOR_PREPARING, 51),
+            RecordingState.TRANSCRIBING: (COLOR_TRANSCRIBING, 61),
+            RecordingState.ERROR: (COLOR_ERROR, 90),
+        }
+        if state in tinted:
+            token, alpha = tinted[state]
+            color = QColor(token)
+            color.setAlpha(alpha)
+            return color
         if state == RecordingState.CANCELLED:
             return QColor(255, 255, 255, 20)
         return QColor(255, 255, 255, 26)
@@ -469,7 +476,9 @@ class RecordingIndicator(QWidget):
         )
 
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 92, 87, 36))
+        halo = QColor(COLOR_RECORDING)
+        halo.setAlpha(36)
+        painter.setBrush(halo)
         painter.drawEllipse(record)
         painter.setBrush(QColor(COLOR_RECORDING))
         inner = 13
@@ -513,7 +522,7 @@ class RecordingIndicator(QWidget):
             )
 
     def _paint_recording(self, painter: QPainter) -> None:
-        self._pulse_dot(painter, self._LEFT, 11.0, QColor(COLOR_RECORDING))
+        self._pulse_dot(painter, self._LEFT, 11.0, QColor(COLOR_RECORDING_DOT))
         painter.setPen(QColor(TEXT_COLOR))
         painter.setFont(self._font(14, bold=True))
         label = state_label(RecordingState.RECORDING)
@@ -532,7 +541,9 @@ class RecordingIndicator(QWidget):
         )
 
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 92, 87, 41))
+        halo = QColor(COLOR_RECORDING)
+        halo.setAlpha(41)
+        painter.setBrush(halo)
         painter.drawEllipse(stop)
         painter.setBrush(QColor(COLOR_RECORDING))
         square = 11.0
@@ -662,7 +673,7 @@ class RecordingIndicator(QWidget):
         percent = get_transcription_progress()
         if percent is not None:
             percent_text = f"{percent} %"
-            painter.setPen(QColor(COLOR_TRANSCRIBING))
+            painter.setPen(QColor(COLOR_TRANSCRIBING_TEXT))
             percent_w = painter.fontMetrics().horizontalAdvance(percent_text)
             painter.drawText(
                 QRect(x, 0, percent_w + 4, INDICATOR_HEIGHT),

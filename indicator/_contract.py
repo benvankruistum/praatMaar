@@ -103,19 +103,29 @@ def preset_indicator_xy(
 # Max. tekens voor sticky bestemmingsnaam in de pill (voorkomt knippen).
 MAX_DESTINATION_DISPLAY_CHARS = 24
 
-# Kleuren uit canvas #2a (donkere HUD). Vorm draagt betekenis, kleur versterkt.
-PILL_BG = "#1C1F23"
-PILL_BG_ERROR = "#221819"  # rood-getinte capsule bij fout
-TEXT_COLOR = "#F1F3F4"
+# Kleuren uit canvas 1a (donkere HUD). Vorm draagt betekenis, kleur versterkt.
+#
+# Eén regel bepaalt het schema: **rood betekent uitsluitend "er wordt
+# opgenomen"**. Daarom is transcriberen blauw en mislukt amber. Zie
+# docs/design/pill.md; getest in tests/test_indicator_color_semantics.py.
+#
+# De gebruiker is kleurenblind: elke state moet óók zonder kleur te
+# onderscheiden zijn. STATE_GLYPHS legt die vorm-per-state vast.
+PILL_BG = "#202328"
+PILL_BG_ERROR = "#221E18"  # amber-getinte capsule bij fout
+TEXT_COLOR = "#E6E8EB"
 MUTED_COLOR = "#A7AEB6"  # secundair op donker
-SUBTLE_COLOR = "#8B929B"  # sublabel / dismiss-glyph
+SUBTLE_COLOR = "#8A929C"  # sublabel / dismiss-glyph (canvas text-2)
 TAG_TEXT_COLOR = "#C9CFD6"  # modus-tag tekst
-COLOR_RECORDING = "#FF5C57"
-COLOR_TRANSCRIBING = "#FFB020"
-COLOR_PREPARING = "#B8A078"  # gedempt amber-grijs (tussen muted en transcribing)
+COLOR_RECORDING = "#E5484D"  # rec — alleen tijdens opnemen
+COLOR_RECORDING_DOT = "#F0575C"  # iets feller voor de pulsdot
+COLOR_TRANSCRIBING = "#6E9BFF"  # work — verwerken
+COLOR_TRANSCRIBING_TEXT = "#9EC0FF"  # percentage/label op donker
+COLOR_PREPARING = "#8A929C"  # neutraal grijs: nog geen audio
 COLOR_CANCELLED = "#8B929B"
-COLOR_ERROR = "#FF6B6B"
-COLOR_ERROR_LABEL = "#FF8F8B"
+COLOR_OK = "#3DD68C"  # ready-cue
+COLOR_ERROR = "#F5A524"  # warn — mislukt (amber, niet rood)
+COLOR_ERROR_LABEL = "#F5C063"
 COLOR_MEETING_TAG = "#0F6CBD"
 COLOR_MEETING_DOT = "#7FB1E0"  # meeting-tag stip op donker
 COLOR_MEETING_TEXT = "#BFD8EF"  # meeting-tag tekst op donker
@@ -139,6 +149,23 @@ STATE_COLORS = {
     RecordingState.TRANSCRIBING: COLOR_TRANSCRIBING,
     RecordingState.CANCELLED: COLOR_CANCELLED,
     RecordingState.ERROR: COLOR_ERROR,
+}
+
+# Vorm per state — de betekenisdrager die niet van kleur afhangt. Wie geen
+# kleurverschil ziet, herkent de state aan dít silhouet. Wijzig alleen samen
+# met de bijbehorende _paint_*-routine in indicator/_qt.py.
+GLYPH_PULSE_DOT = "pulse-dot"  # opname: kloppende stip + waveform
+GLYPH_SOFT_DOT = "soft-dot"  # voorbereiden: trage stip + marching dots
+GLYPH_ARC = "arc"  # transcriberen: draaiende arc + voortgang
+GLYPH_CIRCLE_SLASH = "circle-slash"  # geannuleerd: doorgestreepte cirkel
+GLYPH_TRIANGLE = "triangle"  # mislukt: waarschuwingsdriehoek + actieknop
+
+STATE_GLYPHS = {
+    RecordingState.PREPARING: GLYPH_SOFT_DOT,
+    RecordingState.RECORDING: GLYPH_PULSE_DOT,
+    RecordingState.TRANSCRIBING: GLYPH_ARC,
+    RecordingState.CANCELLED: GLYPH_CIRCLE_SLASH,
+    RecordingState.ERROR: GLYPH_TRIANGLE,
 }
 
 
