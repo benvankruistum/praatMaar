@@ -18,6 +18,9 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 - **Dicteercyclus UX-states** Accepted-spec (focus-safe errors, preparing,
   busy-zichtbaarheid, ERROR next-step, transient ready-cue) —
   [spec](docs/superpowers/specs/2026-08-01-dicteercyclus-ux-states-product.md).
+- **Dicteercyclus UX implementation plan** (PREPARING, non-modal errors, busy,
+  ready-cue) —
+  [plan](docs/superpowers/plans/2026-08-01-dicteercyclus-ux-states.md).
 
 ### Changed
 
