@@ -103,7 +103,10 @@ Op een echte Mac (arm64), vanuit bron (`python dictation.py` via Cursor):
 
 ## Open / roadmap
 
-1. **Docs honesty + UX state-review** (dicteercyclus) richting v1.0.0.
+1. **Dicteercyclus UX Must** (Accepted-spec) → `/implementation-plan` + build:
+   focus-safe mic errors, preparing, busy-zichtbaarheid, ERROR next-step,
+   transient ready-cue —
+   [ux-states](superpowers/specs/2026-08-01-dicteercyclus-ux-states-product.md).
 2. **v1.0.0 uitbrengen** wanneer `/release-readiness` groen is voor Windows
    core (Setup/zip via Actions). macOS `.app`/signing later.
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).

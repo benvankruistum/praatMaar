@@ -15,6 +15,9 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 - **v1.0.0 support-scope** productbesluit (Windows core primair; MB/LLM
   experimenteel; unsigned; macOS vanuit bron) —
   [spec](docs/superpowers/specs/2026-08-01-v1-support-scope-product.md).
+- **Dicteercyclus UX-states** Accepted-spec (focus-safe errors, preparing,
+  busy-zichtbaarheid, ERROR next-step, transient ready-cue) —
+  [spec](docs/superpowers/specs/2026-08-01-dicteercyclus-ux-states-product.md).
 
 ### Changed
 
