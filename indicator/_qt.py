@@ -215,7 +215,7 @@ class RecordingIndicator(QWidget):
         if self._stop_requested:
             self._stop()
             return
-        for state, mode in drain_status_queue():
+        for state, mode, _hint in drain_status_queue():
             self._apply_state(state, mode)
         self._frame += 1
         if self.isVisible():

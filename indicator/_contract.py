@@ -19,6 +19,7 @@ class RecordingState(Enum):
     """De fasen van de dicteercyclus."""
 
     IDLE = auto()
+    PREPARING = auto()
     RECORDING = auto()
     TRANSCRIBING = auto()
     CANCELLED = auto()
@@ -110,6 +111,7 @@ SUBTLE_COLOR = "#8B929B"  # sublabel / dismiss-glyph
 TAG_TEXT_COLOR = "#C9CFD6"  # modus-tag tekst
 COLOR_RECORDING = "#FF5C57"
 COLOR_TRANSCRIBING = "#FFB020"
+COLOR_PREPARING = "#B8A078"  # gedempt amber-grijs (tussen muted en transcribing)
 COLOR_CANCELLED = "#8B929B"
 COLOR_ERROR = "#FF6B6B"
 COLOR_ERROR_LABEL = "#FF8F8B"
@@ -123,6 +125,7 @@ COLOR_CHUNK_LED_FIXED = COLOR_TRANSCRIBING
 CHUNK_LED_HIT_SECONDS = 0.8
 
 STATE_LABEL_KEYS = {
+    RecordingState.PREPARING: "state.preparing",
     RecordingState.RECORDING: "state.recording",
     RecordingState.TRANSCRIBING: "state.transcribing",
     RecordingState.CANCELLED: "state.cancelled",
@@ -130,6 +133,7 @@ STATE_LABEL_KEYS = {
 }
 
 STATE_COLORS = {
+    RecordingState.PREPARING: COLOR_PREPARING,
     RecordingState.RECORDING: COLOR_RECORDING,
     RecordingState.TRANSCRIBING: COLOR_TRANSCRIBING,
     RecordingState.CANCELLED: COLOR_CANCELLED,
@@ -218,7 +222,8 @@ class DestinationPillModel:
 # STATUSDOORGIFTE (thread-safe, producent -> GUI)
 # =========================================================
 
-_status_queue: queue.Queue[tuple[RecordingState, str]] = queue.Queue()
+# Queue-item: (state, mode, hint). Lege hint = geen hint-tekst.
+_status_queue: queue.Queue[tuple[RecordingState, str, str]] = queue.Queue()
 _level_lock = threading.Lock()
 _levels: deque[float] = deque(maxlen=NUM_BARS)
 _mic_levels: deque[float] = deque(maxlen=NUM_BARS)
@@ -268,16 +273,28 @@ def chunk_led_snapshot() -> tuple[bool, bool, bool]:
         )
 
 
-def notify_state(state: RecordingState, mode: str = "toggle") -> None:
+def notify_state(
+    state: RecordingState,
+    mode: str = "toggle",
+    *,
+    hint: str | None = None,
+) -> None:
     """
     Meldt een nieuwe toestand aan de indicator. Veilig vanaf elke thread.
 
     `mode` is "toggle" of "ptt"; de indicator toont het als modus-tag.
+    `hint` is al-vertaalde korte tekst (bijv. bij ERROR/PREPARING). Lege string
+    of None = geen hint. Bij IDLE en bij elke niet-ERROR/niet-PREPARING-toestand
+    wordt de hint automatisch gewist zodat callers niet hoeven te onthouden.
     """
 
     if state != RecordingState.TRANSCRIBING:
         set_transcription_progress(None)
-    _status_queue.put((state, mode))
+    if state in (RecordingState.ERROR, RecordingState.PREPARING):
+        hint_str = "" if hint is None else str(hint)
+    else:
+        hint_str = ""
+    _status_queue.put((state, mode, hint_str))
 
 
 def push_level(rms: float) -> None:
@@ -347,10 +364,13 @@ def snapshot_loopback_levels() -> list[float]:
         return list(_loopback_levels)
 
 
-def drain_status_queue() -> list[tuple[RecordingState, str]]:
-    """Leegt de status-queue (aanroepen vanaf de GUI-/poll-thread)."""
+def drain_status_queue() -> list[tuple[RecordingState, str, str]]:
+    """Leegt de status-queue (aanroepen vanaf de GUI-/poll-thread).
 
-    items: list[tuple[RecordingState, str]] = []
+    Elk item is ``(state, mode, hint)``; ``hint`` is ``""`` als er geen hint is.
+    """
+
+    items: list[tuple[RecordingState, str, str]] = []
     try:
         while True:
             items.append(_status_queue.get_nowait())
