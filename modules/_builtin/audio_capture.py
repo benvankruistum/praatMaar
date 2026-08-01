@@ -205,6 +205,10 @@ class AudioCaptureEngine:
             return CaptureSession(session_id=session_id)
 
         try:
+            from indicator import reset_levels, reset_source_levels
+
+            reset_levels()
+            reset_source_levels()
             sounddevice = self._get_sounddevice()
             self._start_mic_stream(state, sounddevice, options)
             if options.get("enable_loopback"):
@@ -455,11 +459,19 @@ class AudioCaptureEngine:
         self._append_loopback_samples(state, samples)
 
     def _append_mic_samples(self, state: _CaptureState, samples: np.ndarray) -> None:
+        if state.status == CaptureStatus.ACTIVE and samples.size > 0:
+            from indicator import push_mic_level
+
+            push_mic_level(float(np.sqrt(np.mean(np.square(samples)))))
         with state.mix_lock:
             state.mic_pending = np.concatenate((state.mic_pending, samples))
             self._flush_mixed_samples(state)
 
     def _append_loopback_samples(self, state: _CaptureState, samples: np.ndarray) -> None:
+        if state.status == CaptureStatus.ACTIVE and samples.size > 0:
+            from indicator import push_loopback_level
+
+            push_loopback_level(float(np.sqrt(np.mean(np.square(samples)))))
         with state.mix_lock:
             state.loopback_pending = np.concatenate((state.loopback_pending, samples))
             self._flush_mixed_samples(state)
@@ -504,6 +516,7 @@ class AudioCaptureEngine:
             if state.status == CaptureStatus.ACTIVE and mixed.size > 0:
                 from indicator import push_level
 
+                # Pill blijft de mix tonen; mic/loopback meters komen uit de stream-callbacks.
                 push_level(float(np.sqrt(np.mean(np.square(mixed)))))
 
     def _mic_stream_finished(self, state: _CaptureState) -> None:

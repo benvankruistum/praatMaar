@@ -440,3 +440,74 @@ def test_stop_skips_flush_when_only_overlap_remain() -> None:
     engine.stop_session(session.session_id)
 
     assert not any(isinstance(e, AudioChunkReceived) for e in events)
+
+
+def test_flush_mixed_pushes_separate_source_levels() -> None:
+    from indicator._contract import (
+        reset_levels,
+        reset_source_levels,
+        snapshot_levels,
+        snapshot_loopback_levels,
+        snapshot_mic_levels,
+    )
+
+    sounddevice = FakeSoundDevice()
+    sounddevice.WasapiSettings = lambda *, loopback: {"loopback": loopback}
+    sounddevice.default = type("Default", (), {"device": (None, 7)})()
+    sounddevice.query_devices = staticmethod(
+        lambda _device: {
+            "max_input_channels": 2,
+            "default_samplerate": 16000,
+        }
+    )
+    engine = AudioCaptureEngine(
+        sounddevice_module=sounddevice,
+        platform_name="win32",
+    )
+    session = engine.start_session({"enable_loopback": True})
+    state = engine._require_session(session.session_id)
+    assert state.loopback_enabled is True
+
+    reset_levels()
+    reset_source_levels()
+    # Loud mic, quiet loopback — meters must diverge (per-stream push).
+    mic = np.full(800, 0.8, dtype=np.float32)
+    loop = np.full(800, 0.05, dtype=np.float32)
+    engine._append_mic_samples(state, mic)
+    engine._append_loopback_samples(state, loop)
+
+    mic_levels = snapshot_mic_levels()
+    loop_levels = snapshot_loopback_levels()
+    mixed_levels = snapshot_levels()
+    assert len(mic_levels) >= 1
+    assert len(loop_levels) >= 1
+    assert len(mixed_levels) >= 1
+    assert mic_levels[-1] > loop_levels[-1]
+    engine.stop_session(session.session_id)
+
+
+def test_source_levels_update_without_mix_partner() -> None:
+    """Meeting meter must move even when the other stream has not flushed yet."""
+    from indicator._contract import reset_source_levels, snapshot_loopback_levels
+
+    sounddevice = FakeSoundDevice()
+    sounddevice.WasapiSettings = lambda *, loopback: {"loopback": loopback}
+    sounddevice.default = type("Default", (), {"device": (None, 7)})()
+    sounddevice.query_devices = staticmethod(
+        lambda _device: {
+            "max_input_channels": 2,
+            "default_samplerate": 16000,
+        }
+    )
+    engine = AudioCaptureEngine(
+        sounddevice_module=sounddevice,
+        platform_name="win32",
+    )
+    session = engine.start_session({"enable_loopback": True})
+    state = engine._require_session(session.session_id)
+    reset_source_levels()
+    engine._append_loopback_samples(state, np.full(400, 0.4, dtype=np.float32))
+    levels = snapshot_loopback_levels()
+    assert len(levels) == 1
+    assert levels[0] == pytest.approx(0.4, abs=0.05)
+    engine.stop_session(session.session_id)

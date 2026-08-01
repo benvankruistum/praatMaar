@@ -6,8 +6,8 @@ import re
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from PySide6.QtCore import QRectF, Qt, QTimer
-from PySide6.QtGui import QCloseEvent, QColor, QPainter, QPen
+from PySide6.QtCore import QPoint, QRectF, Qt, QTimer
+from PySide6.QtGui import QCloseEvent, QColor, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -21,9 +21,12 @@ import i18n
 from indicator._contract import (
     COLOR_MEETING_TEXT,
     COLOR_RECORDING,
+    NUM_BARS,
     PILL_BG,
     SUBTLE_COLOR,
     TEXT_COLOR,
+    snapshot_loopback_levels,
+    snapshot_mic_levels,
 )
 from ui.app import ensure_app
 from ui.overlay_flags import apply_hud_window_flags
@@ -147,6 +150,180 @@ class _HudWindow(QWidget):
         event.ignore()
 
 
+class _SourceWaveforms(QWidget):
+    """Two compact bar rows: microphone vs meeting (loopback) levels."""
+
+    _DISPLAY_GAIN = 14.0
+    _BARS = NUM_BARS
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("mbSourceLevels")
+        self.setMinimumHeight(78)
+        self._loopback_active: bool | None = None
+        self._loopback_requested = False
+        self._warn = QLabel()
+        self._warn.setObjectName("mbLevelsWarn")
+        self._warn.setWordWrap(True)
+        self._warn.setStyleSheet(f"color: {TOKENS['amber_text']}; font-size: 11px;")
+        self._warn.hide()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 4, 12, 8)
+        layout.setSpacing(6)
+        self._canvas = _SourceWaveformCanvas(display_gain=self._DISPLAY_GAIN, bars=self._BARS)
+        layout.addWidget(self._canvas)
+        layout.addWidget(self._warn)
+
+    def set_loopback_state(
+        self, *, loopback_active: bool | None, loopback_requested: bool
+    ) -> None:
+        self._loopback_active = loopback_active
+        self._loopback_requested = loopback_requested
+        self._canvas.set_loopback_live(loopback_active is True)
+        if loopback_requested and loopback_active is False:
+            self._warn.setText(
+                i18n.t("modules.meeting_buddy.overlay.recording.mic_only_unavailable")
+            )
+            self._warn.show()
+        elif not loopback_requested:
+            self._warn.setText(i18n.t("modules.meeting_buddy.overlay.recording.mic_only"))
+            self._warn.show()
+        else:
+            self._warn.hide()
+
+    def refresh(self) -> None:
+        self._canvas.refresh()
+
+
+class _SourceWaveformCanvas(QWidget):
+    def __init__(self, *, display_gain: float, bars: int) -> None:
+        super().__init__()
+        self.setFixedHeight(52)
+        self._display_gain = display_gain
+        self._bars = bars
+        self._loopback_live = False
+        self._mic: list[float] = []
+        self._loop: list[float] = []
+
+    def set_loopback_live(self, live: bool) -> None:
+        self._loopback_live = live
+
+    def refresh(self) -> None:
+        self._mic = snapshot_mic_levels()
+        # Always snapshot meeting levels when the stream exists or recently did;
+        # empty deque → flat bars (honest “geen signaal”).
+        self._loop = snapshot_loopback_levels()
+        self.update()
+
+    def paintEvent(self, _event: Any) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        font = painter.font()
+        font.setPointSize(9)
+        font.setBold(True)
+        painter.setFont(font)
+        row_h = self.height() / 2
+        self._paint_row(
+            painter,
+            y=0,
+            height=row_h,
+            label=i18n.t("modules.meeting_buddy.overlay.levels.mic"),
+            levels=self._mic,
+            color=QColor(COLOR_RECORDING),
+            muted=False,
+        )
+        meeting_color = (
+            QColor("#3D7AB5") if self._loopback_live else QColor(TOKENS["muted_soft"])
+        )
+        self._paint_row(
+            painter,
+            y=row_h,
+            height=row_h,
+            label=i18n.t("modules.meeting_buddy.overlay.levels.meeting"),
+            levels=self._loop if self._loopback_live else [],
+            color=meeting_color,
+            muted=not self._loopback_live,
+        )
+
+    def _paint_row(
+        self,
+        painter: QPainter,
+        *,
+        y: float,
+        height: float,
+        label: str,
+        levels: list[float],
+        color: QColor,
+        muted: bool,
+    ) -> None:
+        label_w = 72
+        painter.setPen(QColor(TOKENS["muted"] if muted else TOKENS["text_secondary"]))
+        painter.drawText(
+            QRectF(0, y, label_w, height),
+            int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft),
+            label,
+        )
+        x_left = label_w + 8
+        x_right = float(self.width()) - 2
+        region = max(0.0, x_right - x_left)
+        if region <= 0:
+            return
+        # Track behind bars for readability.
+        track = QColor(TOKENS["border"])
+        track.setAlpha(90)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(track)
+        track_h = max(6.0, height - 8)
+        painter.drawRoundedRect(
+            QRectF(x_left, y + (height - track_h) / 2, region, track_h), 4, 4
+        )
+
+        padded = [0.0] * (self._bars - len(levels)) + levels[-self._bars :]
+        slot = region / self._bars
+        bar_width = max(2.5, slot * 0.55)
+        max_half = max(3.0, track_h / 2 - 1.5)
+        cy = y + height / 2
+        bar_color = QColor(color)
+        if muted:
+            bar_color.setAlpha(90)
+        painter.setBrush(bar_color)
+        for index, level in enumerate(padded):
+            half = max(1.5, min(1.0, level * self._display_gain) * max_half)
+            cx = x_left + slot * index + slot / 2
+            painter.drawRoundedRect(
+                QRectF(cx - bar_width / 2, cy - half, bar_width, half * 2), 1.5, 1.5
+            )
+
+
+class _DragHeader(QFrame):
+    """Frameless HUD title bar: drag moves ``window`` (no ``startSystemMove``)."""
+
+    def __init__(self, window: QWidget) -> None:
+        super().__init__()
+        self._window = window
+        self._drag_offset: QPoint | None = None
+        self.setObjectName("mbHeader")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = event.globalPosition().toPoint() - self._window.pos()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if self._drag_offset is not None:
+            self._window.move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
+
+
 class _MiniPill(QWidget):
     """Minimized overlay: dark capsule (family of the dicteer-pill #2a)."""
 
@@ -155,6 +332,7 @@ class _MiniPill(QWidget):
         apply_hud_window_flags(self)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(230, 44)
+        self._drag_offset: QPoint | None = None
         row = QHBoxLayout(self)
         row.setContentsMargins(12, 0, 6, 0)
         row.setSpacing(7)
@@ -175,11 +353,14 @@ class _MiniPill(QWidget):
             " font-size: 11px; min-width: 20px; }"
         )
         expand.clicked.connect(on_expand)
+        for label in (self._dot, self._timer, self._count):
+            label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         row.addWidget(self._dot)
         row.addWidget(self._timer)
         row.addWidget(self._count)
         row.addStretch(1)
         self._tag = QLabel(i18n.t("state.tag.meeting"))
+        self._tag.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self._tag.setStyleSheet(
             f"color: {COLOR_MEETING_TEXT}; background: rgba(92,147,199,0.20);"
             " border-radius: 10px; padding: 2px 7px; font-size: 10px; font-weight: 600;"
@@ -190,6 +371,24 @@ class _MiniPill(QWidget):
     def set_state(self, timer: str, count: str) -> None:
         self._timer.setText(timer)
         self._count.setText(count)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = event.globalPosition().toPoint() - self.pos()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if self._drag_offset is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
 
     def paintEvent(self, _event: Any) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -242,14 +441,13 @@ class MeetingBuddyOverlay:
         outer.setSpacing(0)
 
         # --- header bar ---
-        header = QFrame()
-        header.setObjectName("mbHeader")
-        header.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        header = _DragHeader(self.window)
         head = QHBoxLayout(header)
         head.setContentsMargins(12, 9, 10, 9)
         head.setSpacing(8)
         title = QLabel(i18n.t("modules.meeting_buddy.overlay.title"))
         title.setObjectName("mbHeaderTitle")
+        title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         head.addWidget(title)
         head.addStretch(1)
         minimize = QPushButton("—")
@@ -280,6 +478,10 @@ class MeetingBuddyOverlay:
         status_row.addStretch(1)
         status_row.addWidget(self._timer_label)
         outer.addLayout(status_row)
+
+        self._source_levels = _SourceWaveforms()
+        self._source_levels.hide()
+        outer.addWidget(self._source_levels)
 
         # --- banner host ---
         self._banner_host = QWidget()
@@ -334,6 +536,9 @@ class MeetingBuddyOverlay:
         self._timer = QTimer(self.window)
         self._timer.timeout.connect(self._tick)
         self._timer.start(1000)
+        self._levels_timer = QTimer(self.window)
+        self._levels_timer.timeout.connect(self._source_levels.refresh)
+        self._levels_timer.start(50)
         self._tick()
 
     @staticmethod
@@ -449,6 +654,16 @@ class MeetingBuddyOverlay:
             loopback_active=loopback_active,
             loopback_requested=loopback_requested,
         )
+        capture = _enum_value(capture_status)
+        if capture in {"active", "starting", "reconnecting"}:
+            self._source_levels.set_loopback_state(
+                loopback_active=loopback_active,
+                loopback_requested=loopback_requested,
+            )
+            self._source_levels.show()
+            self._source_levels.refresh()
+        else:
+            self._source_levels.hide()
         self._update_listening_dot(capture_status, transcription_status)
         self._footer_label.setText(
             "  ·  ".join(
@@ -481,6 +696,7 @@ class MeetingBuddyOverlay:
 
     def close(self) -> None:
         self._timer.stop()
+        self._levels_timer.stop()
         if self._mini is not None:
             self._mini.close()
             self._mini.deleteLater()

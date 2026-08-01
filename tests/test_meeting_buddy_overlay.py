@@ -116,6 +116,211 @@ def test_overlay_is_a_non_activating_qt_hud() -> None:
         overlay.close()
 
 
+def _drag_mouse(widget: object, local: object, delta: object) -> None:
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    assert isinstance(local, QPoint) and isinstance(delta, QPoint)
+    press = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        QPointF(local),
+        QPointF(widget.mapToGlobal(local)),  # type: ignore[attr-defined]
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    widget.mousePressEvent(press)  # type: ignore[attr-defined]
+    move = QMouseEvent(
+        QMouseEvent.Type.MouseMove,
+        QPointF(local + delta),
+        QPointF(widget.mapToGlobal(local) + delta),  # type: ignore[attr-defined]
+        Qt.MouseButton.NoButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    widget.mouseMoveEvent(move)  # type: ignore[attr-defined]
+
+
+def test_overlay_shows_source_levels_when_capture_active() -> None:
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay, _SourceWaveforms
+    from modules._builtin.meeting_buddy.state import MeetingState
+    from ui.app import ensure_app
+
+    app = ensure_app([])
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0.0,
+        on_dismiss=lambda _i: None,
+        on_confirm=lambda _i: None,
+        on_reconnect=lambda: None,
+    )
+    try:
+        overlay.update(
+            MeetingState("s", 1, (), (), (), (), ()),
+            capture_status="active",
+            transcription_status="active",
+            loopback_active=True,
+            loopback_requested=True,
+        )
+        app.processEvents()
+        host = overlay.window.findChild(_SourceWaveforms)
+        assert host is not None
+        assert host.isVisible()
+        assert not host._warn.isVisible()
+    finally:
+        overlay.close()
+
+
+def test_overlay_meeting_levels_warn_when_loopback_unavailable() -> None:
+    import i18n
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay, _SourceWaveforms
+    from modules._builtin.meeting_buddy.state import MeetingState
+    from ui.app import ensure_app
+
+    i18n.set_ui_language("nl")
+    app = ensure_app([])
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0.0,
+        on_dismiss=lambda _i: None,
+        on_confirm=lambda _i: None,
+        on_reconnect=lambda: None,
+    )
+    try:
+        overlay.update(
+            MeetingState("s", 1, (), (), (), (), ()),
+            capture_status="active",
+            transcription_status="active",
+            loopback_active=False,
+            loopback_requested=True,
+        )
+        app.processEvents()
+        host = overlay.window.findChild(_SourceWaveforms)
+        assert host is not None
+        assert host.isVisible()
+        assert host._warn.isVisible()
+        assert "niet beschikbaar" in host._warn.text().lower()
+    finally:
+        overlay.close()
+
+
+def test_overlay_header_drag_moves_window() -> None:
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QFrame
+
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
+    from modules._builtin.meeting_buddy.state import MeetingState
+    from ui.app import ensure_app
+
+    app = ensure_app([])
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0.0,
+        on_dismiss=lambda _i: None,
+        on_confirm=lambda _i: None,
+        on_reconnect=lambda: None,
+    )
+    try:
+        overlay.update(
+            MeetingState("s", 1, (), (), (), (), ()),
+            capture_status="active",
+            transcription_status="active",
+        )
+        app.processEvents()
+        header = overlay.window.findChild(QFrame, "mbHeader")
+        assert header is not None
+        start = overlay.window.pos()
+        delta = QPoint(40, 25)
+        _drag_mouse(header, QPoint(20, 10), delta)
+        app.processEvents()
+        assert overlay.window.pos() == start + delta
+    finally:
+        overlay.close()
+
+
+def test_overlay_minimize_button_does_not_start_drag() -> None:
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QFrame, QPushButton
+
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
+    from modules._builtin.meeting_buddy.state import MeetingState
+    from ui.app import ensure_app
+
+    app = ensure_app([])
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0.0,
+        on_dismiss=lambda _i: None,
+        on_confirm=lambda _i: None,
+        on_reconnect=lambda: None,
+    )
+    try:
+        overlay.update(
+            MeetingState("s", 1, (), (), (), (), ()),
+            capture_status="active",
+            transcription_status="active",
+        )
+        app.processEvents()
+        header = overlay.window.findChild(QFrame, "mbHeader")
+        assert header is not None
+        minimize = next(btn for btn in header.findChildren(QPushButton) if btn.text() == "—")
+        start = overlay.window.pos()
+        local = QPoint(5, 5)
+        press = QMouseEvent(
+            QMouseEvent.Type.MouseButtonPress,
+            QPointF(local),
+            QPointF(minimize.mapToGlobal(local)),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        minimize.mousePressEvent(press)
+        move = QMouseEvent(
+            QMouseEvent.Type.MouseMove,
+            QPointF(local + QPoint(40, 25)),
+            QPointF(minimize.mapToGlobal(local) + QPoint(40, 25)),
+            Qt.MouseButton.NoButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        header.mouseMoveEvent(move)
+        app.processEvents()
+        assert overlay.window.pos() == start
+    finally:
+        overlay.close()
+
+
+def test_mini_pill_drag_moves_window() -> None:
+    from PySide6.QtCore import QPoint
+
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
+    from modules._builtin.meeting_buddy.state import MeetingState
+    from ui.app import ensure_app
+
+    app = ensure_app([])
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0.0,
+        on_dismiss=lambda _i: None,
+        on_confirm=lambda _i: None,
+        on_reconnect=lambda: None,
+    )
+    try:
+        overlay.update(
+            MeetingState("s", 1, (), (), (), (), ()),
+            capture_status="active",
+            transcription_status="active",
+        )
+        app.processEvents()
+        overlay.minimize()
+        app.processEvents()
+        mini = overlay._mini
+        assert mini is not None and mini.isVisible()
+        start = mini.pos()
+        delta = QPoint(30, 15)
+        _drag_mouse(mini, QPoint(40, 20), delta)
+        app.processEvents()
+        assert mini.pos() == start + delta
+    finally:
+        overlay.close()
+
+
 def test_listening_text_when_capture_active() -> None:
     import i18n
     from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay

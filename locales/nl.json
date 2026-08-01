@@ -305,6 +305,8 @@
   "modules.meeting_buddy.overlay.recording.mic_only": "● Opname: alleen microfoon",
   "modules.meeting_buddy.overlay.recording.mic_only_delayed": "● Opname: alleen microfoon — transcriptie loopt achter",
   "modules.meeting_buddy.overlay.recording.mic_only_unavailable": "● Opname: alleen microfoon — meetinggeluid niet beschikbaar",
+  "modules.meeting_buddy.overlay.levels.mic": "Mic",
+  "modules.meeting_buddy.overlay.levels.meeting": "Meeting",
   "modules.meeting_buddy.overlay.recording.mic_only_unavailable_delayed": "● Opname: alleen microfoon — meetinggeluid niet beschikbaar (transcriptie loopt achter)",
   "modules.meeting_buddy.overlay.recording.active_delayed": "● Opname actief — transcriptie loopt achter",
   "modules.meeting_buddy.overlay.recording.starting": "Microfoon wordt gestart…",
