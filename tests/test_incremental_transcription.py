@@ -1,4 +1,4 @@
-"""Incrementele transcriptie: partials tijdens opname; finaal altijd volle Whisper."""
+"""Chunk-transcriptie: partials per audio-stuk; finaal = concatenatie (+ staart)."""
 
 from __future__ import annotations
 
@@ -50,26 +50,24 @@ class FakeSoundDevice:
         return self.stream
 
 
-class CountingModel:
-    """Whisper-stub die calls telt."""
+class SequenceModel:
+    """Whisper-stub met vaste teksten per call."""
 
-    def __init__(self, text: str = "tussentijdse tekst") -> None:
-        self.text = text
+    def __init__(self, texts: list[str] | None = None) -> None:
+        self.texts = list(texts or ["chunk tekst"])
         self.calls: list[str] = []
         self.lock = threading.Lock()
         self._call_index = 0
 
     def transcribe(self, path: str, **_kwargs: Any) -> tuple[list[Any], Any]:
         with self.lock:
+            idx = self._call_index
             self._call_index += 1
             self.calls.append(path)
+            text = self.texts[idx] if idx < len(self.texts) else self.texts[-1]
 
         segment = MagicMock()
-        # Finale run (na partials) krijgt een herkenbaar andere tekst.
-        if self._call_index == 1:
-            segment.text = self.text
-        else:
-            segment.text = f"{self.text} plus staart"
+        segment.text = text
         segment.end = 0.5
         return [segment], MagicMock()
 
@@ -88,20 +86,17 @@ def saves() -> list[Path]:
     return []
 
 
-@pytest.fixture
-def model() -> CountingModel:
-    return CountingModel()
-
-
 def _make_session(
     *,
     tmp_path: Path,
     events: list[CycleEvent],
     saves: list[Path],
-    model: CountingModel,
+    model: SequenceModel,
     incremental: bool,
-    interval: float = 0.05,
-    min_seconds: float = 0.01,
+    chunk_mode: str = "fixed",
+    chunk_seconds: float = 0.12,
+    vad_ms: int = 2000,
+    min_seconds: float = 0.05,
 ) -> Opnamesessie:
     sd = FakeSoundDevice()
 
@@ -123,8 +118,10 @@ def _make_session(
         mode="toggle",
         warm_microphone=False,
         incremental_transcription=incremental,
-        incremental_interval_seconds=interval,
         incremental_min_seconds=min_seconds,
+        incremental_chunk_mode=chunk_mode,
+        incremental_chunk_seconds=chunk_seconds,
+        incremental_vad_ms=vad_ms,
         wait_until_modifiers_clear=lambda: None,
         on_ready=lambda: None,
         notify=lambda *_args, **_kwargs: None,
@@ -137,23 +134,8 @@ def _make_session(
     sess.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=_write_wav)
     sess.model = model
     sess._sd_ref = sd  # type: ignore[attr-defined]
+    sess._chunk_poll_seconds = 0.05
     return sess
-
-
-@pytest.fixture
-def session(
-    tmp_path: Path,
-    events: list[CycleEvent],
-    saves: list[Path],
-    model: CountingModel,
-) -> Opnamesessie:
-    return _make_session(
-        tmp_path=tmp_path,
-        events=events,
-        saves=saves,
-        model=model,
-        incremental=True,
-    )
 
 
 def _feed_audio(session: Opnamesessie, seconds: float = 0.2) -> None:
@@ -163,7 +145,7 @@ def _feed_audio(session: Opnamesessie, seconds: float = 0.2) -> None:
     sd.last_callback(np.zeros((frames, 1), dtype=np.float32), frames, None, None)
 
 
-def _wait_until(predicate, timeout: float = 2.0) -> None:
+def _wait_until(predicate, timeout: float = 3.0) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if predicate():
@@ -173,72 +155,85 @@ def _wait_until(predicate, timeout: float = 2.0) -> None:
 
 
 def test_incremental_emits_partial_events_without_saving(
-    session: Opnamesessie,
-    events: list[CycleEvent],
-    saves: list[Path],
-    model: CountingModel,
-) -> None:
-    session.start()
-    _feed_audio(session)
-
-    _wait_until(
-        lambda: any(e.type == CycleEventType.TRANSCRIPT_PARTIAL for e in events),
-        timeout=2.0,
-    )
-
-    assert saves == []
-    assert len(model.calls) >= 1
-    partials = [e for e in events if e.type == CycleEventType.TRANSCRIPT_PARTIAL]
-    assert partials
-    assert partials[0].transcript
-
-    session.cancel()
-
-
-def test_stop_runs_final_whisper_even_with_partial(
-    session: Opnamesessie,
-    events: list[CycleEvent],
-    saves: list[Path],
-    model: CountingModel,
-) -> None:
-    """Partials tijdens opname; bij stop altijd een extra Whisper over de volle buffer."""
-
-    session.start()
-    _feed_audio(session)
-    _wait_until(
-        lambda: any(e.type == CycleEventType.TRANSCRIPT_PARTIAL for e in events),
-        timeout=2.0,
-    )
-    # Voorkom een volgende partial vóór stop (interval was kort voor de test).
-    session._incremental_interval_seconds = 3600.0
-    calls_during_recording = len(model.calls)
-
-    session.stop_and_transcribe()
-    _wait_until(
-        lambda: any(e.type == CycleEventType.TRANSCRIPT_SAVED for e in events),
-        timeout=2.0,
-    )
-
-    assert len(model.calls) == calls_during_recording + 1
-    assert len(saves) == 1
-    assert saves[0].read_text(encoding="utf-8") == "tussentijdse tekst plus staart"
-
-
-def test_stop_without_partial_falls_back_to_full_whisper(
     tmp_path: Path,
     events: list[CycleEvent],
     saves: list[Path],
-    model: CountingModel,
 ) -> None:
-    """Geen partial klaar → volle Whisper zoals voorheen."""
-
+    model = SequenceModel(["eerste deel"])
     session = _make_session(
         tmp_path=tmp_path,
         events=events,
         saves=saves,
         model=model,
         incremental=True,
-        interval=60.0,
+        chunk_seconds=0.08,
+    )
+    session.start()
+    _feed_audio(session, seconds=0.2)
+    _wait_until(
+        lambda: any(e.type == CycleEventType.TRANSCRIPT_PARTIAL for e in events),
+        timeout=3.0,
+    )
+
+    assert saves == []
+    assert len(model.calls) >= 1
+    partials = [e for e in events if e.type == CycleEventType.TRANSCRIPT_PARTIAL]
+    assert partials[0].transcript == "eerste deel"
+
+    session.cancel()
+
+
+def test_stop_uses_chunk_texts_without_full_buffer_retranscription(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    model = SequenceModel(["alfa bravo", "alfa bravo charlie"])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+        chunk_seconds=0.1,
+    )
+    session.start()
+    _feed_audio(session, seconds=0.15)
+    _wait_until(
+        lambda: any(e.type == CycleEventType.TRANSCRIPT_PARTIAL for e in events),
+        timeout=3.0,
+    )
+    # Blokkeer verdere knippen; voeg staart toe die bij stop getranscribeerd wordt.
+    session._incremental_chunk_seconds = 3600.0
+    calls_during = len(model.calls)
+    _feed_audio(session, seconds=0.12)
+
+    session.stop_and_transcribe()
+    _wait_until(
+        lambda: any(e.type == CycleEventType.TRANSCRIPT_SAVED for e in events),
+        timeout=3.0,
+    )
+
+    # Hoogstens één extra Whisper voor de staart — geen volle her-run van alles.
+    assert len(model.calls) == calls_during + 1
+    assert len(saves) == 1
+    # Overlap "alfa bravo" wordt ontdubbeld → "alfa bravo charlie"
+    assert saves[0].read_text(encoding="utf-8") == "alfa bravo charlie"
+
+
+def test_stop_without_chunk_falls_back_to_full_whisper(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    model = SequenceModel(["volle run"])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+        chunk_seconds=60.0,
         min_seconds=0.01,
     )
     session.minimum_recording_seconds = 0.01
@@ -254,16 +249,15 @@ def test_stop_without_partial_falls_back_to_full_whisper(
     )
 
     assert len(model.calls) == 1
-    assert len(saves) == 1
-    assert saves[0].read_text(encoding="utf-8") == "tussentijdse tekst"
+    assert saves[0].read_text(encoding="utf-8") == "volle run"
 
 
 def test_incremental_off_always_runs_whisper_on_stop(
     tmp_path: Path,
     events: list[CycleEvent],
     saves: list[Path],
-    model: CountingModel,
 ) -> None:
+    model = SequenceModel(["uit"])
     session = _make_session(
         tmp_path=tmp_path,
         events=events,
@@ -284,13 +278,23 @@ def test_incremental_off_always_runs_whisper_on_stop(
     )
 
     assert len(model.calls) == 1
-    assert len(saves) == 1
+    assert saves[0].read_text(encoding="utf-8") == "uit"
 
 
-def test_each_partial_retranscribes_full_buffer_not_only_new_chunk(
-    session: Opnamesessie,
-    model: CountingModel,
+def test_each_chunk_whispers_bounded_window_not_full_buffer(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
 ) -> None:
+    model = SequenceModel(["a", "b", "c"])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+        chunk_seconds=0.1,
+    )
     seen_sizes: list[int] = []
     original = session.create_temporary_wav
 
@@ -301,12 +305,16 @@ def test_each_partial_retranscribes_full_buffer_not_only_new_chunk(
     session.create_temporary_wav = spy  # type: ignore[method-assign]
 
     session.start()
-    _feed_audio(session, seconds=0.1)
-    _wait_until(lambda: len(model.calls) >= 1, timeout=2.0)
-    _feed_audio(session, seconds=0.2)
-    _wait_until(lambda: len(model.calls) >= 2, timeout=2.0)
+    _feed_audio(session, seconds=0.12)
+    _wait_until(lambda: len(model.calls) >= 1, timeout=3.0)
+    _feed_audio(session, seconds=0.12)
+    _wait_until(lambda: len(model.calls) >= 2, timeout=3.0)
 
     assert len(seen_sizes) >= 2
-    assert seen_sizes[1] > seen_sizes[0]
+    # Tweede call mag overlap meenemen, maar niet de hele buffer laten groeien
+    # zoals de oude volle-hertranscriptie (die verdubbelde ruwweg).
+    max_expected = int(session.sample_rate * (0.1 + 1.5 + 0.05))
+    assert seen_sizes[1] <= max_expected
+    assert seen_sizes[1] < seen_sizes[0] + int(session.sample_rate * 0.12)
 
     session.cancel()

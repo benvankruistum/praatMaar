@@ -7,11 +7,10 @@ toestanden aandrijft. Toetsenbordrouting blijft in `dictation.py`.
 
 Elke cyclus krijgt een `session_id` (UUID). Optioneel `emit_event` stuurt
 `CycleEvent`-payloads naar de module-bus (zie `modules/`). Met
-`incremental_transcription` draait tussentijdse Whisper op de achtergrond
-tijdens opname (`transcript.partial` voor modules/tools). Bij stop volgt
-altijd een finale Whisper-run over de volledige buffer — anders ontbreekt
-audio die ná de laatste partial is opgenomen (vaak meer dan één interval
-zodra de buffer groeit).
+`incremental_transcription` draait een chunk-pipeline: Whisper alleen over
+nieuwe audiostukken (fixed / VAD / hybrid). Bij stop worden chunk-teksten
+geconcateneerd (+ eventuele staart); geen tweede volle-buffer-run.
+Zie `docs/superpowers/specs/2026-08-01-chunk-transcription-pipeline-design.md`.
 
 OS-plakken gaat via een geïnjecteerde `Host` (zie `docs/adr/0001-platform-seam.md`),
 zodat tests een `FakeHost` kunnen steken.
@@ -31,10 +30,19 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import i18n
+from chunk_transcription import (
+    OVERLAP_SECONDS,
+    decide_chunk_cut,
+    dedupe_overlap_text,
+    normalize_chunk_mode,
+    trailing_silence_seconds,
+)
 from destinations import match_command, resolve_auto_paste
 from indicator import (
     RecordingState,
+    set_chunk_leds_enabled,
     set_transcription_progress,
+    signal_chunk_trigger,
 )
 from indicator import (
     notify_state as default_notify_state,
@@ -54,6 +62,11 @@ from mic_errors import (
 from modules._contract import CycleEvent, CycleEventType
 from modules.whisper import SharedWhisper
 
+# RMS onder deze drempel telt als stilte voor chunk-VAD (v1, eenvoudig).
+_CHUNK_SILENCE_RMS = 0.01
+_CHUNK_FRAME_SECONDS = 0.05
+_CHUNK_POLL_SECONDS = 0.25
+
 
 class Host(Protocol):
     def paste(self) -> None: ...
@@ -67,7 +80,7 @@ class CycleTiming:
     """Fase-tijden van één dicteercyclus (na stop), voor `praatMaar.log`."""
 
     session_id: str
-    path: str  # "full" | "partial"
+    path: str  # "full" | "chunk" | "partial"
     record_s: float
     stop_at: float
     stop_join_s: float
@@ -121,6 +134,9 @@ class Opnamesessie:
         incremental_transcription: bool = False,
         incremental_interval_seconds: float = 3.0,
         incremental_min_seconds: float = 1.5,
+        incremental_chunk_mode: str = "hybrid",
+        incremental_vad_ms: int = 2000,
+        incremental_chunk_seconds: float = 30.0,
         wait_until_modifiers_clear: Callable[[], None] | None = None,
         emit_event: Callable[[CycleEvent], None] | None = None,
         on_ready: Callable[[], None] | None = None,
@@ -152,6 +168,10 @@ class Opnamesessie:
         self.incremental_transcription = incremental_transcription
         self._incremental_interval_seconds = incremental_interval_seconds
         self._incremental_min_seconds = incremental_min_seconds
+        self.incremental_chunk_mode = normalize_chunk_mode(incremental_chunk_mode)
+        self.incremental_vad_ms = max(0, int(incremental_vad_ms))
+        self._incremental_chunk_seconds = float(incremental_chunk_seconds)
+        self._chunk_poll_seconds = _CHUNK_POLL_SECONDS
 
         self.wait_until_modifiers_clear = wait_until_modifiers_clear or (lambda: None)
         self._emit_event = emit_event
@@ -185,6 +205,8 @@ class Opnamesessie:
         self._audio_chunks: list[Any] = []
         self._session_id: str | None = None
         self._last_partial_transcript: str | None = None
+        self._chunk_transcripts: list[str] = []
+        self._transcribed_through_samples: int = 0
         self._incremental_thread: threading.Thread | None = None
         self._incremental_stop: threading.Event | None = None
         self._whisper = shared_whisper if shared_whisper is not None else SharedWhisper()
@@ -346,13 +368,17 @@ class Opnamesessie:
             thread.join(timeout=5.0)
         self._incremental_thread = None
         self._incremental_stop = None
+        if wait:
+            set_chunk_leds_enabled(False)
 
     def _start_incremental_worker(self) -> None:
         if not self.incremental_transcription:
+            set_chunk_leds_enabled(False)
             return
 
         # Oude worker alleen seinen, niet joinen — anders blokkeert start de UI.
         self._stop_incremental_worker(wait=False)
+        set_chunk_leds_enabled(True)
         self._incremental_stop = threading.Event()
         self._incremental_thread = threading.Thread(
             target=self._incremental_loop,
@@ -360,44 +386,159 @@ class Opnamesessie:
         )
         self._incremental_thread.start()
 
+    def _concat_audio(self, chunks: list[Any]) -> Any:
+        np, _, _ = self._require_audio()
+        if not chunks:
+            return np.zeros((0,), dtype=np.float32)
+        return np.concatenate(chunks, axis=0).reshape(-1)
+
+    def _sample_count_locked(self) -> int:
+        return int(sum(int(chunk.shape[0]) for chunk in self._audio_chunks))
+
+    def _rms_frames(self, audio: Any) -> list[float]:
+        np, _, _ = self._require_audio()
+        if audio.size == 0:
+            return []
+        frame = max(1, int(self.sample_rate * _CHUNK_FRAME_SECONDS))
+        levels: list[float] = []
+        for start in range(0, int(audio.shape[0]), frame):
+            piece = audio[start : start + frame]
+            levels.append(float(np.sqrt(np.mean(np.square(piece)))))
+        return levels
+
+    def _emit_partial(self, transcript: str, session_id: str) -> None:
+        with self._lock:
+            self._last_partial_transcript = transcript
+        if self._emit_event is not None:
+            self._emit_event(
+                CycleEvent(
+                    type=CycleEventType.TRANSCRIPT_PARTIAL,
+                    session_id=session_id,
+                    transcript=transcript,
+                    language=self.language,
+                    mode=self.mode,
+                )
+            )
+
+    def _commit_audio_slice(
+        self,
+        *,
+        audio: Any,
+        start_sample: int,
+        end_sample: int,
+        previous_text: str,
+    ) -> str | None:
+        """Whisper over [start,end) + overlap-prefix; retourneert ontdubbelde tekst."""
+
+        if end_sample <= start_sample:
+            return None
+        overlap = int(self.sample_rate * OVERLAP_SECONDS)
+        slice_start = max(0, start_sample - overlap) if previous_text else start_sample
+        piece = audio[slice_start:end_sample]
+        if piece.size == 0:
+            return None
+        try:
+            raw = self._transcribe_chunks_to_text([piece.reshape(-1, 1)])
+        except Exception:
+            return None
+        if not raw:
+            return None
+        return dedupe_overlap_text(previous_text, raw) or None
+
+    def _try_commit_chunk(self, reason: str) -> None:
+        with self._lock:
+            if not self._recording:
+                return
+            session_id = self._session_id
+            chunks_copy = [chunk.copy() for chunk in self._audio_chunks]
+            through = self._transcribed_through_samples
+            previous = " ".join(self._chunk_transcripts).strip()
+            total = self._sample_count_locked()
+
+        if session_id is None or not chunks_copy or total <= through:
+            return
+
+        audio = self._concat_audio(chunks_copy)
+        open_audio = audio[through:]
+        silence_s = trailing_silence_seconds(
+            self._rms_frames(open_audio),
+            frame_seconds=_CHUNK_FRAME_SECONDS,
+            silence_rms=_CHUNK_SILENCE_RMS,
+        )
+        silence_samples = int(silence_s * self.sample_rate)
+
+        if reason == "vad":
+            cut_end = total - silence_samples
+            if cut_end <= through:
+                # Open chunk is (bijna) alleen stilte — wacht op hard cap.
+                return
+        else:
+            cut_end = min(
+                total,
+                through + int(self._incremental_chunk_seconds * self.sample_rate),
+            )
+
+        if cut_end <= through:
+            return
+
+        piece_text = self._commit_audio_slice(
+            audio=audio,
+            start_sample=through,
+            end_sample=cut_end,
+            previous_text=previous,
+        )
+        signal_chunk_trigger(reason)
+
+        with self._lock:
+            if self._session_id != session_id or not self._recording:
+                return
+            self._transcribed_through_samples = cut_end
+            if piece_text:
+                self._chunk_transcripts.append(piece_text)
+                combined = " ".join(self._chunk_transcripts).strip()
+            else:
+                combined = previous
+
+        if piece_text and combined:
+            self._emit_partial(combined, session_id)
+
     def _incremental_loop(self) -> None:
         stop = self._incremental_stop
         if stop is None:
             return
 
-        while not stop.wait(self._incremental_interval_seconds):
+        while not stop.wait(self._chunk_poll_seconds):
             with self._lock:
                 if not self._recording:
                     return
                 chunks_copy = [chunk.copy() for chunk in self._audio_chunks]
-                session_id = self._session_id
+                through = self._transcribed_through_samples
 
-            if not chunks_copy or session_id is None:
+            if not chunks_copy:
                 continue
 
-            sample_count = sum(chunk.shape[0] for chunk in chunks_copy)
-            duration = sample_count / float(self.sample_rate)
-            if duration < self._incremental_min_seconds:
+            audio = self._concat_audio(chunks_copy)
+            total = int(audio.shape[0])
+            open_seconds = (total - through) / float(self.sample_rate)
+            silence_s = trailing_silence_seconds(
+                self._rms_frames(audio[through:]),
+                frame_seconds=_CHUNK_FRAME_SECONDS,
+                silence_rms=_CHUNK_SILENCE_RMS,
+            )
+            reason = decide_chunk_cut(
+                mode=self.incremental_chunk_mode,
+                open_seconds=open_seconds,
+                trailing_silence_seconds=silence_s,
+                chunk_seconds=self._incremental_chunk_seconds,
+                vad_ms=self.incremental_vad_ms,
+                min_seconds=self._incremental_min_seconds,
+            )
+            if reason is None:
                 continue
-
             try:
-                transcript = self._transcribe_chunks_to_text(chunks_copy)
+                self._try_commit_chunk(reason)
             except Exception:
                 continue
-
-            if transcript:
-                with self._lock:
-                    self._last_partial_transcript = transcript
-                if self._emit_event is not None:
-                    self._emit_event(
-                        CycleEvent(
-                            type=CycleEventType.TRANSCRIPT_PARTIAL,
-                            session_id=session_id,
-                            transcript=transcript,
-                            language=self.language,
-                            mode=self.mode,
-                        )
-                    )
 
     def _transcribe_chunks_to_text(self, chunks: list[Any]) -> str:
         """Transcribeert audioblokken naar tekst (incrementeel + finaal)."""
@@ -597,6 +738,8 @@ class Opnamesessie:
             self._session_id = str(uuid.uuid4())
             session_id = self._session_id
             self._last_partial_transcript = None
+            self._chunk_transcripts = []
+            self._transcribed_through_samples = 0
 
         self._event(CycleEventType.CYCLE_STARTED, session_id=session_id)
 
@@ -679,8 +822,11 @@ class Opnamesessie:
         if duration < self.minimum_recording_seconds:
             with self._lock:
                 self._audio_chunks.clear()
+                self._chunk_transcripts = []
+                self._transcribed_through_samples = 0
             # Seinen zonder join: UI blijft snappy.
             self._stop_incremental_worker(wait=False)
+            set_chunk_leds_enabled(False)
             self._notify(RecordingState.IDLE)
             print(i18n.t("rec.too_short"))
             self._release_stream_if_cold()
@@ -708,33 +854,157 @@ class Opnamesessie:
             self.on_ready()
             return
 
-        # UI meteen naar Transcriberen — join van partial-Whisper mag daarna.
+        # UI meteen naar Transcriberen — join van chunk-Whisper mag daarna.
         self._event(CycleEventType.CYCLE_TRANSCRIBING)
         self._release_stream_if_cold()
         self._notify(RecordingState.TRANSCRIBING, self.mode)
 
-        # Join zodat een in-flight partial nog kan landen (events); finaal
-        # transcript komt altijd uit een volle Whisper-run over alle chunks.
+        # Join zodat een in-flight chunk nog kan landen (events).
         self._stop_incremental_worker(wait=True)
         stop_join_s = time.perf_counter() - stop_at
 
         with self._lock:
+            chunk_texts = list(self._chunk_transcripts)
+            through = self._transcribed_through_samples
             self._last_partial_transcript = None
+            self._chunk_transcripts = []
+            self._transcribed_through_samples = 0
 
         timing = CycleTiming(
             session_id=session_id or "",
-            path="full",
+            path="chunk" if chunk_texts else "full",
             record_s=duration,
             stop_at=stop_at,
             stop_join_s=stop_join_s,
         )
 
-        thread = threading.Thread(
-            target=self._transcribe_audio,
-            args=(chunks_to_process, timing),
-            daemon=True,
-        )
+        if chunk_texts:
+            thread = threading.Thread(
+                target=self._finalize_chunk_transcript,
+                args=(chunks_to_process, chunk_texts, through, timing),
+                daemon=True,
+            )
+        else:
+            thread = threading.Thread(
+                target=self._transcribe_audio,
+                args=(chunks_to_process, timing),
+                daemon=True,
+            )
         thread.start()
+
+    def _finalize_chunk_transcript(
+        self,
+        chunks: list[Any],
+        chunk_texts: list[str],
+        through_samples: int,
+        timing: CycleTiming,
+    ) -> None:
+        """Plakt chunk-teksten; Whisper alleen over de onaffe staart."""
+
+        temporary_path: Path | None = None
+        final_state = RecordingState.IDLE
+        error_message: str | None = None
+        recovery_kept: Path | None = None
+
+        try:
+            print(i18n.t("rec.transcribing"))
+            set_transcription_progress(0)
+            texts = list(chunk_texts)
+            previous = " ".join(texts).strip()
+            audio = self._concat_audio(chunks)
+            total = int(audio.shape[0])
+            tail_start = max(0, min(through_samples, total))
+            tail = audio[tail_start:]
+            tail_seconds = tail.shape[0] / float(self.sample_rate)
+
+            if tail_seconds >= self._incremental_min_seconds and tail.shape[0] > 0:
+                whisper_started = time.perf_counter()
+                overlap = int(self.sample_rate * OVERLAP_SECONDS)
+                slice_start = max(0, tail_start - overlap) if previous else tail_start
+                piece_audio = audio[slice_start:total]
+                try:
+                    raw = self._transcribe_chunks_to_text([piece_audio.reshape(-1, 1)])
+                    piece = dedupe_overlap_text(previous, raw) if raw else None
+                    if piece:
+                        texts.append(piece)
+                except Exception as exc:
+                    error_message = str(exc)
+                    print()
+                    print(i18n.t("rec.transcribe_error"))
+                    print(i18n.t("rec.error", error=exc))
+                    wav_started = time.perf_counter()
+                    temporary_path = self.create_temporary_wav(chunks)
+                    timing.wav_s = time.perf_counter() - wav_started
+                    if self._preserve_audio is not None:
+                        try:
+                            recovery_kept = self._preserve_audio(temporary_path)
+                            print(i18n.t("rec.recovery_saved", path=recovery_kept))
+                        except OSError as preserve_exc:
+                            print(i18n.t("rec.recovery_preserve_warn", error=preserve_exc))
+                    final_state = RecordingState.ERROR
+                timing.whisper_s = time.perf_counter() - whisper_started
+
+            transcript = " ".join(t for t in texts if t).strip()
+            set_transcription_progress(100)
+            if transcript:
+                deliver_started = time.perf_counter()
+                self._apply_transcript(transcript)
+                timing.deliver_s = time.perf_counter() - deliver_started
+            elif final_state != RecordingState.ERROR:
+                print()
+                print(i18n.t("rec.no_speech"))
+
+        except Exception as exc:
+            final_state = RecordingState.ERROR
+            error_message = str(exc)
+            print()
+            print(i18n.t("rec.transcribe_error"))
+            print(i18n.t("rec.error", error=exc))
+            if temporary_path is None:
+                try:
+                    temporary_path = self.create_temporary_wav(chunks)
+                except Exception:
+                    temporary_path = None
+            if temporary_path is not None and self._preserve_audio is not None:
+                try:
+                    recovery_kept = self._preserve_audio(temporary_path)
+                    print(i18n.t("rec.recovery_saved", path=recovery_kept))
+                except OSError as preserve_exc:
+                    print(i18n.t("rec.recovery_preserve_warn", error=preserve_exc))
+
+        finally:
+            if temporary_path is not None and temporary_path.exists():
+                if final_state == RecordingState.ERROR and recovery_kept is None:
+                    if self._preserve_audio is not None:
+                        try:
+                            recovery_kept = self._preserve_audio(temporary_path)
+                        except OSError:
+                            pass
+                if self.delete_temp_audio and (
+                    final_state != RecordingState.ERROR or recovery_kept is not None
+                ):
+                    try:
+                        if temporary_path.exists():
+                            os.remove(temporary_path)
+                    except OSError as exc:
+                        print(i18n.t("rec.temp_delete_warn", error=exc))
+
+            timing.log()
+            session_id = timing.session_id or None
+            with self._lock:
+                self._processing = False
+
+            self._notify(final_state)
+            if error_message is not None:
+                self._event(
+                    CycleEventType.CYCLE_ERROR,
+                    error=error_message,
+                    recovery_path=str(recovery_kept) if recovery_kept is not None else None,
+                    session_id=session_id,
+                )
+            self._event(CycleEventType.CYCLE_IDLE, session_id=session_id)
+            self._clear_session_id(session_id)
+            self.on_ready()
 
     def cancel(self) -> None:
         """Annuleert de opname zonder transcriptie of plakken."""
@@ -747,12 +1017,15 @@ class Opnamesessie:
             self._recording_started_at = None
             self._audio_chunks.clear()
             self._last_partial_transcript = None
+            self._chunk_transcripts = []
+            self._transcribed_through_samples = 0
             session_id = self._session_id
 
         self._event(CycleEventType.CYCLE_CANCELLED, session_id=session_id)
         self._notify(RecordingState.CANCELLED)
 
         self._stop_incremental_worker(wait=False)
+        set_chunk_leds_enabled(False)
 
         print()
         print(i18n.t("rec.cancelled"))
