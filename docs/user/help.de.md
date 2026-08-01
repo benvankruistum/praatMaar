@@ -1,5 +1,21 @@
 # praatMaar — Hilfe
 
+## Erste Schritte
+
+1. Starten Sie praatMaar (Infobereich-Symbol erscheint nach dem Modell-Laden).
+2. Setzen Sie den Cursor in ein Textfeld.
+3. Start/Stop Diktat per Hotkey (Standard `Ctrl+Shift+Alt+Leertaste`; siehe
+   Einstellungen).
+4. Text wird lokal transkribiert und — je nach Einstellung — eingefügt oder
+   nur gespeichert.
+
+**Windows-Installer** sind nicht digital signiert. Bei „Windows hat Ihren PC
+geschützt“: **Weitere Informationen** → **Trotzdem ausführen**.
+
+**Datenschutz (kurz):** Spracherkennung läuft lokal. Sensible Dateien liegen
+unter `%APPDATA%\praatMaar\` (Transkripte, Recovery, Inbox, Logs). Siehe auch
+Privacy in der README.
+
 ## Was sind Ziele?
 
 Ein **Ziel** ist ein Name, der mit einem Ordner auf Ihrem Computer verknüpft ist. Beim
@@ -72,7 +88,10 @@ zeigen zwei LEDs, ob ein Schnitt durch Stille oder durch das Zeitfenster kam.
 **Event-Journal:** jeder Diktierzyklus wird als JSON-Zeilen nach
 `%APPDATA%\praatMaar\events\events.jsonl` geschrieben (macOS: Application Support).
 Externe Programme können diese Datei beobachten, ohne praatMaar anzupassen. Jedes
-Event hat `session_id`, `type` (z. B. `transcript.saved`) und Metadaten.
+Event hat `session_id`, `type` (z. B. `transcript.saved`) und Metadaten. Der
+**vollständige Transkripttext steht nicht** im Journal — u. a. nur die Länge
+(`transcript_chars`). Transkriptdateien selbst liegen unter `transcripts\` oder
+im Zielordner.
 
 **Inbox-Spiegel** (standardmäßig an): kopiert jedes gespeicherte Transkript nach
 `%APPDATA%\praatMaar\inbox\` — fester Ablageort für Skripte.

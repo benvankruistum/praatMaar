@@ -212,7 +212,7 @@
   "destinations.error.select_first": "Selecteer eerst een bestemming in de lijst.",
   "destinations.error.default_readonly": "De standaardrij kun je niet wijzigen of verwijderen. Klik op Actief om ernaar terug te gaan.",
   "modules.title": "praatMaar — Modules",
-  "modules.intro": "Schakel uitbreidingen in of uit. Alle dicteercyclus-events worden ook weggeschreven naar het event-journal (events/events.jsonl) voor externe tools.",
+  "modules.intro": "Schakel uitbreidingen in of uit. Dicteercyclus-events gaan naar het event-journal (events/events.jsonl) voor externe tools — zonder volledige transcripttekst (wel lengte/metadata).",
   "modules.intro_short": "Modules zijn ingebouwde uitbreidingen. Zet aan wat je nodig hebt; alles draait lokaal.",
   "modules.incremental": "Incrementele transcriptie (chunk-pipeline tijdens opname)",
   "modules.incremental_title": "Incrementele transcriptie",

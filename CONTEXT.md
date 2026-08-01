@@ -106,6 +106,8 @@ herstel-pad in `dictation.py`.
 Append-only JSONL (`events/events.jsonl` onder de app-datamap) — **hybride brug**
 voor externe tools. `ModuleBus` schrijft elk event altijd; in-process modules
 krijgen dezelfde payload. Schema: `schema_version` + `type` + payload-velden.
+Volledige transcripttekst wordt **niet** in het journal bewaard; wel o.a.
+`transcript_chars` (lengte). Zie ADR-0003 aanvulling 2026-08-01.
 
 ### local-first inference
 

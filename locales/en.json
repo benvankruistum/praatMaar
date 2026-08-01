@@ -212,7 +212,7 @@
   "destinations.error.select_first": "Select a destination in the list first.",
   "destinations.error.default_readonly": "The Default row cannot be edited or deleted. Click Active to switch back to it.",
   "modules.title": "praatMaar — Modules",
-  "modules.intro": "Enable or disable extensions. All dictation cycle events are also written to the event journal (events/events.jsonl) for external tools.",
+  "modules.intro": "Enable or disable extensions. Dictation cycle events are written to the event journal (events/events.jsonl) for external tools — without full transcript text (length/metadata only).",
   "modules.intro_short": "Modules are built-in extensions. Turn on what you need; everything runs locally.",
   "modules.incremental": "Incremental transcription (chunk pipeline while recording)",
   "modules.incremental_title": "Incremental transcription",
