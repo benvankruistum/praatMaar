@@ -108,7 +108,8 @@ Volgens [docs/design/pill.md](../../design/pill.md) en fidelity-pass:
 
 `[ rode dot ] Opname [ waveform ] [◇ VAD] [⏱ tijd] [ modus-tag ] [ ■ ]`
 
-- Twee kleine LED-dots, LCD/LED-metafoor; geen glow-stacks of losse badges.
+- Twee kleine iconen (◇ stilte / ⏱ tijd), LCD-metafoor; grijs in rust, kleur bij hit.
+  Geen anonieme bolletjes — vorm draagt betekenis.
 - **Rust:** muted grijs op donkere capsule (`#202124` / tekstfamilie `#f1f3f4`).
 - **Hit:** kort oplichten (~0,6–1 s), daarna terug grijs; iconen blijven zichtbaar.
 - Kleuren uit bestaand HUD-palet (geen paars/neon): VAD ≈ ok/blauw-accent canvas;

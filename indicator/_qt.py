@@ -511,22 +511,36 @@ class RecordingIndicator(QWidget):
         return int(left)
 
     def _paint_chunk_leds(self, painter: QPainter, right_x: int) -> int:
-        """Twee LCD-LED’s (VAD + tijd); retourneert linker rand voor de waveform."""
+        """Twee LCD-iconen (◇ stilte, ⏱ tijd); retourneert linker rand voor waveform."""
 
         enabled, vad_on, fixed_on = chunk_led_snapshot()
         if not enabled:
             return right_x
 
-        diameter = 7.0
-        gap = 6.0
-        width = diameter * 2 + gap
+        painter.setFont(self._font(13, bold=True))
+        metrics = painter.fontMetrics()
+        vad_glyph = "◇"
+        time_glyph = "⏱"
+        gap = 5
+        vad_w = metrics.horizontalAdvance(vad_glyph)
+        time_w = metrics.horizontalAdvance(time_glyph)
+        width = vad_w + gap + time_w
         left = right_x - width
-        y = self._CY - diameter / 2
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(COLOR_CHUNK_LED_VAD if vad_on else COLOR_CHUNK_LED_IDLE))
-        painter.drawEllipse(QRectF(left, y, diameter, diameter))
-        painter.setBrush(QColor(COLOR_CHUNK_LED_FIXED if fixed_on else COLOR_CHUNK_LED_IDLE))
-        painter.drawEllipse(QRectF(left + diameter + gap, y, diameter, diameter))
+        y = 0
+        h = INDICATOR_HEIGHT
+
+        painter.setPen(QColor(COLOR_CHUNK_LED_VAD if vad_on else COLOR_CHUNK_LED_IDLE))
+        painter.drawText(
+            QRect(int(left), y, vad_w + 2, h),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            vad_glyph,
+        )
+        painter.setPen(QColor(COLOR_CHUNK_LED_FIXED if fixed_on else COLOR_CHUNK_LED_IDLE))
+        painter.drawText(
+            QRect(int(left + vad_w + gap), y, time_w + 2, h),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            time_glyph,
+        )
         return int(left)
 
     def _paint_waveform(
