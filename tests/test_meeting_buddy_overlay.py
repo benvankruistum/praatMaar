@@ -116,6 +116,67 @@ def test_overlay_is_a_non_activating_qt_hud() -> None:
         overlay.close()
 
 
+def test_overlay_shows_source_levels_when_capture_active() -> None:
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay, _SourceWaveforms
+    from modules._builtin.meeting_buddy.state import MeetingState
+    from ui.app import ensure_app
+
+    app = ensure_app([])
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0.0,
+        on_dismiss=lambda _i: None,
+        on_confirm=lambda _i: None,
+        on_reconnect=lambda: None,
+    )
+    try:
+        overlay.update(
+            MeetingState("s", 1, (), (), (), (), ()),
+            capture_status="active",
+            transcription_status="active",
+            loopback_active=True,
+            loopback_requested=True,
+        )
+        app.processEvents()
+        host = overlay.window.findChild(_SourceWaveforms)
+        assert host is not None
+        assert host.isVisible()
+        assert not host._warn.isVisible()
+    finally:
+        overlay.close()
+
+
+def test_overlay_meeting_levels_warn_when_loopback_unavailable() -> None:
+    import i18n
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay, _SourceWaveforms
+    from modules._builtin.meeting_buddy.state import MeetingState
+    from ui.app import ensure_app
+
+    i18n.set_ui_language("nl")
+    app = ensure_app([])
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0.0,
+        on_dismiss=lambda _i: None,
+        on_confirm=lambda _i: None,
+        on_reconnect=lambda: None,
+    )
+    try:
+        overlay.update(
+            MeetingState("s", 1, (), (), (), (), ()),
+            capture_status="active",
+            transcription_status="active",
+            loopback_active=False,
+            loopback_requested=True,
+        )
+        app.processEvents()
+        host = overlay.window.findChild(_SourceWaveforms)
+        assert host is not None
+        assert host.isVisible()
+        assert host._warn.isVisible()
+        assert "niet beschikbaar" in host._warn.text().lower()
+    finally:
+        overlay.close()
+
+
 def test_listening_text_when_capture_active() -> None:
     import i18n
     from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay

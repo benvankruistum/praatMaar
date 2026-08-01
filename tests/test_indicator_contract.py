@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import pytest
+
 from indicator import RecordingState, notify_state, push_level, reset_levels
 from indicator._contract import (
     DestinationPillModel,
     destination_display_name,
     drain_status_queue,
+    push_loopback_level,
+    push_mic_level,
+    reset_source_levels,
     snapshot_levels,
+    snapshot_loopback_levels,
+    snapshot_mic_levels,
 )
 
 
@@ -39,6 +46,29 @@ def test_levels_buffer() -> None:
     assert snapshot_levels() == [0.1, 0.2]
     reset_levels()
     assert snapshot_levels() == []
+
+
+def test_source_levels_are_independent() -> None:
+    reset_source_levels()
+    push_mic_level(0.3)
+    push_loopback_level(0.7)
+    assert snapshot_mic_levels() == [0.3]
+    assert snapshot_loopback_levels() == [0.7]
+    reset_source_levels()
+    assert snapshot_mic_levels() == []
+    assert snapshot_loopback_levels() == []
+
+
+def test_source_levels_respect_maxlen() -> None:
+    from indicator._contract import NUM_BARS
+
+    reset_source_levels()
+    for i in range(NUM_BARS + 5):
+        push_mic_level(i * 0.01)
+        push_loopback_level(0.0)
+    mic = snapshot_mic_levels()
+    assert len(mic) == NUM_BARS
+    assert mic[0] == pytest.approx(5 * 0.01)
 
 
 def test_destination_display_name_truncates() -> None:

@@ -14,7 +14,10 @@ from ._contract import (
     RecordingState,
     notify_state,
     push_level,
+    push_loopback_level,
+    push_mic_level,
     reset_levels,
+    reset_source_levels,
     set_transcription_progress,
 )
 
@@ -23,7 +26,10 @@ __all__ = [
     "RecordingIndicator",
     "notify_state",
     "push_level",
+    "push_mic_level",
+    "push_loopback_level",
     "reset_levels",
+    "reset_source_levels",
     "set_transcription_progress",
 ]
 

@@ -222,6 +222,13 @@ class MeetingBuddyModule:
             llm_chunk_min_new_chars=result.llm_chunk_min_new_chars,
         )
         orchestrator.reload_config()
+        # Device/mix-keuze geldt pas na capture-herstart; anders blijft de
+        # oude loopback-stream open (lege Meeting-waveform ondanks “juiste” UI).
+        if self.is_session_active:
+            try:
+                orchestrator.reconnect_capture()
+            except Exception as exc:
+                message.error(i18n.t("modules.meeting_buddy.dialog.title"), str(exc))
 
     def _begin_meeting(self) -> None:
         from .agenda_store import display_title

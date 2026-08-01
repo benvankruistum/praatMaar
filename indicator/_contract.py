@@ -214,6 +214,8 @@ class DestinationPillModel:
 _status_queue: queue.Queue[tuple[RecordingState, str]] = queue.Queue()
 _level_lock = threading.Lock()
 _levels: deque[float] = deque(maxlen=NUM_BARS)
+_mic_levels: deque[float] = deque(maxlen=NUM_BARS)
+_loopback_levels: deque[float] = deque(maxlen=NUM_BARS)
 _progress_lock = threading.Lock()
 _transcription_progress: int | None = None
 
@@ -237,11 +239,33 @@ def push_level(rms: float) -> None:
         _levels.append(float(rms))
 
 
+def push_mic_level(rms: float) -> None:
+    """RMS van de microfoonbron (vóór mix). Veilig vanaf de audiothread."""
+
+    with _level_lock:
+        _mic_levels.append(float(rms))
+
+
+def push_loopback_level(rms: float) -> None:
+    """RMS van WASAPI-loopback (vóór mix). Veilig vanaf de audiothread."""
+
+    with _level_lock:
+        _loopback_levels.append(float(rms))
+
+
 def reset_levels() -> None:
     """Leegt de waveform-buffer (bij de start van een nieuwe opname)."""
 
     with _level_lock:
         _levels.clear()
+
+
+def reset_source_levels() -> None:
+    """Leegt mic- en loopback-waveform buffers (Meeting Buddy dual meters)."""
+
+    with _level_lock:
+        _mic_levels.clear()
+        _loopback_levels.clear()
 
 
 def set_transcription_progress(percent: int | None) -> None:
@@ -263,6 +287,16 @@ def get_transcription_progress() -> int | None:
 def snapshot_levels() -> list[float]:
     with _level_lock:
         return list(_levels)
+
+
+def snapshot_mic_levels() -> list[float]:
+    with _level_lock:
+        return list(_mic_levels)
+
+
+def snapshot_loopback_levels() -> list[float]:
+    with _level_lock:
+        return list(_loopback_levels)
 
 
 def drain_status_queue() -> list[tuple[RecordingState, str]]:

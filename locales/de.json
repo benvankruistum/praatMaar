@@ -305,6 +305,8 @@
   "modules.meeting_buddy.overlay.recording.mic_only": "● Aufnahme: nur Mikrofon",
   "modules.meeting_buddy.overlay.recording.mic_only_delayed": "● Aufnahme: nur Mikrofon — Transkription verzögert",
   "modules.meeting_buddy.overlay.recording.mic_only_unavailable": "● Aufnahme: nur Mikrofon — Meeting-Audio nicht verfügbar",
+  "modules.meeting_buddy.overlay.levels.mic": "Mic",
+  "modules.meeting_buddy.overlay.levels.meeting": "Meeting",
   "modules.meeting_buddy.overlay.recording.mic_only_unavailable_delayed": "● Aufnahme: nur Mikrofon — Meeting-Audio nicht verfügbar (Transkription verzögert)",
   "modules.meeting_buddy.overlay.recording.active_delayed": "● Aufnahme aktiv — Transkription verzögert",
   "modules.meeting_buddy.overlay.recording.starting": "Mikrofon wird gestartet…",
