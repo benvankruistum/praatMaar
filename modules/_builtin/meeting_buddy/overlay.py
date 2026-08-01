@@ -6,8 +6,8 @@ import re
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from PySide6.QtCore import QRectF, Qt, QTimer
-from PySide6.QtGui import QCloseEvent, QColor, QPainter, QPen
+from PySide6.QtCore import QPoint, QRectF, Qt, QTimer
+from PySide6.QtGui import QCloseEvent, QColor, QMouseEvent, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -295,6 +295,35 @@ class _SourceWaveformCanvas(QWidget):
             )
 
 
+class _DragHeader(QFrame):
+    """Frameless HUD title bar: drag moves ``window`` (no ``startSystemMove``)."""
+
+    def __init__(self, window: QWidget) -> None:
+        super().__init__()
+        self._window = window
+        self._drag_offset: QPoint | None = None
+        self.setObjectName("mbHeader")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = event.globalPosition().toPoint() - self._window.pos()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if self._drag_offset is not None:
+            self._window.move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
+
+
 class _MiniPill(QWidget):
     """Minimized overlay: dark capsule (family of the dicteer-pill #2a)."""
 
@@ -303,6 +332,7 @@ class _MiniPill(QWidget):
         apply_hud_window_flags(self)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(230, 44)
+        self._drag_offset: QPoint | None = None
         row = QHBoxLayout(self)
         row.setContentsMargins(12, 0, 6, 0)
         row.setSpacing(7)
@@ -323,11 +353,14 @@ class _MiniPill(QWidget):
             " font-size: 11px; min-width: 20px; }"
         )
         expand.clicked.connect(on_expand)
+        for label in (self._dot, self._timer, self._count):
+            label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         row.addWidget(self._dot)
         row.addWidget(self._timer)
         row.addWidget(self._count)
         row.addStretch(1)
         self._tag = QLabel(i18n.t("state.tag.meeting"))
+        self._tag.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self._tag.setStyleSheet(
             f"color: {COLOR_MEETING_TEXT}; background: rgba(92,147,199,0.20);"
             " border-radius: 10px; padding: 2px 7px; font-size: 10px; font-weight: 600;"
@@ -338,6 +371,24 @@ class _MiniPill(QWidget):
     def set_state(self, timer: str, count: str) -> None:
         self._timer.setText(timer)
         self._count.setText(count)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = event.globalPosition().toPoint() - self.pos()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        if self._drag_offset is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
 
     def paintEvent(self, _event: Any) -> None:  # noqa: N802
         painter = QPainter(self)
@@ -390,14 +441,13 @@ class MeetingBuddyOverlay:
         outer.setSpacing(0)
 
         # --- header bar ---
-        header = QFrame()
-        header.setObjectName("mbHeader")
-        header.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        header = _DragHeader(self.window)
         head = QHBoxLayout(header)
         head.setContentsMargins(12, 9, 10, 9)
         head.setSpacing(8)
         title = QLabel(i18n.t("modules.meeting_buddy.overlay.title"))
         title.setObjectName("mbHeaderTitle")
+        title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         head.addWidget(title)
         head.addStretch(1)
         minimize = QPushButton("—")
