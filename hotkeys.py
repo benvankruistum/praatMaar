@@ -29,6 +29,29 @@ MODIFIER_TOKENS = ("ctrl", "shift", "alt", "cmd")
 # De standaard-sneltoets als de gebruiker (nog) niets heeft ingesteld.
 DEFAULT_HOTKEY = ["ctrl", "shift", "alt", "space"]
 
+# Windows/pynput levert speciale toetsen soms als Key.* en soms als KeyCode(vk=…).
+# Zonder mapping blijft bijv. Esc als "esc" hangen terwijl release "vk27" is —
+# dan triggert alleen Shift nog de hotkey Shift+Esc.
+_VK_TO_TOKEN = {
+    0x08: "backspace",
+    0x09: "tab",
+    0x0D: "enter",
+    0x1B: "esc",
+    0x20: "space",
+    0x21: "page_up",
+    0x22: "page_down",
+    0x23: "end",
+    0x24: "home",
+    0x25: "left",
+    0x26: "up",
+    0x27: "right",
+    0x28: "down",
+    0x2D: "insert",
+    0x2E: "delete",
+}
+for _i in range(1, 25):
+    _VK_TO_TOKEN[0x6F + _i] = f"f{_i}"  # VK_F1=0x70 … VK_F24
+
 # Nette weergave per token (Windows-default); macOS overschrijft via _display_names().
 _DISPLAY_NAMES_WIN = {
     "ctrl": "Ctrl",
@@ -124,6 +147,8 @@ def key_to_token(key: Any) -> str | None:
         vk = key.vk
         if vk is not None and (48 <= vk <= 57 or 65 <= vk <= 90):
             return chr(vk).lower()
+        if vk is not None and vk in _VK_TO_TOKEN:
+            return _VK_TO_TOKEN[vk]
         if key.char:
             return key.char.lower()
         if vk is not None:
