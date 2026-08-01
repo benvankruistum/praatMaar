@@ -304,6 +304,19 @@ class Opnamesessie:
         with self._lock:
             return self._processing
 
+    def _error_status_hint(self, recovery_kept: Path | None) -> str:
+        """Korte next-step-subline voor de ERROR-pill (FR-UX-04)."""
+
+        if recovery_kept is not None:
+            return i18n.t("state.error_recovery_hint")
+        return i18n.t("state.error_retry_hint")
+
+    def _notify_final(self, state: RecordingState, recovery_kept: Path | None = None) -> None:
+        if state == RecordingState.ERROR:
+            self._notify(state, self.mode, hint=self._error_status_hint(recovery_kept))
+        else:
+            self._notify(state)
+
     def _event(
         self,
         event_type: CycleEventType,
@@ -1001,7 +1014,7 @@ class Opnamesessie:
             with self._lock:
                 self._processing = False
 
-            self._notify(final_state)
+            self._notify_final(final_state, recovery_kept)
             if error_message is not None:
                 self._event(
                     CycleEventType.CYCLE_ERROR,
@@ -1228,7 +1241,7 @@ class Opnamesessie:
             with self._lock:
                 self._processing = False
 
-            self._notify(final_state)
+            self._notify_final(final_state, recovery_kept)
             if error_message is not None:
                 self._event(
                     CycleEventType.CYCLE_ERROR,

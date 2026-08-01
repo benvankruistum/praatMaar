@@ -35,6 +35,9 @@ class _FakeIndicator:
     def set_hotkey_label(self, _text: str | None) -> None:
         pass
 
+    def show_ready_cue(self, duration_ms: int = 4000) -> None:
+        self.ready_cue_ms = duration_ms
+
     def call_on_main(self, fn: object) -> None:
         assert callable(fn)
         fn()
@@ -140,6 +143,7 @@ def test_main_uses_qt_event_loop_and_quits_through_application(monkeypatch) -> N
     assert app.exec_called
     assert app.quit_called
     assert indicator is not None and indicator.run_called and indicator.stop_requested
+    assert getattr(indicator, "ready_cue_ms", None) == 4000
     assert tray is not None and tray.stopped
 
 
