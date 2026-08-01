@@ -58,6 +58,7 @@ def test_session_config_controls_ring_buffer_capacity() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=FakeSoundDevice(),
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
 
     session = engine.start_session({"max_audio_buffer_duration_s": 0.25})
@@ -73,6 +74,7 @@ def test_engine_emits_configured_float32_chunk() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session()
     events: list[object] = []
@@ -109,6 +111,7 @@ def test_start_session_passes_microphone_device() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
 
     session = engine.start_session({"device": 3})
@@ -129,6 +132,7 @@ def test_loopback_failure_falls_back_to_microphone_only() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     events: list[object] = []
     session = engine.start_session({"enable_loopback": True})
@@ -163,6 +167,7 @@ def test_loopback_active_reported_when_mixed() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session({"enable_loopback": True})
     events: list[object] = []
@@ -193,6 +198,7 @@ def test_disable_loopback_republishes_active_status() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session({"enable_loopback": True})
     events: list[object] = []
@@ -233,6 +239,7 @@ def test_loopback_disconnect_schedules_reconnect_and_recovers(
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session({"enable_loopback": True})
     events: list[object] = []
@@ -267,6 +274,7 @@ def test_loopback_and_microphone_are_mixed() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session({"enable_loopback": True})
     events: list[object] = []
@@ -342,6 +350,7 @@ def test_input_overflow_emits_gap_before_captured_samples() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session()
     events: list[object] = []
@@ -377,6 +386,7 @@ def test_callback_failure_marks_capture_error_and_stopped() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session()
     events: list[object] = []
@@ -407,6 +417,7 @@ def test_stop_flushes_partial_tail_beyond_overlap() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session()
     events: list[object] = []
@@ -429,6 +440,7 @@ def test_stop_skips_flush_when_only_overlap_remain() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session()
     events: list[object] = []
@@ -463,6 +475,7 @@ def test_flush_mixed_pushes_separate_source_levels() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session({"enable_loopback": True})
     state = engine._require_session(session.session_id)
@@ -502,6 +515,7 @@ def test_source_levels_update_without_mix_partner() -> None:
     engine = AudioCaptureEngine(
         sounddevice_module=sounddevice,
         platform_name="win32",
+        wasapi_loopback_module=False,
     )
     session = engine.start_session({"enable_loopback": True})
     state = engine._require_session(session.session_id)

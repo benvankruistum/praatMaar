@@ -337,7 +337,7 @@
   "modules.meeting_buddy.settings.section.storage": "Opslag",
   "modules.meeting_buddy.settings.section.summary": "Samenvatting",
   "modules.meeting_buddy.settings.loopback_title": "Meetinggeluid opnemen",
-  "modules.meeting_buddy.settings.loopback_desc": "Windows-loopback: neemt ook de andere deelnemers op.",
+  "modules.meeting_buddy.settings.loopback_desc": "WASAPI-loopback: neemt ook de andere deelnemers op van het gekozen uitvoerapparaat (Bluetooth vaak niet beschikbaar).",
   "modules.meeting_buddy.settings.output_device": "Uitvoerapparaat",
   "modules.meeting_buddy.settings.transcript_label": "Transcriptmap",
   "modules.meeting_buddy.settings.summary_every": "Elke",

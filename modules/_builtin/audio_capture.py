@@ -170,9 +170,12 @@ class AudioCaptureEngine:
         *,
         sounddevice_module: Any | None = None,
         platform_name: str | None = None,
+        wasapi_loopback_module: Any | bool | None = None,
     ) -> None:
         self._sounddevice = sounddevice_module
         self._platform_name = platform_name if platform_name is not None else sys.platform
+        # None = auto-import; False = uit (tests / fallback); module = inject
+        self._wasapi_loopback_module = wasapi_loopback_module
         self._sessions: dict[str, _CaptureState] = {}
         self._lock = RLock()
 
@@ -247,9 +250,28 @@ class AudioCaptureEngine:
             latency="low",
         )
 
+    def _get_wasapi_loopback_module(self) -> Any | None:
+        if self._wasapi_loopback_module is False:
+            return None
+        if self._wasapi_loopback_module is not None:
+            return self._wasapi_loopback_module
+        try:
+            from modules._builtin import wasapi_loopback as mod
+        except ImportError:
+            self._wasapi_loopback_module = False
+            return None
+        if not mod.is_available():
+            self._wasapi_loopback_module = False
+            return None
+        self._wasapi_loopback_module = mod
+        return mod
+
     def _try_start_loopback_stream(
         self, state: _CaptureState, sounddevice: Any, options: dict[str, Any]
     ) -> None:
+        if self._try_start_wasapi_loopback_stream(state, options):
+            return
+
         try:
             device, sample_rate, channels, extra_settings = self._resolve_loopback(
                 sounddevice,
@@ -288,6 +310,61 @@ class AudioCaptureEngine:
             )
             state.loopback_stream = None
             state.loopback_enabled = False
+
+    def _try_start_wasapi_loopback_stream(
+        self, state: _CaptureState, options: dict[str, Any]
+    ) -> bool:
+        """Start PyAudioWPatch WASAPI-loopback. True als gestart of hard mislukt zonder fallback-skip.
+
+        Retourneert False als WASAPI niet beschikbaar is → caller mag Stereo Mix
+        proberen. True als WASAPI-pad is gebruikt (succes óf mislukking zonder
+        zinvolle sounddevice-fallback).
+        """
+
+        mod = self._get_wasapi_loopback_module()
+        if mod is None:
+            return False
+
+        try:
+            info = mod.resolve_loopback_device_info(options.get("loopback_device"))
+        except Exception as exc:
+            log.warning(
+                "WASAPI loopback-apparaat niet gevonden voor sessie %s: %s",
+                state.session_id,
+                exc,
+            )
+            # Geen Stereo Mix-fallback als WASAPI wél geïnstalleerd is maar
+            # het gekozen device ontbreekt — UI-keuze moet kloppen.
+            return True
+
+        try:
+            stream = mod.WasapiLoopbackStream(
+                device_info=info,
+                callback=lambda data, frames, time_info, status: self._loopback_stream_callback(
+                    state, data, frames, time_info, status
+                ),
+                finished_callback=lambda: self._loopback_stream_finished(state),
+            )
+            state.loopback_stream = stream
+            state.loopback_enabled = True
+            state.loopback_sample_rate = int(stream.sample_rate)
+            log.info(
+                "WASAPI loopback actief voor sessie %s: %s (index=%s, rate=%s)",
+                state.session_id,
+                info.get("name"),
+                info.get("index"),
+                stream.sample_rate,
+            )
+            return True
+        except Exception as exc:
+            log.warning(
+                "WASAPI loopback starten mislukt voor sessie %s: %s",
+                state.session_id,
+                exc,
+            )
+            state.loopback_stream = None
+            state.loopback_enabled = False
+            return True
 
     def subscribe(self, session_id: str, handler: CaptureEventHandler) -> None:
         state = self._require_session(session_id)

@@ -136,7 +136,9 @@ Zet de module **Speaker Detection** aan (Modules) voor groepsgesprekken met
 een rustige ruimte; overlappende spraak blijft lastig.
 
 Op Windows kan Meeting Buddy naast je microfoon ook **meetinggeluid** opnemen van
-het gekozen Windows-uitvoerapparaat via loopback.
+het gekozen Windows-uitvoerapparaat via **WASAPI-loopback** (niet Stereo Mix).
+Kies in Eigenschappen hetzelfde apparaat als waarop Teams/Zoom afspeelt. Bluetooth
+verschijnt vaak niet als loopback-bron — gebruik speakers of een HDMI/monitor-uitgang.
 
 Voor Teams-gesprekken:
 

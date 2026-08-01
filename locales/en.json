@@ -337,7 +337,7 @@
   "modules.meeting_buddy.settings.section.storage": "Storage",
   "modules.meeting_buddy.settings.section.summary": "Summary",
   "modules.meeting_buddy.settings.loopback_title": "Record meeting audio",
-  "modules.meeting_buddy.settings.loopback_desc": "Windows loopback: also records the other participants.",
+  "modules.meeting_buddy.settings.loopback_desc": "WASAPI loopback: also records other participants from the chosen output device (Bluetooth often unavailable).",
   "modules.meeting_buddy.settings.output_device": "Output device",
   "modules.meeting_buddy.settings.transcript_label": "Transcript folder",
   "modules.meeting_buddy.settings.summary_every": "Every",
