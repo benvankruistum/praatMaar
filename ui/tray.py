@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -24,8 +25,11 @@ from ui.app import ensure_app
 from ui.marshal import ui_dispatch
 from ui.theme import TOKENS
 
+_BUSY_TOOLTIP_SECONDS = 2.5
+
 _STATE_COLORS: dict[RecordingState, tuple[int, int, int, int]] = {
     RecordingState.IDLE: (32, 33, 36, 255),
+    RecordingState.PREPARING: (184, 160, 120, 255),
     RecordingState.RECORDING: (255, 82, 82, 255),
     RecordingState.TRANSCRIBING: (255, 176, 32, 255),
     RecordingState.CANCELLED: (154, 160, 166, 255),
@@ -33,6 +37,7 @@ _STATE_COLORS: dict[RecordingState, tuple[int, int, int, int]] = {
 }
 _TOOLTIP_KEYS: dict[RecordingState, str] = {
     RecordingState.IDLE: "tray.tooltip.idle",
+    RecordingState.PREPARING: "tray.tooltip.preparing",
     RecordingState.RECORDING: "tray.tooltip.recording",
     RecordingState.TRANSCRIBING: "tray.tooltip.transcribing",
     RecordingState.CANCELLED: "tray.tooltip.cancelled",
@@ -195,6 +200,7 @@ class TrayIcon:
         self._state = RecordingState.IDLE
         self._attention = False
         self._attention_tooltip_key = "tray.tooltip.attention_mic"
+        self._busy_until = 0.0
         self._icons = {state: _make_icon(color) for state, color in _STATE_COLORS.items()}
         self._menu = self._build_menu()
         self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
@@ -306,8 +312,18 @@ class TrayIcon:
         # het icoon bijwerken hoort op de GUI-thread.
         ui_dispatch(self._apply_icon_and_title)
 
+    def signal_busy(self) -> None:
+        """Korte tray-tooltip: verwerking nog bezig (FR-UX-03)."""
+
+        self._busy_until = time.monotonic() + _BUSY_TOOLTIP_SECONDS
+        ui_dispatch(self._apply_icon_and_title)
+
     def _tooltip_for(self) -> str:
-        return i18n.t(self._attention_tooltip_key) if self._attention else _tooltip(self._state)
+        if self._attention:
+            return i18n.t(self._attention_tooltip_key)
+        if self._busy_until > time.monotonic():
+            return i18n.t("state.busy_hint")
+        return _tooltip(self._state)
 
     def _icon_for(self, state: RecordingState) -> Image.Image:
         base = self._icons.get(state, self._icons[RecordingState.IDLE])

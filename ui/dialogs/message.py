@@ -26,6 +26,11 @@ def warning(title: str, text: str, *, parent: Any = None) -> None:
 
 
 def error(title: str, text: str, *, parent: Any = None) -> None:
-    """Show an error message dialog."""
+    """Show an error message dialog.
+
+    Alleen voor **expliciete** gebruikersacties (Instellingen, tray, modules).
+    Automatische mic-/hotkey-fouten moeten ``dictation._report_user_error``
+    gebruiken (tray attention + ERROR-pill), niet deze modal.
+    """
     ensure_app()
     QMessageBox.critical(_parent(parent), title, text)

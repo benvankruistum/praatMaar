@@ -120,7 +120,7 @@ def session(
         warm_microphone=False,
         wait_until_modifiers_clear=lambda: None,
         on_ready=lambda: None,
-        notify=lambda state, mode=None: states.append(state),
+        notify=lambda state, mode="toggle", **_kwargs: states.append(state),
         push_level=lambda _level: None,
         reset_levels=lambda: None,
         copy_text=clipboard.append,
@@ -144,7 +144,9 @@ def test_start_sets_recording_and_notifies(
     session.start()
     assert session.is_recording
     assert sd.stream.started
+    assert RecordingState.PREPARING in states
     assert states[-1] == RecordingState.RECORDING
+    assert states.index(RecordingState.PREPARING) < states.index(RecordingState.RECORDING)
 
 
 def test_start_failure_shows_user_error(
@@ -159,10 +161,32 @@ def test_start_failure_shows_user_error(
     sd.InputStream = boom  # type: ignore[method-assign]
     session.start()
     assert not session.is_recording
+    assert RecordingState.PREPARING in states
+    assert RecordingState.RECORDING not in states
     assert states[-1] == RecordingState.ERROR
     assert len(errors) == 1
     assert "microfoon" in errors[0].lower()
     assert "No Default Input Device Available" in errors[0]
+
+
+def test_start_failure_notifies_error_with_mic_hint(
+    session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    notified: list[tuple] = []
+
+    def capture(state, mode="toggle", *, hint=None, **_kwargs):
+        notified.append((state, mode, hint or ""))
+
+    session._notify = capture
+
+    def boom(**_kwargs):
+        raise RuntimeError("No Default Input Device Available")
+
+    sd.InputStream = boom  # type: ignore[method-assign]
+    session.start()
+    assert notified[0][0] == RecordingState.PREPARING
+    assert notified[-1][0] == RecordingState.ERROR
+    assert "microfoon" in notified[-1][2].lower() or "instellingen" in notified[-1][2].lower()
 
 
 def test_start_while_recording_is_noop(session: Opnamesessie, sd: FakeSoundDevice) -> None:
@@ -389,7 +413,7 @@ def test_active_destination_without_auto_paste_skips_clipboard(
         warm_microphone=False,
         wait_until_modifiers_clear=lambda: None,
         on_ready=lambda: None,
-        notify=lambda state, mode=None: states.append(state),
+        notify=lambda state, mode="toggle", **_kwargs: states.append(state),
         push_level=lambda _level: None,
         reset_levels=lambda: None,
         copy_text=clipboard.append,
@@ -438,7 +462,7 @@ def test_destination_command_skips_paste_and_save(
         warm_microphone=False,
         wait_until_modifiers_clear=lambda: None,
         on_ready=lambda: None,
-        notify=lambda state, mode=None: states.append(state),
+        notify=lambda state, mode="toggle", **_kwargs: states.append(state),
         push_level=lambda _level: None,
         reset_levels=lambda: None,
         copy_text=clipboard.append,
@@ -487,7 +511,7 @@ def test_reset_command_skips_paste(
         warm_microphone=False,
         wait_until_modifiers_clear=lambda: None,
         on_ready=lambda: None,
-        notify=lambda state, mode=None: states.append(state),
+        notify=lambda state, mode="toggle", **_kwargs: states.append(state),
         push_level=lambda _level: None,
         reset_levels=lambda: None,
         copy_text=clipboard.append,
@@ -566,7 +590,7 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         incremental_chunk_seconds=0.05,
         wait_until_modifiers_clear=lambda: None,
         on_ready=lambda: None,
-        notify=lambda state, mode=None: states.append(state),
+        notify=lambda state, mode="toggle", **_kwargs: states.append(state),
         push_level=lambda _level: None,
         reset_levels=lambda: None,
         copy_text=lambda _text: None,

@@ -32,6 +32,7 @@ from ._contract import (
     COLOR_ERROR_LABEL,
     COLOR_MEETING_DOT,
     COLOR_MEETING_TEXT,
+    COLOR_PREPARING,
     COLOR_RECORDING,
     COLOR_TRANSCRIBING,
     ERROR_DURATION_MS,
@@ -43,6 +44,7 @@ from ._contract import (
     PILL_BG_ERROR,
     POLL_INTERVAL_MS,
     POSITION_LAST,
+    READY_CUE_DURATION_MS,
     SUBTLE_COLOR,
     TAG_TEXT_COLOR,
     TEXT_COLOR,
@@ -88,6 +90,8 @@ class RecordingIndicator(QWidget):
 
         self._state = RecordingState.IDLE
         self._mode = "toggle"
+        self._status_hint = ""
+        self._ready_cue_active = False
         self._frame = 0
         self._position = normalize_indicator_position(position)
         self._xy = xy
@@ -148,14 +152,24 @@ class RecordingIndicator(QWidget):
             self.hide()
 
     def _apply_idle_visibility(self) -> None:
-        if self._dest_pill.idle_visible:
+        if self._ready_cue_active or self._dest_pill.idle_visible:
             self._show_window()
         else:
             self._hide_window()
 
-    def _apply_state(self, state: RecordingState, mode: str) -> None:
+    def _apply_state(self, state: RecordingState, mode: str, hint: str = "") -> None:
+        self._ready_cue_active = False
         self._mode = mode
         self._state = state
+        self._status_hint = (
+            hint
+            if state
+            in (
+                RecordingState.ERROR,
+                RecordingState.PREPARING,
+            )
+            else ""
+        )
         self._notify_listener(state, mode)
         self._hide_timer.stop()
 
@@ -173,7 +187,9 @@ class RecordingIndicator(QWidget):
         self.update()
 
     def _transient_expired(self) -> None:
+        self._ready_cue_active = False
         self._state = RecordingState.IDLE
+        self._status_hint = ""
         self._notify_listener(RecordingState.IDLE, self._mode)
         self._apply_idle_visibility()
         self.update()
@@ -211,12 +227,23 @@ class RecordingIndicator(QWidget):
         if self.isVisible():
             self.update()
 
+    def show_ready_cue(self, duration_ms: int = READY_CUE_DURATION_MS) -> None:
+        """Korte non-activating gereed-pill na splash (FR-UX-05 B)."""
+
+        self._ready_cue_active = True
+        self._state = RecordingState.IDLE
+        self._status_hint = ""
+        self._hide_timer.stop()
+        self._show_window()
+        self._hide_timer.start(max(0, int(duration_ms)))
+        self.update()
+
     def _tick(self) -> None:
         if self._stop_requested:
             self._stop()
             return
-        for state, mode, _hint in drain_status_queue():
-            self._apply_state(state, mode)
+        for state, mode, hint in drain_status_queue():
+            self._apply_state(state, mode, hint)
         self._frame += 1
         if self.isVisible():
             self.update()
@@ -346,6 +373,8 @@ class RecordingIndicator(QWidget):
         state = self._state
         if state == RecordingState.RECORDING:
             return QColor(255, 92, 87, 61)
+        if state == RecordingState.PREPARING:
+            return QColor(184, 160, 120, 51)
         if state == RecordingState.TRANSCRIBING:
             return QColor(255, 176, 32, 61)
         if state == RecordingState.ERROR:
@@ -371,8 +400,10 @@ class RecordingIndicator(QWidget):
 
         state = self._state
         if state == RecordingState.IDLE:
-            if self._dest_pill.idle_visible:
+            if self._ready_cue_active or self._dest_pill.idle_visible:
                 self._paint_idle(painter)
+        elif state == RecordingState.PREPARING:
+            self._paint_preparing(painter)
         elif state == RecordingState.RECORDING:
             self._paint_recording(painter)
         elif state == RecordingState.TRANSCRIBING:
@@ -394,6 +425,19 @@ class RecordingIndicator(QWidget):
         phase = 0.5 + 0.5 * math.cos(2 * math.pi * ((self._frame % 32) / 32.0))
         scale = 0.82 + 0.18 * phase
         alpha = int(255 * (0.5 + 0.5 * phase))
+        size = base * scale
+        tint = QColor(color)
+        tint.setAlpha(alpha)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(tint)
+        painter.drawEllipse(QRectF(x + (base - size) / 2, self._CY - size / 2, size, size))
+
+    def _slow_pulse_dot(self, painter: QPainter, x: float, base: float, color: QColor) -> None:
+        """Gedempte, trage pulse — onderscheidbaar van de opname-dot."""
+
+        phase = 0.5 + 0.5 * math.cos(2 * math.pi * ((self._frame % 64) / 64.0))
+        scale = 0.88 + 0.12 * phase
+        alpha = int(255 * (0.35 + 0.35 * phase))
         size = base * scale
         tint = QColor(color)
         tint.setAlpha(alpha)
@@ -435,6 +479,38 @@ class RecordingIndicator(QWidget):
         painter.setPen(QColor(SUBTLE_COLOR))
         painter.setFont(self._font(15))
         painter.drawText(dismiss, Qt.AlignCenter, "×")
+
+    def _paint_preparing(self, painter: QPainter) -> None:
+        """Warm-up: geen waveform; trage muted pulse ≠ Opname."""
+
+        self._slow_pulse_dot(painter, self._LEFT, 10.0, QColor(COLOR_PREPARING))
+        tag_left = self._draw_mode_tag(painter, INDICATOR_WIDTH - 16)
+        text_left = int(self._LEFT + 10 + 10)
+        text_right = tag_left - 8
+        width = max(0, text_right - text_left)
+
+        painter.setPen(QColor(TEXT_COLOR))
+        painter.setFont(self._font(14, bold=True))
+        label = state_label(RecordingState.PREPARING)
+        if self._status_hint:
+            painter.drawText(
+                QRect(text_left, 11, width, 20),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                label,
+            )
+            painter.setPen(QColor(SUBTLE_COLOR))
+            painter.setFont(self._font(11))
+            painter.drawText(
+                QRect(text_left, 31, width, 16),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                self._status_hint,
+            )
+        else:
+            painter.drawText(
+                QRect(text_left, 0, width, INDICATOR_HEIGHT),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                label,
+            )
 
     def _paint_recording(self, painter: QPainter) -> None:
         self._pulse_dot(painter, self._LEFT, 11.0, QColor(COLOR_RECORDING))
@@ -655,12 +731,30 @@ class RecordingIndicator(QWidget):
         triangle.lineTo(self._LEFT, top + 12)
         triangle.closeSubpath()
         painter.drawPath(triangle)
+
+        text_left = int(self._LEFT + 14 + 10)
         painter.setPen(QColor(COLOR_ERROR_LABEL))
         painter.setFont(self._font(14, bold=True))
+        label = state_label(RecordingState.ERROR)
+        if self._status_hint:
+            painter.drawText(
+                QRect(text_left, 11, INDICATOR_WIDTH - text_left - 16, 20),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                label,
+            )
+            painter.setPen(QColor(SUBTLE_COLOR))
+            painter.setFont(self._font(11))
+            painter.drawText(
+                QRect(text_left, 31, INDICATOR_WIDTH - text_left - 16, 16),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                self._status_hint,
+            )
+            return
+
         painter.drawText(
-            QRect(self._LEFT + 14 + 10, 0, 180, INDICATOR_HEIGHT),
+            QRect(text_left, 0, 180, INDICATOR_HEIGHT),
             Qt.AlignVCenter | Qt.AlignLeft,
-            state_label(RecordingState.ERROR),
+            label,
         )
         if self._hotkey_label:
             painter.setPen(QColor(SUBTLE_COLOR))

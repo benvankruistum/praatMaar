@@ -30,7 +30,9 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Fixed
 
-## [0.3.0] - 2026-07-28
+- **Dicteercyclus UX:** geen false “Opname” vóór mic-ready (`PREPARING`); mic-fouten
+  zonder focus-stealende modal; ERROR-pill met next-step-subline; zichtbare busy
+  bij hotkey tijdens verwerking; korte ready-cue na splash.
 
 ### Added
 

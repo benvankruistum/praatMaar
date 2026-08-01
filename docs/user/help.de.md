@@ -16,6 +16,10 @@ geschützt“: **Weitere Informationen** → **Trotzdem ausführen**.
 unter `%APPDATA%\praatMaar\` (Transkripte, Recovery, Inbox, Logs). Siehe auch
 Privacy in der README.
 
+**Status & Fehler:** nach dem Laden erscheint kurz eine Bereit-Pille mit Hotkey.
+Mikrofonfehler öffnen keinen blockierenden Dialog: Status-Pille und Tray zeigen
+das Problem; die Checkliste steht in den Einstellungen.
+
 ## Was sind Ziele?
 
 Ein **Ziel** ist ein Name, der mit einem Ordner auf Ihrem Computer verknüpft ist. Beim

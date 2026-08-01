@@ -16,6 +16,10 @@
 onder `%APPDATA%\praatMaar\` (transcripts, recovery, inbox, logs). Zie ook
 Privacy in de README.
 
+**Status & fouten:** na het laden zie je kort een gereed-pill met je sneltoets.
+Microfoonfouten openen geen blokkerende dialoog: de status-pill en het tray-icoon
+tonen wat er misgaat; de checklist staat in Instellingen.
+
 ## Wat zijn bestemmingen?
 
 Een **bestemming** is een naam gekoppeld aan een map op je computer. Als je dicteert,

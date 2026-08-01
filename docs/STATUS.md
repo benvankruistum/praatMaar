@@ -103,7 +103,8 @@ Op een echte Mac (arm64), vanuit bron (`python dictation.py` via Cursor):
 
 ## Open / roadmap
 
-1. **Dicteercyclus UX Must** (Accepted-spec) → implementation plan + build:
+1. **Dicteercyclus UX Must** — implementatie op feature-branch (PREPARING,
+   non-modal errors, busy, ready-cue); AC-smoke op Windows nog open:
    [ux-states spec](superpowers/specs/2026-08-01-dicteercyclus-ux-states-product.md) ·
    [impl plan](superpowers/plans/2026-08-01-dicteercyclus-ux-states.md).
 2. **v1.0.0 uitbrengen** wanneer `/release-readiness` groen is voor Windows

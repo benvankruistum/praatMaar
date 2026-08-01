@@ -304,6 +304,19 @@ class Opnamesessie:
         with self._lock:
             return self._processing
 
+    def _error_status_hint(self, recovery_kept: Path | None) -> str:
+        """Korte next-step-subline voor de ERROR-pill (FR-UX-04)."""
+
+        if recovery_kept is not None:
+            return i18n.t("state.error_recovery_hint")
+        return i18n.t("state.error_retry_hint")
+
+    def _notify_final(self, state: RecordingState, recovery_kept: Path | None = None) -> None:
+        if state == RecordingState.ERROR:
+            self._notify(state, self.mode, hint=self._error_status_hint(recovery_kept))
+        else:
+            self._notify(state)
+
     def _event(
         self,
         event_type: CycleEventType,
@@ -730,6 +743,7 @@ class Opnamesessie:
 
             if self._processing:
                 print("\n" + i18n.t("rec.busy"))
+                self._notify(RecordingState.TRANSCRIBING, self.mode)
                 return
 
             self._audio_chunks = []
@@ -743,9 +757,9 @@ class Opnamesessie:
 
         self._event(CycleEventType.CYCLE_STARTED, session_id=session_id)
 
-        # UI meteen rood — vóór incremental-worker en eventuele (her)open van de stream.
+        # PREPARING tot de stream open is — geen false “Opname” (FR-UX-02).
         self._reset_levels()
-        self._notify(RecordingState.RECORDING, self.mode)
+        self._notify(RecordingState.PREPARING, self.mode)
 
         self._start_incremental_worker()
 
@@ -765,11 +779,17 @@ class Opnamesessie:
             print(message)
             if self._on_user_error is not None:
                 self._on_user_error(message)
-            self._notify(RecordingState.ERROR)
+            self._notify(
+                RecordingState.ERROR,
+                self.mode,
+                hint=i18n.t("state.error_mic_hint"),
+            )
             self._event(CycleEventType.CYCLE_ERROR, error=message, session_id=session_id)
             self._event(CycleEventType.CYCLE_IDLE, session_id=session_id)
             self._clear_session_id(session_id)
             return
+
+        self._notify(RecordingState.RECORDING, self.mode)
 
         print()
         print(i18n.t("rec.started"))
@@ -994,7 +1014,7 @@ class Opnamesessie:
             with self._lock:
                 self._processing = False
 
-            self._notify(final_state)
+            self._notify_final(final_state, recovery_kept)
             if error_message is not None:
                 self._event(
                     CycleEventType.CYCLE_ERROR,
@@ -1221,7 +1241,7 @@ class Opnamesessie:
             with self._lock:
                 self._processing = False
 
-            self._notify(final_state)
+            self._notify_final(final_state, recovery_kept)
             if error_message is not None:
                 self._event(
                     CycleEventType.CYCLE_ERROR,
