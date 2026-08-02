@@ -35,11 +35,26 @@ INDICATOR_HEIGHT = 60
 WINDOW_ALPHA = 0.94
 MARGIN_FRACTION = 0.10
 POLL_INTERVAL_MS = 50
+# Statische states (Idle/Geannuleerd/Mislukt) animeren niets. De timer kan niet
+# volledig stoppen — hij drenkt óók de statuswachtrij waarmee worker-threads een
+# nieuwe state doorgeven — maar hij mag wél veel trager pollen en niet
+# herschilderen. Zie tests/test_indicator_idle_cpu.py.
+POLL_INTERVAL_IDLE_MS = 250
 CANCELLED_DURATION_MS = 2000
 ERROR_DURATION_MS = 4000
-READY_CUE_DURATION_MS = 4000
+# Canvas 02: de ready-cue is een korte bevestiging (~1,5 s), geen melding.
+READY_CUE_DURATION_MS = 1500
 NUM_BARS = 18
 WAVEFORM_GAIN = 9.0
+# Canvas 1a: 18 staven, 3 px breed, tot 24 px hoog (radius 2).
+WAVEFORM_BAR_WIDTH = 3.0
+WAVEFORM_BAR_MAX_HEIGHT = 24.0
+# Canvas 04/10: de stopknop is een gevulde knop van 36×36; dismiss blijft 32.
+STOP_BUTTON_SIZE = 36
+# Canvas 05: 4 px voortgangsbalk in de tekstkolom (radius 2), niet als draad
+# over de volle capsulebreedte.
+PROGRESS_BAR_HEIGHT = 4
+PROGRESS_TRACK_COLOR = "#2C3138"
 
 # Pill-positiemodi (opgeslagen in config.json).
 POSITION_TOP = "boven-midden"
@@ -103,19 +118,29 @@ def preset_indicator_xy(
 # Max. tekens voor sticky bestemmingsnaam in de pill (voorkomt knippen).
 MAX_DESTINATION_DISPLAY_CHARS = 24
 
-# Kleuren uit canvas #2a (donkere HUD). Vorm draagt betekenis, kleur versterkt.
-PILL_BG = "#1C1F23"
-PILL_BG_ERROR = "#221819"  # rood-getinte capsule bij fout
-TEXT_COLOR = "#F1F3F4"
+# Kleuren uit canvas 1a (donkere HUD). Vorm draagt betekenis, kleur versterkt.
+#
+# Eén regel bepaalt het schema: **rood betekent uitsluitend "er wordt
+# opgenomen"**. Daarom is transcriberen blauw en mislukt amber. Zie
+# docs/design/pill.md; getest in tests/test_indicator_color_semantics.py.
+#
+# De gebruiker is kleurenblind: elke state moet óók zonder kleur te
+# onderscheiden zijn. STATE_GLYPHS legt die vorm-per-state vast.
+PILL_BG = "#202328"
+PILL_BG_ERROR = "#221E18"  # amber-getinte capsule bij fout
+TEXT_COLOR = "#E6E8EB"
 MUTED_COLOR = "#A7AEB6"  # secundair op donker
-SUBTLE_COLOR = "#8B929B"  # sublabel / dismiss-glyph
+SUBTLE_COLOR = "#8A929C"  # sublabel / dismiss-glyph (canvas text-2)
 TAG_TEXT_COLOR = "#C9CFD6"  # modus-tag tekst
-COLOR_RECORDING = "#FF5C57"
-COLOR_TRANSCRIBING = "#FFB020"
-COLOR_PREPARING = "#B8A078"  # gedempt amber-grijs (tussen muted en transcribing)
+COLOR_RECORDING = "#E5484D"  # rec — alleen tijdens opnemen
+COLOR_RECORDING_DOT = "#F0575C"  # iets feller voor de pulsdot
+COLOR_TRANSCRIBING = "#6E9BFF"  # work — verwerken
+COLOR_TRANSCRIBING_TEXT = "#9EC0FF"  # percentage/label op donker
+COLOR_PREPARING = "#8A929C"  # neutraal grijs: nog geen audio
 COLOR_CANCELLED = "#8B929B"
-COLOR_ERROR = "#FF6B6B"
-COLOR_ERROR_LABEL = "#FF8F8B"
+COLOR_OK = "#3DD68C"  # ready-cue
+COLOR_ERROR = "#F5A524"  # warn — mislukt (amber, niet rood)
+COLOR_ERROR_LABEL = "#F5C063"
 COLOR_MEETING_TAG = "#0F6CBD"
 COLOR_MEETING_DOT = "#7FB1E0"  # meeting-tag stip op donker
 COLOR_MEETING_TEXT = "#BFD8EF"  # meeting-tag tekst op donker
@@ -141,6 +166,23 @@ STATE_COLORS = {
     RecordingState.ERROR: COLOR_ERROR,
 }
 
+# Vorm per state — de betekenisdrager die niet van kleur afhangt. Wie geen
+# kleurverschil ziet, herkent de state aan dít silhouet. Wijzig alleen samen
+# met de bijbehorende _paint_*-routine in indicator/_qt.py.
+GLYPH_PULSE_DOT = "pulse-dot"  # opname: kloppende stip + waveform
+GLYPH_SOFT_DOT = "soft-dot"  # voorbereiden: trage stip + marching dots
+GLYPH_ARC = "arc"  # transcriberen: draaiende arc + voortgang
+GLYPH_CIRCLE_SLASH = "circle-slash"  # geannuleerd: doorgestreepte cirkel
+GLYPH_TRIANGLE = "triangle"  # mislukt: waarschuwingsdriehoek + actieknop
+
+STATE_GLYPHS = {
+    RecordingState.PREPARING: GLYPH_SOFT_DOT,
+    RecordingState.RECORDING: GLYPH_PULSE_DOT,
+    RecordingState.TRANSCRIBING: GLYPH_ARC,
+    RecordingState.CANCELLED: GLYPH_CIRCLE_SLASH,
+    RecordingState.ERROR: GLYPH_TRIANGLE,
+}
+
 
 def state_label(state: RecordingState) -> str:
     import i18n
@@ -159,12 +201,56 @@ def transcribing_label(percent: int | None) -> str:
     return i18n.t("state.transcribing_progress", percent=int(percent))
 
 
+def countdown_fraction(elapsed_ms: float, total_ms: float) -> float:
+    """Resterend deel (1.0 -> 0.0) voor het aflopende streepje bij Geannuleerd.
+
+    Canvas 06 toont met een krimpend streepje hoe lang de melding nog blijft,
+    zodat je niet hoeft te gokken of hij nog iets gaat doen.
+    """
+
+    if total_ms <= 0:
+        return 0.0
+    remaining = 1.0 - (float(elapsed_ms) / float(total_ms))
+    return max(0.0, min(1.0, remaining))
+
+
+def elapsed_label(seconds: float) -> str:
+    """Looptijd voor de opname-pill: ``mm:ss``, met uren zodra die er zijn.
+
+    Tabular-nums in de paint zorgt dat er niets verspringt terwijl de teller
+    loopt (canvas 1a, type-sectie).
+    """
+
+    total = max(0, int(seconds))
+    minutes, secs = divmod(total, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
 def transcription_percent(position_seconds: float, duration_seconds: float) -> int:
     """Voortgang 0–99 tijdens segment-iteratie (100% pas bij afronden)."""
 
     if duration_seconds <= 0:
         return 0
     return min(99, max(0, int(100.0 * float(position_seconds) / float(duration_seconds))))
+
+
+# Canvas 08: klikdoel van de modus-tag.
+MODE_TAG_HIT_WIDTH = 56
+MODE_TAG_HIT_HEIGHT = 32
+
+
+def mode_tag_is_filled(mode: str, *, held: bool) -> bool:
+    """Gevuld = nú actief, outline = passief (canvas 08).
+
+    Alleen push-to-talk heeft een "nu actief"-moment: zolang de toets/knop
+    ingedrukt is. Toggle en meeting blijven outline; hun state blijkt al uit de
+    rest van de pill.
+    """
+
+    return mode == "ptt" and bool(held)
 
 
 def mode_tag(mode: str) -> str:
@@ -189,6 +275,39 @@ def destination_display_name(name: str | None) -> str:
     if len(cleaned) <= limit:
         return cleaned
     return cleaned[: limit - 1] + "…"
+
+
+def destination_path_label(path: str | None, limit: int = 40) -> str:
+    """Laatste twee padsegmenten, met midden-ellipsis als het niet past.
+
+    Canvas 01 toont niet het volle pad maar de staart ("Opnames /
+    Klantgesprekken"): dat is het stuk dat de gebruiker onderscheidt. Bij een
+    te lang resultaat knippen we in het mídden, zodat begin én einde leesbaar
+    blijven — het einde is bij paden juist het meest onderscheidend.
+    """
+
+    if not path:
+        return ""
+    cleaned = str(path).strip().replace("\\", "/").rstrip("/")
+    if not cleaned:
+        return ""
+    segments = [segment for segment in cleaned.split("/") if segment]
+    label = " / ".join(segments[-2:]) if segments else ""
+    if len(label) <= limit:
+        return label
+    keep = limit - 1
+    head = keep // 2
+    tail = keep - head
+    return f"{label[:head]}…{label[-tail:]}"
+
+
+def hotkey_chips(label: str | None) -> list[str]:
+    """Splitst "Ctrl+Alt+R" in losse toetsen voor de chip-weergave (canvas 01)."""
+
+    if not label:
+        return []
+    parts = [part.strip() for part in str(label).split("+")]
+    return [part for part in parts if part]
 
 
 class DestinationPillModel:

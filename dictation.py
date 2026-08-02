@@ -747,7 +747,18 @@ def _handle_destination_command(kind: str, name: str | None) -> None:
     indicator = _indicator
     if indicator is not None:
         active = ACTIVE_DESTINATION
-        indicator.call_on_main(lambda: indicator.set_destination(active))
+        active_path = _active_destination_path()
+        indicator.call_on_main(lambda: indicator.set_destination(active, active_path))
+
+
+def _active_destination_path() -> str | None:
+    """Map van de actieve bestemming, voor de padregel in de Idle-pill."""
+
+    item = destinations.find_destination(ACTIVE_DESTINATION, DESTINATIONS)
+    if item is None:
+        return None
+    path = str(item.get("path") or "").strip()
+    return path or None
 
 
 def _set_mic_attention(needed: bool) -> None:
@@ -1111,7 +1122,7 @@ def apply_settings(
     if position_changed:
         indicator.set_position(new_position, xy=INDICATOR_XY)
 
-    indicator.set_destination(ACTIVE_DESTINATION)
+    indicator.set_destination(ACTIVE_DESTINATION, _active_destination_path())
 
     if _tray is not None:
         _tray.refresh_language()
@@ -1215,15 +1226,42 @@ def main() -> None:
             print("\n" + i18n.t("dictation.ptt_stopped"))
             session.stop_and_transcribe()
 
+    def pill_toggle_mode() -> None:
+        """Klik op de modus-tag: wissel toggle <-> push-to-talk.
+
+        Loopt via apply_settings zodat de sessie, de config en de pill-labels
+        in één keer meebewegen (zelfde route als Instellingen).
+        """
+
+        if MODE == "meeting":
+            return
+        settings = _user_config_dict()
+        settings["mode"] = "ptt" if MODE == "toggle" else "toggle"
+        apply_settings(settings)
+        print("\n" + i18n.t("dictation.mode_switched", mode=i18n.t(f"state.tag.{MODE}")))
+
+    def pill_retry() -> None:
+        """ "Opnieuw" bij Mislukt: probeer opnieuw op te nemen.
+
+        Zelfde route als de pill-knop, zodat mic-hotplug en meeting-routing
+        meelopen. De mic-attentie wordt eerst opnieuw bepaald, want de fout
+        kwam meestal doordat het apparaat weg was.
+        """
+
+        _refresh_mic_attention()
+        pill_control_press()
+
     indicator = RecordingIndicator(
         position=INDICATOR_POSITION,
         xy=INDICATOR_XY,
         on_moved=_on_indicator_moved,
         on_control_press=pill_control_press,
         on_control_release=pill_control_release,
+        on_retry=pill_retry,
+        on_mode_toggle=pill_toggle_mode,
     )
     _indicator = indicator
-    indicator.set_destination(ACTIVE_DESTINATION)
+    indicator.set_destination(ACTIVE_DESTINATION, _active_destination_path())
     indicator.set_hotkey_label(hotkeys.format_hotkey(HOTKEY_TOKENS))
     # Eenmalige ready-cue na splash (niet bij elke settings-save).
     indicator.show_ready_cue()

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import math
+import time
 from typing import Any
 
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QFont,
+    QFontMetrics,
     QMouseEvent,
     QPainter,
     QPainterPath,
@@ -32,31 +34,47 @@ from ._contract import (
     COLOR_ERROR_LABEL,
     COLOR_MEETING_DOT,
     COLOR_MEETING_TEXT,
+    COLOR_OK,
     COLOR_PREPARING,
     COLOR_RECORDING,
+    COLOR_RECORDING_DOT,
     COLOR_TRANSCRIBING,
+    COLOR_TRANSCRIBING_TEXT,
     ERROR_DURATION_MS,
     INDICATOR_HEIGHT,
     INDICATOR_WIDTH,
+    MODE_TAG_HIT_HEIGHT,
+    MODE_TAG_HIT_WIDTH,
     MUTED_COLOR,
     NUM_BARS,
     PILL_BG,
     PILL_BG_ERROR,
+    POLL_INTERVAL_IDLE_MS,
     POLL_INTERVAL_MS,
     POSITION_LAST,
+    PROGRESS_BAR_HEIGHT,
+    PROGRESS_TRACK_COLOR,
     READY_CUE_DURATION_MS,
+    STOP_BUTTON_SIZE,
     SUBTLE_COLOR,
     TAG_TEXT_COLOR,
     TEXT_COLOR,
+    WAVEFORM_BAR_MAX_HEIGHT,
+    WAVEFORM_BAR_WIDTH,
     WAVEFORM_GAIN,
     WINDOW_ALPHA,
     DestinationPillModel,
     RecordingState,
     chunk_led_snapshot,
     clamp_indicator_xy,
+    countdown_fraction,
     destination_display_name,
+    destination_path_label,
     drain_status_queue,
+    elapsed_label,
     get_transcription_progress,
+    hotkey_chips,
+    mode_tag_is_filled,
     normalize_indicator_position,
     preset_indicator_xy,
     snapshot_levels,
@@ -80,6 +98,8 @@ class RecordingIndicator(QWidget):
         on_control_press: Any | None = None,
         on_control_release: Any | None = None,
         on_context_menu: Any | None = None,
+        on_retry: Any | None = None,
+        on_mode_toggle: Any | None = None,
     ) -> None:
         ensure_app()
         super().__init__()
@@ -99,6 +119,8 @@ class RecordingIndicator(QWidget):
         self._control_press_cb = on_control_press
         self._control_release_cb = on_control_release
         self.on_context_menu = on_context_menu
+        self._retry_cb = on_retry
+        self._mode_toggle_cb = on_mode_toggle
         self.state_listener: Any | None = None
         self._drag_offset: QPoint | None = None
         self._drag_moved = False
@@ -106,6 +128,10 @@ class RecordingIndicator(QWidget):
         self._dest_pill = DestinationPillModel()
         self._stop_requested = False
         self._hotkey_label: str | None = None
+        self._recording_started_at: float | None = None
+        self._destination_path: str | None = None
+        self._hide_remaining_ms: int | None = None
+        self._hovered_control: str | None = None
 
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_INTERVAL_MS)
@@ -175,6 +201,10 @@ class RecordingIndicator(QWidget):
 
         if state == RecordingState.RECORDING:
             self._dest_pill.on_recording_started()
+            if self._recording_started_at is None:
+                self._recording_started_at = time.monotonic()
+        else:
+            self._recording_started_at = None
 
         if state == RecordingState.IDLE:
             self._apply_idle_visibility()
@@ -184,10 +214,12 @@ class RecordingIndicator(QWidget):
                 self._hide_timer.start(CANCELLED_DURATION_MS)
             elif state == RecordingState.ERROR:
                 self._hide_timer.start(ERROR_DURATION_MS)
+        self._sync_timer_interval()
         self.update()
 
     def _transient_expired(self) -> None:
         self._ready_cue_active = False
+        self._sync_timer_interval()
         self._state = RecordingState.IDLE
         self._status_hint = ""
         self._notify_listener(RecordingState.IDLE, self._mode)
@@ -215,8 +247,25 @@ class RecordingIndicator(QWidget):
             self._xy = xy
         self._place_window(position)
 
-    def set_destination(self, name: str | None) -> None:
+    def set_destination(self, name: str | None, path: str | None = None) -> None:
+        self._destination_path = (path or "").strip() or None
         self._dest_pill.set_destination(name)
+        self._sync_destination_tooltip()
+
+    def _sync_destination_tooltip(self) -> None:
+        """Volledig pad als tooltip.
+
+        Bij 340 px blijft er na de toets-chips en de twee knoppen ~129 px over
+        voor tekst — genoeg voor de bestemmingsnaam, niet voor naam én pad. De
+        tooltip geeft het volle pad zonder ruimte te kosten.
+        """
+
+        name = self._dest_pill.name or ""
+        path = self._destination_path or ""
+        if name and path:
+            self.setToolTip(f"{name}\n{path}")
+        else:
+            self.setToolTip(path or name)
         if self._state == RecordingState.IDLE:
             self._apply_idle_visibility()
             self.update()
@@ -236,16 +285,47 @@ class RecordingIndicator(QWidget):
         self._hide_timer.stop()
         self._show_window()
         self._hide_timer.start(max(0, int(duration_ms)))
+        self._sync_timer_interval()
         self.update()
+
+    _ANIMATED_STATES = (
+        RecordingState.PREPARING,
+        RecordingState.RECORDING,
+        RecordingState.TRANSCRIBING,
+    )
+
+    def _is_animated(self) -> bool:
+        """True zolang er iets beweegt dat een repaint per frame rechtvaardigt.
+
+        Idle, Geannuleerd en Mislukt staan stil: daar is 20 repaints per seconde
+        pure verspilling op een altijd-zichtbare HUD. Krijgt de ready-cue in een
+        latere slice zijn eenmalige ring, dan hoort die hier ook bij.
+        """
+
+        if self._ready_cue_active:
+            # De groene ring speelt eenmalig af; die moet frames krijgen.
+            return True
+        return self._state in self._ANIMATED_STATES
+
+    def _sync_timer_interval(self) -> None:
+        if self._timer is None:
+            return
+        wanted = POLL_INTERVAL_MS if self._is_animated() else POLL_INTERVAL_IDLE_MS
+        if self._timer.interval() != wanted:
+            self._timer.setInterval(wanted)
 
     def _tick(self) -> None:
         if self._stop_requested:
             self._stop()
             return
+        changed = False
         for state, mode, hint in drain_status_queue():
             self._apply_state(state, mode, hint)
+            changed = True
         self._frame += 1
-        if self.isVisible():
+        # Alleen schilderen als er iets beweegt of net iets veranderd is;
+        # _apply_state heeft bij een wissel zelf al update() aangeroepen.
+        if self.isVisible() and self._is_animated() and not changed:
             self.update()
 
     def run(self) -> None:
@@ -269,6 +349,31 @@ class RecordingIndicator(QWidget):
         self._hide_timer.stop()
         self._hide_window()
 
+    def enterEvent(self, _event: Any) -> None:  # noqa: N802
+        """Cursor boven de pill: auto-hide pauzeren (canvas 07).
+
+        Anders verdwijnt een foutmelding onder je muis weg terwijl je hem leest
+        of naar de actieknop beweegt.
+        """
+
+        if self._hide_timer.isActive():
+            self._hide_remaining_ms = self._hide_timer.remainingTime()
+            self._hide_timer.stop()
+        super().enterEvent(_event)
+
+    def leaveEvent(self, _event: Any) -> None:  # noqa: N802
+        if self._hovered_control is not None:
+            self._hovered_control = None
+            self.update()
+        remaining = self._hide_remaining_ms
+        self._hide_remaining_ms = None
+        if remaining is not None and self._state in (
+            RecordingState.ERROR,
+            RecordingState.CANCELLED,
+        ):
+            self._hide_timer.start(max(0, remaining))
+        super().leaveEvent(_event)
+
     def _dismiss_rect(self) -> QRect:
         return QRect(INDICATOR_WIDTH - _RIGHT_PAD - _BTN, _BTN_Y, _BTN, _BTN)
 
@@ -276,7 +381,117 @@ class RecordingIndicator(QWidget):
         return QRect(INDICATOR_WIDTH - _RIGHT_PAD - _BTN * 2 - 10, _BTN_Y, _BTN, _BTN)
 
     def _stop_rect(self) -> QRect:
-        return QRect(INDICATOR_WIDTH - _RIGHT_PAD - _BTN, _BTN_Y, _BTN, _BTN)
+        size = STOP_BUTTON_SIZE
+        return QRect(
+            INDICATOR_WIDTH - _RIGHT_PAD - size,
+            (INDICATOR_HEIGHT - size) // 2,
+            size,
+            size,
+        )
+
+    def _mode_tag_right_x(self) -> int | None:
+        """Rechterrand waar de tag hangt; None als de state geen tag toont."""
+
+        if self._state == RecordingState.RECORDING:
+            return self._stop_rect().left() - 10
+        if self._state == RecordingState.TRANSCRIBING:
+            return INDICATOR_WIDTH - 16
+        return None
+
+    def _mode_tag_metrics(self) -> tuple[int, int] | None:
+        """(left, width) van de getekende tag — zonder paint, zodat hit-test en
+        schilderwerk niet uit elkaar kunnen lopen."""
+
+        right_x = self._mode_tag_right_x()
+        if right_x is None:
+            return None
+        font = self._font(11, bold=True)
+        metrics = QFontMetrics(font)
+        pad, gap = 8, 6
+        if self._mode == "meeting":
+            text_w = metrics.horizontalAdvance(i18n.t("state.tag.meeting"))
+            width = pad * 2 + 6 + gap + text_w
+        else:
+            glyph = "●" if self._mode == "ptt" else "↔"
+            key = "state.tag.ptt" if self._mode == "ptt" else "state.tag.toggle"
+            width = pad * 2 + metrics.horizontalAdvance(f"{glyph} {i18n.t(key)}")
+        return right_x - width, width
+
+    def _mode_tag_rect(self) -> QRect | None:
+        """Klikdoel van de tag: minimaal 56×32 rond de getekende pill (canvas 08)."""
+
+        found = self._mode_tag_metrics()
+        if found is None:
+            return None
+        left, width = found
+        hit_w = max(width, MODE_TAG_HIT_WIDTH)
+        hit_h = MODE_TAG_HIT_HEIGHT
+        center_x = left + width / 2
+        return QRect(
+            int(center_x - hit_w / 2),
+            (INDICATOR_HEIGHT - hit_h) // 2,
+            hit_w,
+            hit_h,
+        )
+
+    def _transient_fraction(self) -> float:
+        """Resterend deel van een tijdelijke melding (Geannuleerd/Mislukt)."""
+
+        if self._state not in (RecordingState.CANCELLED, RecordingState.ERROR):
+            return 0.0
+        if not self._hide_timer.isActive():
+            return 0.0
+        total = self._hide_timer.interval()
+        remaining = self._hide_timer.remainingTime()
+        if total <= 0 or remaining < 0:
+            return 0.0
+        return countdown_fraction(total - remaining, total)
+
+    def _retry_rect(self) -> QRect | None:
+        """Actieknop bij Mislukt; None in elke andere state (canvas 07)."""
+
+        if self._state != RecordingState.ERROR:
+            return None
+        width, height = 68, 32
+        return QRect(
+            INDICATOR_WIDTH - _RIGHT_PAD - width,
+            (INDICATOR_HEIGHT - height) // 2,
+            width,
+            height,
+        )
+
+    def _progress_bar_rect(self) -> QRect | None:
+        """Balk in de tekstkolom; None als er niets te tonen valt.
+
+        Alleen tijdens TRANSCRIBEREN én met een bekend percentage: bij
+        onbekende duur blijven de marching dots het indeterminate-signaal.
+        """
+
+        if self._state != RecordingState.TRANSCRIBING:
+            return None
+        if get_transcription_progress() is None:
+            return None
+        left = self._LEFT + 13 + 10
+        # Zelfde rechtergrens als de tekstkolom in _paint_transcribing: tag
+        # (~64 px) + marching dots (18 px) + tussenruimte.
+        right = INDICATOR_WIDTH - 16 - 64 - 8 - 18 - 10
+        width = right - left
+        if width <= 0:
+            return None
+        return QRect(left, 36, width, PROGRESS_BAR_HEIGHT)
+
+    @staticmethod
+    def _progress_fill_width(rect: QRect, percent: int) -> float:
+        ratio = max(0, min(100, int(percent))) / 100.0
+        return rect.width() * ratio
+
+    def _elapsed_seconds(self) -> int:
+        """Looptijd van de huidige opname; 0 zodra er niet opgenomen wordt."""
+
+        started = self._recording_started_at
+        if started is None or self._state != RecordingState.RECORDING:
+            return 0
+        return max(0, int(time.monotonic() - started))
 
     def _control_rect(self) -> QRect:
         if self._state == RecordingState.RECORDING:
@@ -297,6 +512,19 @@ class RecordingIndicator(QWidget):
         if event.button() != Qt.LeftButton:
             event.ignore()
             return
+
+        tag = self._mode_tag_rect()
+        if tag is not None and tag.contains(event.position().toPoint()):
+            self._invoke_callback(self._mode_toggle_cb)
+            event.accept()
+            return
+
+        if self._state == RecordingState.ERROR:
+            retry = self._retry_rect()
+            if retry is not None and retry.contains(event.position().toPoint()):
+                self._invoke_callback(self._retry_cb)
+                event.accept()
+                return
 
         if self._state == RecordingState.IDLE and self._dest_pill.idle_visible:
             if self._dismiss_rect().contains(event.position().toPoint()):
@@ -322,8 +550,39 @@ class RecordingIndicator(QWidget):
         self._drag_moved = False
         event.accept()
 
+    def _interactive_rect_at(self, point: Any) -> str | None:
+        """Naam van het klikdoel onder ``point``, of None voor de body."""
+
+        tag = self._mode_tag_rect()
+        if tag is not None and tag.contains(point):
+            return "tag"
+        retry = self._retry_rect()
+        if retry is not None and retry.contains(point):
+            return "retry"
+        if self._state == RecordingState.RECORDING:
+            if self._stop_rect().contains(point):
+                return "control"
+        elif self._state == RecordingState.IDLE and self._dest_pill.idle_visible:
+            if self._record_rect().contains(point):
+                return "control"
+            if self._dismiss_rect().contains(point):
+                return "dismiss"
+        return None
+
+    def _update_hover(self, point: Any) -> None:
+        """Cursor + hover-markering bijwerken (canvas: body = open hand)."""
+
+        target = self._interactive_rect_at(point)
+        if target != self._hovered_control:
+            self._hovered_control = target
+            self.update()
+        shape = Qt.CursorShape.ArrowCursor if target is not None else Qt.CursorShape.OpenHandCursor
+        if self.cursor().shape() != shape:
+            self.setCursor(shape)
+
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         if self._drag_offset is None:
+            self._update_hover(event.position().toPoint())
             event.ignore()
             return
         target = event.globalPosition().toPoint() - self._drag_offset
@@ -369,16 +628,29 @@ class RecordingIndicator(QWidget):
             font.setWeight(QFont.Weight.DemiBold)
         return font
 
+    def _control_fill(self, token: str, *, target: str = "control") -> QColor:
+        """Knopvulling, +6% helderheid als de cursor erboven hangt (canvas)."""
+
+        color = QColor(token)
+        if self._hovered_control == target:
+            color = color.lighter(106)
+        return color
+
     def _border_color(self) -> QColor:
+        """1 px capsulerand; tint volgt de state-kleur (canvas 1a)."""
+
         state = self._state
-        if state == RecordingState.RECORDING:
-            return QColor(255, 92, 87, 61)
-        if state == RecordingState.PREPARING:
-            return QColor(184, 160, 120, 51)
-        if state == RecordingState.TRANSCRIBING:
-            return QColor(255, 176, 32, 61)
-        if state == RecordingState.ERROR:
-            return QColor(255, 107, 107, 87)
+        tinted = {
+            RecordingState.RECORDING: (COLOR_RECORDING, 90),
+            RecordingState.PREPARING: (COLOR_PREPARING, 51),
+            RecordingState.TRANSCRIBING: (COLOR_TRANSCRIBING, 61),
+            RecordingState.ERROR: (COLOR_ERROR, 90),
+        }
+        if state in tinted:
+            token, alpha = tinted[state]
+            color = QColor(token)
+            color.setAlpha(alpha)
+            return color
         if state == RecordingState.CANCELLED:
             return QColor(255, 255, 255, 20)
         return QColor(255, 255, 255, 26)
@@ -445,33 +717,84 @@ class RecordingIndicator(QWidget):
         painter.setBrush(tint)
         painter.drawEllipse(QRectF(x + (base - size) / 2, self._CY - size / 2, size, size))
 
-    def _paint_idle(self, painter: QPainter) -> None:
-        self._draw_folder(painter, self._LEFT, QColor(MUTED_COLOR))
-        record, dismiss = self._record_rect(), self._dismiss_rect()
-        text_left, text_right = 40, record.left() - 8
+    def _paint_ready_ring(self, painter: QPainter) -> None:
+        """Groene stip met eenmalige uitdijende ring (canvas 02).
 
+        Speelt af over de eerste ~1,1 s van de cue en valt dan terug op een
+        statische stip; de ring is dus een bevestiging, geen doorlopende
+        animatie.
+        """
+
+        cx = self._LEFT + 5.0
+        painter.setPen(Qt.NoPen)
+        # Ring: groeit en dooft uit over 22 frames (50 ms per frame).
+        progress = min(1.0, (self._frame % 512) / 22.0) if self._frame < 22 else 1.0
+        if progress < 1.0:
+            ring = QColor(COLOR_OK)
+            ring.setAlphaF(0.25 * (1.0 - progress))
+            radius = 4.5 + 9.0 * progress
+            painter.setBrush(ring)
+            painter.drawEllipse(QRectF(cx - radius, self._CY - radius, radius * 2, radius * 2))
+        painter.setBrush(QColor(COLOR_OK))
+        painter.drawEllipse(QRectF(cx - 4.5, self._CY - 4.5, 9.0, 9.0))
+
+    def _paint_idle(self, painter: QPainter) -> None:
+        if self._ready_cue_active:
+            self._paint_ready_ring(painter)
+        else:
+            self._draw_folder(painter, self._LEFT, QColor(MUTED_COLOR))
+        record, dismiss = self._record_rect(), self._dismiss_rect()
+        text_left = 40
+
+        # Toets-chips rechts van de tekst: die reserveren hun breedte eerst,
+        # zodat de tekstkolom weet waar hij mag eindigen (canvas 01).
+        chips_left = self._draw_hotkey_chips(painter, record.left() - 10)
+        text_right = chips_left - 10
+
+        # Canvas-regelorde: status boven, bestemming eronder.
         painter.setPen(QColor(TEXT_COLOR))
         painter.setFont(self._font(14, bold=True))
         painter.drawText(
-            QRect(text_left, 11, text_right - text_left, 20),
+            QRect(text_left, 11, max(0, text_right - text_left), 20),
             Qt.AlignVCenter | Qt.AlignLeft,
-            destination_display_name(self._dest_pill.name),
+            i18n.t("state.ready"),
         )
-        subline = i18n.t("state.ready")
-        if self._hotkey_label:
-            subline = f"{subline} · {self._hotkey_label}"
+
+        # Regel 2: naam én pad — je ziet wát actief is en wáár het landt.
+        name = destination_display_name(self._dest_pill.name)
         painter.setPen(QColor(SUBTLE_COLOR))
         painter.setFont(self._font(11))
+        available = max(0, text_right - text_left)
+        metrics = painter.fontMetrics()
+        subline = name
+        path_label = destination_path_label(self._destination_path)
+        if path_label and path_label != name:
+            if not name:
+                subline = metrics.elidedText(path_label, Qt.TextElideMode.ElideMiddle, available)
+            else:
+                # Naam blijft heel; alleen het pad krimpt (midden-ellipsis) tot
+                # wat er overblijft. Onder ~40 px is een padrestje onleesbaar,
+                # dan valt het pad weg i.p.v. "O…s" te tonen.
+                separator = " · "
+                room = available - metrics.horizontalAdvance(name + separator)
+                if room >= 40:
+                    subline = (
+                        name
+                        + separator
+                        + metrics.elidedText(path_label, Qt.TextElideMode.ElideMiddle, room)
+                    )
         painter.drawText(
-            QRect(text_left, 31, text_right - text_left, 16),
+            QRect(text_left, 31, available, 16),
             Qt.AlignVCenter | Qt.AlignLeft,
             subline,
         )
 
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 92, 87, 36))
+        halo = QColor(COLOR_RECORDING)
+        halo.setAlpha(36)
+        painter.setBrush(halo)
         painter.drawEllipse(record)
-        painter.setBrush(QColor(COLOR_RECORDING))
+        painter.setBrush(self._control_fill(COLOR_RECORDING))
         inner = 13
         painter.drawEllipse(
             record.center().x() - inner // 2 + 1, record.center().y() - inner // 2 + 1, inner, inner
@@ -485,8 +808,12 @@ class RecordingIndicator(QWidget):
 
         self._slow_pulse_dot(painter, self._LEFT, 10.0, QColor(COLOR_PREPARING))
         tag_left = self._draw_mode_tag(painter, INDICATOR_WIDTH - 16)
+        # Marching dots i.p.v. een waveform: die zou suggereren dat er al audio
+        # binnenkomt terwijl de microfoon nog opengaat (canvas 03).
+        dots_left = tag_left - 8 - 18
+        self._paint_marching_dots(painter, dots_left, QColor(COLOR_PREPARING))
         text_left = int(self._LEFT + 10 + 10)
-        text_right = tag_left - 8
+        text_right = dots_left - 10
         width = max(0, text_right - text_left)
 
         painter.setPen(QColor(TEXT_COLOR))
@@ -513,17 +840,35 @@ class RecordingIndicator(QWidget):
             )
 
     def _paint_recording(self, painter: QPainter) -> None:
-        self._pulse_dot(painter, self._LEFT, 11.0, QColor(COLOR_RECORDING))
-        painter.setPen(QColor(TEXT_COLOR))
-        painter.setFont(self._font(14, bold=True))
+        self._pulse_dot(painter, self._LEFT, 11.0, QColor(COLOR_RECORDING_DOT))
         label = state_label(RecordingState.RECORDING)
-        label_w = painter.fontMetrics().horizontalAdvance(label)
         label_x = self._LEFT + 11 + 10
+
+        # Label + looptijd als twee regels (canvas 04). De looptijd staat in de
+        # state-kleur-neutrale subtint, zodat de rode stip het enige "live"-
+        # signaal blijft.
+        painter.setFont(self._font(13, bold=True))
+        label_w = painter.fontMetrics().horizontalAdvance(label)
+        elapsed = elapsed_label(self._elapsed_seconds())
+        painter.setFont(self._font(11))
+        elapsed_w = painter.fontMetrics().horizontalAdvance(elapsed)
+        text_w = max(label_w, elapsed_w)
+
+        painter.setPen(QColor(COLOR_RECORDING_DOT))
+        painter.setFont(self._font(13, bold=True))
         painter.drawText(
-            QRect(label_x, 0, label_w + 4, INDICATOR_HEIGHT),
+            QRect(label_x, 12, text_w + 4, 18),
             Qt.AlignVCenter | Qt.AlignLeft,
             label,
         )
+        painter.setPen(QColor(SUBTLE_COLOR))
+        painter.setFont(self._font(11))
+        painter.drawText(
+            QRect(label_x, 30, text_w + 4, 16),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            elapsed,
+        )
+        label_w = text_w
         stop = self._stop_rect()
         tag_left = self._draw_mode_tag(painter, stop.left() - 10)
         leds_right = self._paint_chunk_leds(painter, tag_left - 8)
@@ -531,11 +876,13 @@ class RecordingIndicator(QWidget):
             painter, QColor(COLOR_RECORDING), label_x + label_w + 12, leds_right - 8
         )
 
+        # Canvas 04/10: gevulde knop 36×36 radius 12 met wit vierkant 12×12 —
+        # leest als knop, niet als vlak.
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 92, 87, 41))
-        painter.drawEllipse(stop)
-        painter.setBrush(QColor(COLOR_RECORDING))
-        square = 11.0
+        painter.setBrush(self._control_fill(COLOR_RECORDING))
+        painter.drawRoundedRect(QRectF(stop), 12, 12)
+        painter.setBrush(QColor("#FFFFFF"))
+        square = 12.0
         painter.drawRoundedRect(
             QRectF(
                 stop.center().x() - square / 2 + 1,
@@ -543,9 +890,38 @@ class RecordingIndicator(QWidget):
                 square,
                 square,
             ),
-            2,
-            2,
+            3,
+            3,
         )
+
+    def _draw_hotkey_chips(self, painter: QPainter, right_x: int) -> int:
+        """Sneltoets als omrande toetsjes; retourneert de linkerrand.
+
+        Chips lezen op 11 px sneller dan "Ctrl+Alt+R" als doorlopende tekst
+        (canvas 01). Zonder sneltoets verandert er niets aan de layout.
+        """
+
+        chips = hotkey_chips(self._hotkey_label)
+        if not chips:
+            return right_x
+
+        painter.setFont(self._font(10))
+        metrics = painter.fontMetrics()
+        pad_x, gap, height = 5, 4, 18
+        widths = [metrics.horizontalAdvance(chip) + pad_x * 2 for chip in chips]
+        total = sum(widths) + gap * (len(chips) - 1)
+        left = right_x - total
+        y = (INDICATOR_HEIGHT - height) / 2.0
+
+        x = float(left)
+        for chip, width in zip(chips, widths, strict=True):
+            painter.setPen(QPen(QColor(255, 255, 255, 46)))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(QRectF(x, y, width, height), 4, 4)
+            painter.setPen(QColor(SUBTLE_COLOR))
+            painter.drawText(QRectF(x, y, width, height), Qt.AlignCenter, chip)
+            x += width + gap
+        return int(left)
 
     def _draw_mode_tag(self, painter: QPainter, right_x: int) -> int:
         painter.setFont(self._font(11, bold=True))
@@ -575,10 +951,19 @@ class RecordingIndicator(QWidget):
         text_w = metrics.horizontalAdvance(combined)
         tag_w = pad * 2 + text_w
         left = right_x - tag_w
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 20))
-        painter.drawRoundedRect(QRectF(left, y, tag_w, height), 10, 10)
-        painter.setPen(QColor(TAG_TEXT_COLOR))
+        # Canvas 08: gevuld = nú actief (ptt ingedrukt), outline = passief. Een
+        # vúlverschil, geen kleurverschil — blijft leesbaar zonder kleur.
+        filled = mode_tag_is_filled(self._mode, held=self._control_held)
+        if filled:
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(TAG_TEXT_COLOR))
+            painter.drawRoundedRect(QRectF(left, y, tag_w, height), 10, 10)
+            painter.setPen(QColor("#151719"))
+        else:
+            painter.setPen(QPen(QColor(255, 255, 255, 46)))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(QRectF(left, y, tag_w, height), 10, 10)
+            painter.setPen(QColor(TAG_TEXT_COLOR))
         painter.drawText(
             QRectF(left + pad, y, text_w + 2, height),
             Qt.AlignVCenter | Qt.AlignLeft,
@@ -628,8 +1013,8 @@ class RecordingIndicator(QWidget):
         levels = snapshot_levels()
         padded = [0.0] * (NUM_BARS - len(levels)) + levels[-NUM_BARS:]
         slot = region / NUM_BARS
-        bar_width = 2.0
-        max_half = 10.0
+        bar_width = WAVEFORM_BAR_WIDTH
+        max_half = WAVEFORM_BAR_MAX_HEIGHT / 2.0
         painter.setPen(Qt.NoPen)
         painter.setBrush(color)
         for index, level in enumerate(padded):
@@ -649,50 +1034,58 @@ class RecordingIndicator(QWidget):
         start = (self._frame * 12) % 360
         painter.drawArc(arc, int(-start * 16), int(300 * 16))
 
-        x = self._LEFT + diameter + 10
-        painter.setPen(QColor(TEXT_COLOR))
-        painter.setFont(self._font(14, bold=True))
-        label = state_label(RecordingState.TRANSCRIBING)
-        label_w = painter.fontMetrics().horizontalAdvance(label)
-        painter.drawText(
-            QRect(x, 0, label_w + 4, INDICATOR_HEIGHT), Qt.AlignVCenter | Qt.AlignLeft, label
-        )
-        x += label_w + 8
-
         percent = get_transcription_progress()
+        bar = self._progress_bar_rect()
+
+        # Rechts eerst: tag en dots bepalen waar de tekstkolom mag eindigen.
+        tag_left = self._draw_mode_tag(painter, INDICATOR_WIDTH - 16)
+        dots_left = tag_left - 8 - 18
+        self._paint_marching_dots(painter, dots_left)
+
+        column_left = self._LEFT + diameter + 10
+        column_right = dots_left - 10
+        label = state_label(RecordingState.TRANSCRIBING)
+
+        # Met balk staan label en percentage op één regel bóven de balk; zonder
+        # balk (onbekende duur) blijft de regel verticaal gecentreerd.
+        row_y, row_h = (14, 18) if bar is not None else (0, INDICATOR_HEIGHT)
+        painter.setPen(QColor(TEXT_COLOR))
+        painter.setFont(self._font(13, bold=True))
+        painter.drawText(
+            QRect(column_left, row_y, max(0, column_right - column_left), row_h),
+            Qt.AlignVCenter | Qt.AlignLeft,
+            label,
+        )
         if percent is not None:
-            percent_text = f"{percent} %"
-            painter.setPen(QColor(COLOR_TRANSCRIBING))
-            percent_w = painter.fontMetrics().horizontalAdvance(percent_text)
+            painter.setPen(QColor(COLOR_TRANSCRIBING_TEXT))
+            painter.setFont(self._font(12, bold=True))
             painter.drawText(
-                QRect(x, 0, percent_w + 4, INDICATOR_HEIGHT),
-                Qt.AlignVCenter | Qt.AlignLeft,
-                percent_text,
+                QRect(column_left, row_y, max(0, column_right - column_left), row_h),
+                Qt.AlignVCenter | Qt.AlignRight,
+                f"{percent} %",
             )
-            x += percent_w + 10
-        self._paint_marching_dots(painter, x)
-        self._draw_mode_tag(painter, INDICATOR_WIDTH - 16)
 
-        if percent is not None:
-            clip = QPainterPath()
-            clip.addRoundedRect(
-                QRectF(0.5, 0.5, INDICATOR_WIDTH - 1.0, INDICATOR_HEIGHT - 1.0),
-                INDICATOR_HEIGHT / 2,
-                INDICATOR_HEIGHT / 2,
-            )
-            painter.setClipPath(clip)
-            thread = QColor(COLOR_TRANSCRIBING)
-            thread.setAlphaF(0.85)
+        bar = self._progress_bar_rect()
+        if bar is not None and percent is not None:
             painter.setPen(Qt.NoPen)
-            painter.setBrush(thread)
-            painter.drawRect(QRectF(0, INDICATOR_HEIGHT - 2, INDICATOR_WIDTH * percent / 100.0, 2))
-            painter.setClipping(False)
+            painter.setBrush(QColor(PROGRESS_TRACK_COLOR))
+            radius = PROGRESS_BAR_HEIGHT / 2.0
+            painter.drawRoundedRect(QRectF(bar), radius, radius)
+            filled = self._progress_fill_width(bar, percent)
+            if filled > 0:
+                painter.setBrush(QColor(COLOR_TRANSCRIBING))
+                painter.drawRoundedRect(
+                    QRectF(bar.left(), bar.top(), filled, bar.height()), radius, radius
+                )
 
-    def _paint_marching_dots(self, painter: QPainter, x: float) -> None:
+    def _paint_marching_dots(
+        self, painter: QPainter, x: float, color: QColor | None = None
+    ) -> None:
         active = (self._frame // 4) % 3
         painter.setPen(Qt.NoPen)
+        base = color if color is not None else QColor(COLOR_TRANSCRIBING)
         for index in range(3):
-            dot = QColor(COLOR_TRANSCRIBING)
+            dot = QColor(base)
             dot.setAlpha(255 if index == active else 90)
             painter.setBrush(dot)
             painter.drawEllipse(QRectF(x + index * 7, self._CY - 2, 4, 4))
@@ -713,10 +1106,24 @@ class RecordingIndicator(QWidget):
             Qt.AlignVCenter | Qt.AlignLeft,
             state_label(RecordingState.CANCELLED),
         )
+        # Canvas 06: krimpend streepje toont hoe lang de melding nog blijft.
+        track_w, track_h = 44, 3
+        track_x = INDICATOR_WIDTH - 16 - track_w
+        track_y = (INDICATOR_HEIGHT - track_h) / 2.0
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(PROGRESS_TRACK_COLOR))
+        painter.drawRoundedRect(QRectF(track_x, track_y, track_w, track_h), 1.5, 1.5)
+        remaining = self._transient_fraction()
+        if remaining > 0:
+            painter.setBrush(QColor("#4C545E"))
+            painter.drawRoundedRect(
+                QRectF(track_x, track_y, track_w * remaining, track_h), 1.5, 1.5
+            )
+
         painter.setPen(QColor("#6E757D"))
         painter.setFont(self._font(11))
         painter.drawText(
-            QRect(0, 0, INDICATOR_WIDTH - 16, INDICATOR_HEIGHT),
+            QRect(0, 0, track_x - 10, INDICATOR_HEIGHT),
             Qt.AlignVCenter | Qt.AlignRight,
             i18n.t("state.cancelled_note"),
         )
@@ -733,34 +1140,40 @@ class RecordingIndicator(QWidget):
         painter.drawPath(triangle)
 
         text_left = int(self._LEFT + 14 + 10)
+        retry = self._retry_rect()
+        text_right = (retry.left() - 10) if retry is not None else (INDICATOR_WIDTH - 16)
+        text_width = max(0, text_right - text_left)
+
         painter.setPen(QColor(COLOR_ERROR_LABEL))
-        painter.setFont(self._font(14, bold=True))
+        painter.setFont(self._font(13, bold=True))
         label = state_label(RecordingState.ERROR)
         if self._status_hint:
             painter.drawText(
-                QRect(text_left, 11, INDICATOR_WIDTH - text_left - 16, 20),
+                QRect(text_left, 11, text_width, 20),
                 Qt.AlignVCenter | Qt.AlignLeft,
                 label,
             )
-            painter.setPen(QColor(SUBTLE_COLOR))
+            painter.setPen(QColor(MUTED_COLOR))
             painter.setFont(self._font(11))
+            metrics = painter.fontMetrics()
             painter.drawText(
-                QRect(text_left, 31, INDICATOR_WIDTH - text_left - 16, 16),
+                QRect(text_left, 31, text_width, 16),
                 Qt.AlignVCenter | Qt.AlignLeft,
-                self._status_hint,
+                metrics.elidedText(self._status_hint, Qt.TextElideMode.ElideRight, text_width),
             )
-            return
-
-        painter.drawText(
-            QRect(text_left, 0, 180, INDICATOR_HEIGHT),
-            Qt.AlignVCenter | Qt.AlignLeft,
-            label,
-        )
-        if self._hotkey_label:
-            painter.setPen(QColor(SUBTLE_COLOR))
-            painter.setFont(self._font(11))
+        else:
             painter.drawText(
-                QRect(0, 0, INDICATOR_WIDTH - 16, INDICATOR_HEIGHT),
-                Qt.AlignVCenter | Qt.AlignRight,
-                self._hotkey_label,
+                QRect(text_left, 0, text_width, INDICATOR_HEIGHT),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                label,
             )
+
+        if retry is not None:
+            # Gevulde amber knop met donkere tekst: de enige actie in deze
+            # state, dus hij mag de aandacht trekken.
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(self._control_fill(COLOR_ERROR, target="retry"))
+            painter.drawRoundedRect(QRectF(retry), 10, 10)
+            painter.setPen(QColor("#151719"))
+            painter.setFont(self._font(11, bold=True))
+            painter.drawText(retry, Qt.AlignCenter, i18n.t("state.error_retry_action"))
