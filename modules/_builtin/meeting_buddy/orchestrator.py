@@ -426,6 +426,12 @@ class MeetingOrchestrator:
                 version=self._state.version + 1,
             )
             state = self._state
+            journal = self._journal
+        if journal is not None:
+            try:
+                journal.update_summary(text)
+            except Exception:
+                log.exception("Live summary journal update failed")
         # UI buiten de lock: anders blokkeert de LLM-thread de STT-callback.
         self._ui.notify(state, force=True)
 

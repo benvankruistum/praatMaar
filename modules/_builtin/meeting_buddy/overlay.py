@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -33,6 +32,7 @@ from ui.overlay_flags import apply_hud_window_flags
 from ui.theme import TOKENS
 
 from .hints import HintType
+from .live_summary import summary_points
 from .state import Hint, HintStatus, MeetingState, Question, QuestionStatus, Topic, TopicStatus
 from .topic_ladder import is_at_least_sequential
 
@@ -80,27 +80,6 @@ def pick_emphasis(hints: Sequence[Hint]) -> str | None:
 
 def _topics_done(topics: Sequence[Topic]) -> int:
     return sum(1 for t in topics if t.status in (TopicStatus.SEQUENTIAL, TopicStatus.CONFIRMED))
-
-
-def summary_points(text: str, *, limit: int = 3) -> list[str]:
-    """Split a live summary into up to ``limit`` separate points (canvas 03).
-
-    Prefers explicit lines (stripping bullet markers); falls back to sentence
-    splitting for a single paragraph.
-    """
-    cleaned = (text or "").strip()
-    if not cleaned:
-        return []
-    lines = [
-        re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", line).strip()
-        for line in cleaned.splitlines()
-        if line.strip()
-    ]
-    if len(lines) > 1:
-        return lines[:limit]
-    base = lines[0] if lines else cleaned
-    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", base) if part.strip()]
-    return sentences[:limit] if sentences else [base]
 
 
 class _StatusDot(QWidget):
