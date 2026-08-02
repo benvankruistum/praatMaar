@@ -10,6 +10,7 @@ from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QFont,
+    QFontMetrics,
     QMouseEvent,
     QPainter,
     QPainterPath,
@@ -41,6 +42,8 @@ from ._contract import (
     ERROR_DURATION_MS,
     INDICATOR_HEIGHT,
     INDICATOR_WIDTH,
+    MODE_TAG_HIT_HEIGHT,
+    MODE_TAG_HIT_WIDTH,
     MUTED_COLOR,
     NUM_BARS,
     PILL_BG,
@@ -69,6 +72,7 @@ from ._contract import (
     elapsed_label,
     get_transcription_progress,
     hotkey_chips,
+    mode_tag_is_filled,
     normalize_indicator_position,
     preset_indicator_xy,
     snapshot_levels,
@@ -93,6 +97,7 @@ class RecordingIndicator(QWidget):
         on_control_release: Any | None = None,
         on_context_menu: Any | None = None,
         on_retry: Any | None = None,
+        on_mode_toggle: Any | None = None,
     ) -> None:
         ensure_app()
         super().__init__()
@@ -113,6 +118,7 @@ class RecordingIndicator(QWidget):
         self._control_release_cb = on_control_release
         self.on_context_menu = on_context_menu
         self._retry_cb = on_retry
+        self._mode_toggle_cb = on_mode_toggle
         self.state_listener: Any | None = None
         self._drag_offset: QPoint | None = None
         self._drag_moved = False
@@ -372,6 +378,51 @@ class RecordingIndicator(QWidget):
             size,
         )
 
+    def _mode_tag_right_x(self) -> int | None:
+        """Rechterrand waar de tag hangt; None als de state geen tag toont."""
+
+        if self._state == RecordingState.RECORDING:
+            return self._stop_rect().left() - 10
+        if self._state == RecordingState.TRANSCRIBING:
+            return INDICATOR_WIDTH - 16
+        return None
+
+    def _mode_tag_metrics(self) -> tuple[int, int] | None:
+        """(left, width) van de getekende tag — zonder paint, zodat hit-test en
+        schilderwerk niet uit elkaar kunnen lopen."""
+
+        right_x = self._mode_tag_right_x()
+        if right_x is None:
+            return None
+        font = self._font(11, bold=True)
+        metrics = QFontMetrics(font)
+        pad, gap = 8, 6
+        if self._mode == "meeting":
+            text_w = metrics.horizontalAdvance(i18n.t("state.tag.meeting"))
+            width = pad * 2 + 6 + gap + text_w
+        else:
+            glyph = "●" if self._mode == "ptt" else "↔"
+            key = "state.tag.ptt" if self._mode == "ptt" else "state.tag.toggle"
+            width = pad * 2 + metrics.horizontalAdvance(f"{glyph} {i18n.t(key)}")
+        return right_x - width, width
+
+    def _mode_tag_rect(self) -> QRect | None:
+        """Klikdoel van de tag: minimaal 56×32 rond de getekende pill (canvas 08)."""
+
+        found = self._mode_tag_metrics()
+        if found is None:
+            return None
+        left, width = found
+        hit_w = max(width, MODE_TAG_HIT_WIDTH)
+        hit_h = MODE_TAG_HIT_HEIGHT
+        center_x = left + width / 2
+        return QRect(
+            int(center_x - hit_w / 2),
+            (INDICATOR_HEIGHT - hit_h) // 2,
+            hit_w,
+            hit_h,
+        )
+
     def _retry_rect(self) -> QRect | None:
         """Actieknop bij Mislukt; None in elke andere state (canvas 07)."""
 
@@ -436,6 +487,12 @@ class RecordingIndicator(QWidget):
 
         if event.button() != Qt.LeftButton:
             event.ignore()
+            return
+
+        tag = self._mode_tag_rect()
+        if tag is not None and tag.contains(event.position().toPoint()):
+            self._invoke_callback(self._mode_toggle_cb)
+            event.accept()
             return
 
         if self._state == RecordingState.ERROR:
@@ -803,10 +860,19 @@ class RecordingIndicator(QWidget):
         text_w = metrics.horizontalAdvance(combined)
         tag_w = pad * 2 + text_w
         left = right_x - tag_w
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 20))
-        painter.drawRoundedRect(QRectF(left, y, tag_w, height), 10, 10)
-        painter.setPen(QColor(TAG_TEXT_COLOR))
+        # Canvas 08: gevuld = nú actief (ptt ingedrukt), outline = passief. Een
+        # vúlverschil, geen kleurverschil — blijft leesbaar zonder kleur.
+        filled = mode_tag_is_filled(self._mode, held=self._control_held)
+        if filled:
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(TAG_TEXT_COLOR))
+            painter.drawRoundedRect(QRectF(left, y, tag_w, height), 10, 10)
+            painter.setPen(QColor("#151719"))
+        else:
+            painter.setPen(QPen(QColor(255, 255, 255, 46)))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(QRectF(left, y, tag_w, height), 10, 10)
+            painter.setPen(QColor(TAG_TEXT_COLOR))
         painter.drawText(
             QRectF(left + pad, y, text_w + 2, height),
             Qt.AlignVCenter | Qt.AlignLeft,

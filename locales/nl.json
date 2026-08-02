@@ -103,6 +103,7 @@
   "splash.close": "Sluiten",
   "splash.model_failed": "Het model kon niet worden geladen.",
   "dictation.busy": "Er wordt nog een vorige opname verwerkt.",
+  "dictation.mode_switched": "Modus gewijzigd: {mode}",
   "dictation.ptt_started": "Dicteren (push-to-talk) gestart.",
   "dictation.stopped_hotkey": "Dicteren wordt gestopt via de sneltoets.",
   "dictation.started_hotkey": "Dicteren wordt gestart via de sneltoets.",

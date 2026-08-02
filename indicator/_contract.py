@@ -223,6 +223,22 @@ def transcription_percent(position_seconds: float, duration_seconds: float) -> i
     return min(99, max(0, int(100.0 * float(position_seconds) / float(duration_seconds))))
 
 
+# Canvas 08: klikdoel van de modus-tag.
+MODE_TAG_HIT_WIDTH = 56
+MODE_TAG_HIT_HEIGHT = 32
+
+
+def mode_tag_is_filled(mode: str, *, held: bool) -> bool:
+    """Gevuld = nú actief, outline = passief (canvas 08).
+
+    Alleen push-to-talk heeft een "nu actief"-moment: zolang de toets/knop
+    ingedrukt is. Toggle en meeting blijven outline; hun state blijkt al uit de
+    rest van de pill.
+    """
+
+    return mode == "ptt" and bool(held)
+
+
 def mode_tag(mode: str) -> str:
     """Modus-tag voor de pill (●/↔ + vertaalde korte naam)."""
 

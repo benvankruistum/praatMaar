@@ -1226,6 +1226,20 @@ def main() -> None:
             print("\n" + i18n.t("dictation.ptt_stopped"))
             session.stop_and_transcribe()
 
+    def pill_toggle_mode() -> None:
+        """Klik op de modus-tag: wissel toggle <-> push-to-talk.
+
+        Loopt via apply_settings zodat de sessie, de config en de pill-labels
+        in één keer meebewegen (zelfde route als Instellingen).
+        """
+
+        if MODE == "meeting":
+            return
+        settings = _user_config_dict()
+        settings["mode"] = "ptt" if MODE == "toggle" else "toggle"
+        apply_settings(settings)
+        print("\n" + i18n.t("dictation.mode_switched", mode=i18n.t(f"state.tag.{MODE}")))
+
     def pill_retry() -> None:
         """ "Opnieuw" bij Mislukt: probeer opnieuw op te nemen.
 
@@ -1244,6 +1258,7 @@ def main() -> None:
         on_control_press=pill_control_press,
         on_control_release=pill_control_release,
         on_retry=pill_retry,
+        on_mode_toggle=pill_toggle_mode,
     )
     _indicator = indicator
     indicator.set_destination(ACTIVE_DESTINATION, _active_destination_path())
