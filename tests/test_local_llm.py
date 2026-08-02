@@ -46,7 +46,7 @@ def test_ollama_has_model(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_provider_running_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     client = MagicMock()
     client.has_model.return_value = True
-    client.chat.return_value = "Korte samenvatting van de meeting."
+    client.chat.return_value = "- Korte samenvatting van de meeting.\n- Tweede punt.\n- Derde punt."
     provider = OllamaSemanticAnalysis(client, model="qwen2.5:7b")
     assert provider.is_ready() is True
     result = provider.analyze(
@@ -60,6 +60,11 @@ def test_provider_running_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.kind == KIND_RUNNING_SUMMARY
     assert "samenvatting" in result.text.lower()
     client.chat.assert_called_once()
+    messages = client.chat.call_args.kwargs["messages"]
+    system = messages[0]["content"]
+    user = messages[1]["content"]
+    assert "3 tot 5" in system
+    assert "Nieuw transcript" in user
 
 
 def test_provider_rejects_unknown_kind() -> None:

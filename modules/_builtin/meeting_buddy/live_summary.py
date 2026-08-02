@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -18,8 +19,41 @@ from modules.capabilities.semantic_analysis import (
 
 log = logging.getLogger(__name__)
 
-# Begrens het transcript dat integraal de prompt in gaat (±30 min spreken).
-_MAX_BUFFER_CHARS = 24_000
+# Cap per delta-chunk (prompt-explosie bij lange stilte + burst).
+_MAX_DELTA_CHARS = 12_000
+_DEFAULT_BULLET_LIMIT = 5
+
+
+def summary_points(text: str, *, limit: int = _DEFAULT_BULLET_LIMIT) -> list[str]:
+    """Split a running summary into up to ``limit`` points.
+
+    Prefers explicit lines (stripping bullet markers); falls back to sentence
+    splitting for a single paragraph.
+    """
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return []
+    lines = [
+        re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", line).strip()
+        for line in cleaned.splitlines()
+        if line.strip()
+    ]
+    if len(lines) > 1:
+        return lines[:limit]
+    base = lines[0] if lines else cleaned
+    base = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", base).strip() or base
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", base) if part.strip()]
+    if len(sentences) > 1:
+        return sentences[:limit]
+    return [base] if base else []
+
+
+def normalize_running_summary(text: str, *, limit: int = _DEFAULT_BULLET_LIMIT) -> str:
+    """Return a canonical ``- `` bullet block (max ``limit``), or empty."""
+    points = summary_points(text, limit=limit)
+    if not points:
+        return ""
+    return "\n".join(f"- {point}" for point in points)
 
 
 @dataclass
@@ -45,7 +79,7 @@ class LiveSummaryCoordinator:
         self._on_summary = on_summary
         self._lock = Lock()
         self._summary = ""
-        self._buffer = ""
+        self._delta = ""
         self._chars_since = 0
         self._last_run_at = time.monotonic()
         self._busy = False
@@ -62,9 +96,9 @@ class LiveSummaryCoordinator:
     def reset(self) -> None:
         with self._lock:
             self._summary = ""
-            self._buffer = ""
+            self._delta = ""
             self._chars_since = 0
-            # Startinterval: eerste LLM-run wacht ook op interval_s (niet meteen bij 200 tekens).
+            # Startinterval: eerste LLM-run wacht ook op interval_s.
             self._last_run_at = time.monotonic()
             self._busy = False
 
@@ -75,26 +109,24 @@ class LiveSummaryCoordinator:
         with self._lock:
             if not self._settings.enabled:
                 return
-            self._buffer = f"{self._buffer} {chunk}".strip()
-            if len(self._buffer) > _MAX_BUFFER_CHARS:
-                # Lange meetings: begrens de prompt (context-overflow) en het
-                # geheugen; de vorige samenvatting draagt de oudere context.
-                self._buffer = self._buffer[-_MAX_BUFFER_CHARS:]
+            self._delta = f"{self._delta} {chunk}".strip()
+            if len(self._delta) > _MAX_DELTA_CHARS:
+                self._delta = self._delta[-_MAX_DELTA_CHARS:]
             self._chars_since += len(chunk)
             should = self._should_run_unlocked(now=now if now is not None else time.monotonic())
             if not should:
                 return
             self._busy = True
-            snapshot_transcript = self._buffer
+            snapshot_delta = self._delta
             snapshot_previous = self._summary
             language = self._settings.language
             log.info(
-                "Live summary starten (%s tekens, interval ok)",
-                len(snapshot_transcript),
+                "Live summary starten (%s tekens delta, interval ok)",
+                len(snapshot_delta),
             )
         Thread(
             target=self._run_analyze,
-            args=(snapshot_transcript, snapshot_previous, language),
+            args=(snapshot_delta, snapshot_previous, language),
             name="meeting-buddy-live-summary",
             daemon=True,
         ).start()
@@ -106,14 +138,13 @@ class LiveSummaryCoordinator:
             return False
         if (now - self._last_run_at) < self._settings.interval_s:
             return False
-        # Alleen registry-lookup hier; geen HTTP. Ready-check gebeurt in de worker.
         provider = self._capabilities.get(
             CAPABILITY_ID,
             minimum_contract_version=CONTRACT_VERSION,
         )
         return provider is not None
 
-    def _run_analyze(self, transcript: str, previous: str, language: str) -> None:
+    def _run_analyze(self, delta: str, previous: str, language: str) -> None:
         provider = self._capabilities.get(
             CAPABILITY_ID,
             minimum_contract_version=CONTRACT_VERSION,
@@ -123,7 +154,6 @@ class LiveSummaryCoordinator:
                 log.warning("Live summary: geen ai.semantic_analysis capability")
                 return
             if hasattr(provider, "is_ready") and not provider.is_ready():
-                # Back-off: voorkom een worker per final-chunk als Ollama nog niet klaar is.
                 log.warning("Live summary: Local LLM niet klaar (Ollama/model)")
                 with self._lock:
                     self._last_run_at = time.monotonic()
@@ -131,18 +161,23 @@ class LiveSummaryCoordinator:
             result = provider.analyze(
                 AnalysisRequest(
                     kind=KIND_RUNNING_SUMMARY,
-                    transcript=transcript,
+                    transcript=delta,
                     previous_summary=previous or None,
                     language=language,
                 )
             )
-            text = (result.text or "").strip()
+            text = normalize_running_summary((result.text or "").strip())
             if not text:
-                log.warning("Live summary: leeg antwoord van model")
+                log.warning("Live summary: leeg of onbruikbaar antwoord van model")
                 return
             with self._lock:
                 self._summary = text
-                self._chars_since = 0
+                # Succes: verstuurde delta weg; tekst tijdens de run blijft.
+                if self._delta.startswith(delta):
+                    self._delta = self._delta[len(delta) :].strip()
+                else:
+                    self._delta = ""
+                self._chars_since = len(self._delta)
                 self._last_run_at = time.monotonic()
             log.info("Live summary bijgewerkt (%s tekens)", len(text))
             if self._on_summary is not None:
@@ -150,8 +185,6 @@ class LiveSummaryCoordinator:
         except Exception:
             log.exception("Live summary analyse mislukt")
             with self._lock:
-                # Backoff: anders start elke final-chunk (±8s) een nieuwe
-                # worker die tegen dezelfde fout aanloopt (Ollama down).
                 self._last_run_at = time.monotonic()
         finally:
             with self._lock:

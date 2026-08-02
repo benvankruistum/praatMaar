@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 _MODULE_ID = "meeting-buddy"
 _TRANSCRIPT_MARKER = "## Transcript\n"
 _AGENDA_MARKER = "## Agenda\n"
+_SUMMARY_MARKER = "## Samenvatting\n"
 
 
 def transcripts_dir(app_dir: Path, *, override: str | Path | None = None) -> Path:
@@ -128,6 +129,47 @@ class TranscriptJournal:
             self._wrote_transcript = True
         except OSError as exc:
             log.warning("Meeting transcript append failed path=%s error=%s", self.path, exc)
+
+    def update_summary(self, text: str) -> None:
+        """Insert or replace ``## Samenvatting`` between Agenda and Transcript."""
+        body = (text or "").strip()
+        if not body:
+            return
+        try:
+            raw = self.path.read_text(encoding="utf-8")
+        except OSError as exc:
+            log.warning(
+                "Meeting transcript summary read failed path=%s error=%s",
+                self.path,
+                exc,
+            )
+            return
+
+        block = f"{_SUMMARY_MARKER}\n{body}\n"
+        summary_start = raw.find(_SUMMARY_MARKER)
+        transcript_start = raw.find(_TRANSCRIPT_MARKER)
+        if transcript_start < 0:
+            log.warning(
+                "Meeting transcript missing ## Transcript path=%s",
+                self.path,
+            )
+            return
+
+        if summary_start >= 0 and summary_start < transcript_start:
+            # Replace existing summary section through (not including) Transcript.
+            updated = raw[:summary_start] + block + "\n" + raw[transcript_start:]
+        else:
+            # Insert immediately before Transcript.
+            updated = raw[:transcript_start] + block + "\n" + raw[transcript_start:]
+
+        try:
+            self.path.write_text(updated, encoding="utf-8")
+        except OSError as exc:
+            log.warning(
+                "Meeting transcript summary write failed path=%s error=%s",
+                self.path,
+                exc,
+            )
 
     def finalize(
         self,

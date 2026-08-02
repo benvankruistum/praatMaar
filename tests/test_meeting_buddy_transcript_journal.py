@@ -78,3 +78,50 @@ def test_finalize_updates_status_and_agenda(tmp_path: Path) -> None:
     assert "- [x] Opening" in text
     assert "- [ ] Graph" in text
     assert "tekst" in text
+
+
+def test_update_summary_inserts_between_agenda_and_transcript(tmp_path: Path) -> None:
+    doc = journal.TranscriptJournal.create(
+        tmp_path,
+        title="Demo",
+        agenda_titles=["Opening"],
+        started_at=datetime(2026, 7, 22, 10, 0),
+    )
+    doc.append_final("Hallo wereld")
+    doc.update_summary("- Eerste punt\n- Tweede punt")
+    text = doc.path.read_text(encoding="utf-8")
+    agenda_i = text.index("## Agenda\n")
+    summary_i = text.index("## Samenvatting\n")
+    transcript_i = text.index("## Transcript\n")
+    assert agenda_i < summary_i < transcript_i
+    assert "- Eerste punt" in text
+    assert "- Tweede punt" in text
+    assert "Hallo wereld" in text.split("## Transcript\n", 1)[1]
+
+
+def test_update_summary_replaces_existing_section(tmp_path: Path) -> None:
+    doc = journal.TranscriptJournal.create(
+        tmp_path,
+        title="Demo",
+        agenda_titles=["A"],
+        started_at=datetime(2026, 7, 22, 10, 0),
+    )
+    doc.update_summary("- Oud")
+    doc.update_summary("- Nieuw A\n- Nieuw B")
+    text = doc.path.read_text(encoding="utf-8")
+    assert text.count("## Samenvatting\n") == 1
+    assert "- Oud" not in text
+    assert "- Nieuw A" in text
+    assert "- Nieuw B" in text
+
+
+def test_update_summary_ignores_blank(tmp_path: Path) -> None:
+    doc = journal.TranscriptJournal.create(
+        tmp_path,
+        title="Demo",
+        agenda_titles=[],
+        started_at=datetime(2026, 7, 22, 10, 0),
+    )
+    before = doc.path.read_text(encoding="utf-8")
+    doc.update_summary("  \n")
+    assert doc.path.read_text(encoding="utf-8") == before

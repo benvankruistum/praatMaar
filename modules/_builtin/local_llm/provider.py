@@ -74,14 +74,18 @@ class OllamaSemanticAnalysis:
 
         system = (
             f"Je bent een beknopte notulist. Schrijf in het {lang}. "
-            "Geef alleen de bijgewerkte lopende samenvatting als platte tekst, "
-            "geen markdown-koppen, geen JSON, max ca. 8 zinnen."
+            "Geef alleen een bijgewerkte lopende samenvatting als 3 tot 5 bullets. "
+            "Elke regel begint met '- '. Geen markdown-koppen, geen nummers, "
+            "geen inleiding of slotzin, geen labels. Vervang de vorige set volledig."
         )
         user_parts = []
         if previous:
             user_parts.append(f"Vorige samenvatting:\n{previous}")
-        user_parts.append(f"Transcript tot nu toe:\n{transcript}")
-        user_parts.append("Werk de lopende samenvatting bij op basis van het transcript.")
+        user_parts.append(f"Nieuw transcript (sinds vorige samenvatting):\n{transcript}")
+        user_parts.append(
+            "Werk de lopende samenvatting bij op basis van het nieuwe transcript. "
+            "Antwoord met precies 3 tot 5 regels die met '- ' beginnen."
+        )
         content = self._client.chat(
             model=self._model,
             messages=[

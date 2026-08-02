@@ -7,13 +7,21 @@ def test_summary_points_splits_lines_and_strips_bullets() -> None:
     assert summary_points("- one\n* two\n3. three") == ["one", "two", "three"]
 
 
-def test_summary_points_caps_at_three() -> None:
-    assert summary_points("a\nb\nc\nd") == ["a", "b", "c"]
+def test_summary_points_caps_at_five() -> None:
+    assert summary_points("a\nb\nc\nd\ne\nf") == ["a", "b", "c", "d", "e"]
 
 
 def test_summary_points_splits_paragraph_into_sentences() -> None:
-    points = summary_points("First thing. Second thing. Third thing. Fourth thing.")
-    assert points == ["First thing.", "Second thing.", "Third thing."]
+    points = summary_points(
+        "First thing. Second thing. Third thing. Fourth thing. Fifth thing. Sixth thing."
+    )
+    assert points == [
+        "First thing.",
+        "Second thing.",
+        "Third thing.",
+        "Fourth thing.",
+        "Fifth thing.",
+    ]
 
 
 def test_summary_points_empty() -> None:
