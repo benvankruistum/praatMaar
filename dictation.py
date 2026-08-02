@@ -1226,12 +1226,24 @@ def main() -> None:
             print("\n" + i18n.t("dictation.ptt_stopped"))
             session.stop_and_transcribe()
 
+    def pill_retry() -> None:
+        """ "Opnieuw" bij Mislukt: probeer opnieuw op te nemen.
+
+        Zelfde route als de pill-knop, zodat mic-hotplug en meeting-routing
+        meelopen. De mic-attentie wordt eerst opnieuw bepaald, want de fout
+        kwam meestal doordat het apparaat weg was.
+        """
+
+        _refresh_mic_attention()
+        pill_control_press()
+
     indicator = RecordingIndicator(
         position=INDICATOR_POSITION,
         xy=INDICATOR_XY,
         on_moved=_on_indicator_moved,
         on_control_press=pill_control_press,
         on_control_release=pill_control_release,
+        on_retry=pill_retry,
     )
     _indicator = indicator
     indicator.set_destination(ACTIVE_DESTINATION, _active_destination_path())

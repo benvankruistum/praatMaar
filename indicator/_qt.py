@@ -92,6 +92,7 @@ class RecordingIndicator(QWidget):
         on_control_press: Any | None = None,
         on_control_release: Any | None = None,
         on_context_menu: Any | None = None,
+        on_retry: Any | None = None,
     ) -> None:
         ensure_app()
         super().__init__()
@@ -111,6 +112,7 @@ class RecordingIndicator(QWidget):
         self._control_press_cb = on_control_press
         self._control_release_cb = on_control_release
         self.on_context_menu = on_context_menu
+        self._retry_cb = on_retry
         self.state_listener: Any | None = None
         self._drag_offset: QPoint | None = None
         self._drag_moved = False
@@ -120,6 +122,7 @@ class RecordingIndicator(QWidget):
         self._hotkey_label: str | None = None
         self._recording_started_at: float | None = None
         self._destination_path: str | None = None
+        self._hide_remaining_ms: int | None = None
 
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_INTERVAL_MS)
@@ -332,6 +335,28 @@ class RecordingIndicator(QWidget):
         self._hide_timer.stop()
         self._hide_window()
 
+    def enterEvent(self, _event: Any) -> None:  # noqa: N802
+        """Cursor boven de pill: auto-hide pauzeren (canvas 07).
+
+        Anders verdwijnt een foutmelding onder je muis weg terwijl je hem leest
+        of naar de actieknop beweegt.
+        """
+
+        if self._hide_timer.isActive():
+            self._hide_remaining_ms = self._hide_timer.remainingTime()
+            self._hide_timer.stop()
+        super().enterEvent(_event)
+
+    def leaveEvent(self, _event: Any) -> None:  # noqa: N802
+        remaining = self._hide_remaining_ms
+        self._hide_remaining_ms = None
+        if remaining is not None and self._state in (
+            RecordingState.ERROR,
+            RecordingState.CANCELLED,
+        ):
+            self._hide_timer.start(max(0, remaining))
+        super().leaveEvent(_event)
+
     def _dismiss_rect(self) -> QRect:
         return QRect(INDICATOR_WIDTH - _RIGHT_PAD - _BTN, _BTN_Y, _BTN, _BTN)
 
@@ -345,6 +370,19 @@ class RecordingIndicator(QWidget):
             (INDICATOR_HEIGHT - size) // 2,
             size,
             size,
+        )
+
+    def _retry_rect(self) -> QRect | None:
+        """Actieknop bij Mislukt; None in elke andere state (canvas 07)."""
+
+        if self._state != RecordingState.ERROR:
+            return None
+        width, height = 68, 32
+        return QRect(
+            INDICATOR_WIDTH - _RIGHT_PAD - width,
+            (INDICATOR_HEIGHT - height) // 2,
+            width,
+            height,
         )
 
     def _progress_bar_rect(self) -> QRect | None:
@@ -399,6 +437,13 @@ class RecordingIndicator(QWidget):
         if event.button() != Qt.LeftButton:
             event.ignore()
             return
+
+        if self._state == RecordingState.ERROR:
+            retry = self._retry_rect()
+            if retry is not None and retry.contains(event.position().toPoint()):
+                self._invoke_callback(self._retry_cb)
+                event.accept()
+                return
 
         if self._state == RecordingState.IDLE and self._dest_pill.idle_visible:
             if self._dismiss_rect().contains(event.position().toPoint()):
@@ -921,34 +966,40 @@ class RecordingIndicator(QWidget):
         painter.drawPath(triangle)
 
         text_left = int(self._LEFT + 14 + 10)
+        retry = self._retry_rect()
+        text_right = (retry.left() - 10) if retry is not None else (INDICATOR_WIDTH - 16)
+        text_width = max(0, text_right - text_left)
+
         painter.setPen(QColor(COLOR_ERROR_LABEL))
-        painter.setFont(self._font(14, bold=True))
+        painter.setFont(self._font(13, bold=True))
         label = state_label(RecordingState.ERROR)
         if self._status_hint:
             painter.drawText(
-                QRect(text_left, 11, INDICATOR_WIDTH - text_left - 16, 20),
+                QRect(text_left, 11, text_width, 20),
                 Qt.AlignVCenter | Qt.AlignLeft,
                 label,
             )
-            painter.setPen(QColor(SUBTLE_COLOR))
+            painter.setPen(QColor(MUTED_COLOR))
             painter.setFont(self._font(11))
+            metrics = painter.fontMetrics()
             painter.drawText(
-                QRect(text_left, 31, INDICATOR_WIDTH - text_left - 16, 16),
+                QRect(text_left, 31, text_width, 16),
                 Qt.AlignVCenter | Qt.AlignLeft,
-                self._status_hint,
+                metrics.elidedText(self._status_hint, Qt.TextElideMode.ElideRight, text_width),
             )
-            return
-
-        painter.drawText(
-            QRect(text_left, 0, 180, INDICATOR_HEIGHT),
-            Qt.AlignVCenter | Qt.AlignLeft,
-            label,
-        )
-        if self._hotkey_label:
-            painter.setPen(QColor(SUBTLE_COLOR))
-            painter.setFont(self._font(11))
+        else:
             painter.drawText(
-                QRect(0, 0, INDICATOR_WIDTH - 16, INDICATOR_HEIGHT),
-                Qt.AlignVCenter | Qt.AlignRight,
-                self._hotkey_label,
+                QRect(text_left, 0, text_width, INDICATOR_HEIGHT),
+                Qt.AlignVCenter | Qt.AlignLeft,
+                label,
             )
+
+        if retry is not None:
+            # Gevulde amber knop met donkere tekst: de enige actie in deze
+            # state, dus hij mag de aandacht trekken.
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(QColor(COLOR_ERROR))
+            painter.drawRoundedRect(QRectF(retry), 10, 10)
+            painter.setPen(QColor("#151719"))
+            painter.setFont(self._font(11, bold=True))
+            painter.drawText(retry, Qt.AlignCenter, i18n.t("state.error_retry_action"))

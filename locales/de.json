@@ -20,6 +20,7 @@
   "state.error_mic_hint": "Mikrofon prüfen · Tray",
   "state.error_recovery_hint": "Wiederherstellungsaudio in Einstellungen",
   "state.error_retry_hint": "Erneut mit Tastenkürzel versuchen",
+  "state.error_retry_action": "Erneut",
   "state.busy_hint": "Noch beschäftigt…",
   "state.ready": "Bereit",
   "state.cancelled_note": "nichts eingefügt",

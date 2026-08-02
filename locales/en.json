@@ -20,6 +20,7 @@
   "state.error_mic_hint": "Check microphone · tray",
   "state.error_recovery_hint": "Recovery audio in Settings",
   "state.error_retry_hint": "Try again with the hotkey",
+  "state.error_retry_action": "Retry",
   "state.busy_hint": "Still busy…",
   "state.ready": "Ready",
   "state.cancelled_note": "nothing inserted",

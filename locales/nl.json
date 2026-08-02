@@ -20,6 +20,7 @@
   "state.error_mic_hint": "Controleer microfoon · tray",
   "state.error_recovery_hint": "Herstel-audio in Instellingen",
   "state.error_retry_hint": "Opnieuw proberen met sneltoets",
+  "state.error_retry_action": "Opnieuw",
   "state.busy_hint": "Nog bezig…",
   "state.ready": "Gereed",
   "state.cancelled_note": "niets ingevoegd",
