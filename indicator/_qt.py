@@ -34,6 +34,7 @@ from ._contract import (
     COLOR_ERROR_LABEL,
     COLOR_MEETING_DOT,
     COLOR_MEETING_TEXT,
+    COLOR_OK,
     COLOR_PREPARING,
     COLOR_RECORDING,
     COLOR_RECORDING_DOT,
@@ -66,6 +67,7 @@ from ._contract import (
     RecordingState,
     chunk_led_snapshot,
     clamp_indicator_xy,
+    countdown_fraction,
     destination_display_name,
     destination_path_label,
     drain_status_queue,
@@ -217,6 +219,7 @@ class RecordingIndicator(QWidget):
 
     def _transient_expired(self) -> None:
         self._ready_cue_active = False
+        self._sync_timer_interval()
         self._state = RecordingState.IDLE
         self._status_hint = ""
         self._notify_listener(RecordingState.IDLE, self._mode)
@@ -282,6 +285,7 @@ class RecordingIndicator(QWidget):
         self._hide_timer.stop()
         self._show_window()
         self._hide_timer.start(max(0, int(duration_ms)))
+        self._sync_timer_interval()
         self.update()
 
     _ANIMATED_STATES = (
@@ -298,6 +302,9 @@ class RecordingIndicator(QWidget):
         latere slice zijn eenmalige ring, dan hoort die hier ook bij.
         """
 
+        if self._ready_cue_active:
+            # De groene ring speelt eenmalig af; die moet frames krijgen.
+            return True
         return self._state in self._ANIMATED_STATES
 
     def _sync_timer_interval(self) -> None:
@@ -426,6 +433,19 @@ class RecordingIndicator(QWidget):
             hit_w,
             hit_h,
         )
+
+    def _transient_fraction(self) -> float:
+        """Resterend deel van een tijdelijke melding (Geannuleerd/Mislukt)."""
+
+        if self._state not in (RecordingState.CANCELLED, RecordingState.ERROR):
+            return 0.0
+        if not self._hide_timer.isActive():
+            return 0.0
+        total = self._hide_timer.interval()
+        remaining = self._hide_timer.remainingTime()
+        if total <= 0 or remaining < 0:
+            return 0.0
+        return countdown_fraction(total - remaining, total)
 
     def _retry_rect(self) -> QRect | None:
         """Actieknop bij Mislukt; None in elke andere state (canvas 07)."""
@@ -697,8 +717,32 @@ class RecordingIndicator(QWidget):
         painter.setBrush(tint)
         painter.drawEllipse(QRectF(x + (base - size) / 2, self._CY - size / 2, size, size))
 
+    def _paint_ready_ring(self, painter: QPainter) -> None:
+        """Groene stip met eenmalige uitdijende ring (canvas 02).
+
+        Speelt af over de eerste ~1,1 s van de cue en valt dan terug op een
+        statische stip; de ring is dus een bevestiging, geen doorlopende
+        animatie.
+        """
+
+        cx = self._LEFT + 5.0
+        painter.setPen(Qt.NoPen)
+        # Ring: groeit en dooft uit over 22 frames (50 ms per frame).
+        progress = min(1.0, (self._frame % 512) / 22.0) if self._frame < 22 else 1.0
+        if progress < 1.0:
+            ring = QColor(COLOR_OK)
+            ring.setAlphaF(0.25 * (1.0 - progress))
+            radius = 4.5 + 9.0 * progress
+            painter.setBrush(ring)
+            painter.drawEllipse(QRectF(cx - radius, self._CY - radius, radius * 2, radius * 2))
+        painter.setBrush(QColor(COLOR_OK))
+        painter.drawEllipse(QRectF(cx - 4.5, self._CY - 4.5, 9.0, 9.0))
+
     def _paint_idle(self, painter: QPainter) -> None:
-        self._draw_folder(painter, self._LEFT, QColor(MUTED_COLOR))
+        if self._ready_cue_active:
+            self._paint_ready_ring(painter)
+        else:
+            self._draw_folder(painter, self._LEFT, QColor(MUTED_COLOR))
         record, dismiss = self._record_rect(), self._dismiss_rect()
         text_left = 40
 
@@ -764,8 +808,12 @@ class RecordingIndicator(QWidget):
 
         self._slow_pulse_dot(painter, self._LEFT, 10.0, QColor(COLOR_PREPARING))
         tag_left = self._draw_mode_tag(painter, INDICATOR_WIDTH - 16)
+        # Marching dots i.p.v. een waveform: die zou suggereren dat er al audio
+        # binnenkomt terwijl de microfoon nog opengaat (canvas 03).
+        dots_left = tag_left - 8 - 18
+        self._paint_marching_dots(painter, dots_left, QColor(COLOR_PREPARING))
         text_left = int(self._LEFT + 10 + 10)
-        text_right = tag_left - 8
+        text_right = dots_left - 10
         width = max(0, text_right - text_left)
 
         painter.setPen(QColor(TEXT_COLOR))
@@ -1030,11 +1078,14 @@ class RecordingIndicator(QWidget):
                     QRectF(bar.left(), bar.top(), filled, bar.height()), radius, radius
                 )
 
-    def _paint_marching_dots(self, painter: QPainter, x: float) -> None:
+    def _paint_marching_dots(
+        self, painter: QPainter, x: float, color: QColor | None = None
+    ) -> None:
         active = (self._frame // 4) % 3
         painter.setPen(Qt.NoPen)
+        base = color if color is not None else QColor(COLOR_TRANSCRIBING)
         for index in range(3):
-            dot = QColor(COLOR_TRANSCRIBING)
+            dot = QColor(base)
             dot.setAlpha(255 if index == active else 90)
             painter.setBrush(dot)
             painter.drawEllipse(QRectF(x + index * 7, self._CY - 2, 4, 4))
@@ -1055,10 +1106,24 @@ class RecordingIndicator(QWidget):
             Qt.AlignVCenter | Qt.AlignLeft,
             state_label(RecordingState.CANCELLED),
         )
+        # Canvas 06: krimpend streepje toont hoe lang de melding nog blijft.
+        track_w, track_h = 44, 3
+        track_x = INDICATOR_WIDTH - 16 - track_w
+        track_y = (INDICATOR_HEIGHT - track_h) / 2.0
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(PROGRESS_TRACK_COLOR))
+        painter.drawRoundedRect(QRectF(track_x, track_y, track_w, track_h), 1.5, 1.5)
+        remaining = self._transient_fraction()
+        if remaining > 0:
+            painter.setBrush(QColor("#4C545E"))
+            painter.drawRoundedRect(
+                QRectF(track_x, track_y, track_w * remaining, track_h), 1.5, 1.5
+            )
+
         painter.setPen(QColor("#6E757D"))
         painter.setFont(self._font(11))
         painter.drawText(
-            QRect(0, 0, INDICATOR_WIDTH - 16, INDICATOR_HEIGHT),
+            QRect(0, 0, track_x - 10, INDICATOR_HEIGHT),
             Qt.AlignVCenter | Qt.AlignRight,
             i18n.t("state.cancelled_note"),
         )

@@ -42,7 +42,8 @@ POLL_INTERVAL_MS = 50
 POLL_INTERVAL_IDLE_MS = 250
 CANCELLED_DURATION_MS = 2000
 ERROR_DURATION_MS = 4000
-READY_CUE_DURATION_MS = 4000
+# Canvas 02: de ready-cue is een korte bevestiging (~1,5 s), geen melding.
+READY_CUE_DURATION_MS = 1500
 NUM_BARS = 18
 WAVEFORM_GAIN = 9.0
 # Canvas 1a: 18 staven, 3 px breed, tot 24 px hoog (radius 2).
@@ -198,6 +199,19 @@ def transcribing_label(percent: int | None) -> str:
     if percent is None:
         return i18n.t("state.transcribing")
     return i18n.t("state.transcribing_progress", percent=int(percent))
+
+
+def countdown_fraction(elapsed_ms: float, total_ms: float) -> float:
+    """Resterend deel (1.0 -> 0.0) voor het aflopende streepje bij Geannuleerd.
+
+    Canvas 06 toont met een krimpend streepje hoe lang de melding nog blijft,
+    zodat je niet hoeft te gokken of hij nog iets gaat doen.
+    """
+
+    if total_ms <= 0:
+        return 0.0
+    remaining = 1.0 - (float(elapsed_ms) / float(total_ms))
+    return max(0.0, min(1.0, remaining))
 
 
 def elapsed_label(seconds: float) -> str:
