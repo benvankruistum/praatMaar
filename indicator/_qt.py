@@ -129,6 +129,7 @@ class RecordingIndicator(QWidget):
         self._recording_started_at: float | None = None
         self._destination_path: str | None = None
         self._hide_remaining_ms: int | None = None
+        self._hovered_control: str | None = None
 
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_INTERVAL_MS)
@@ -354,6 +355,9 @@ class RecordingIndicator(QWidget):
         super().enterEvent(_event)
 
     def leaveEvent(self, _event: Any) -> None:  # noqa: N802
+        if self._hovered_control is not None:
+            self._hovered_control = None
+            self.update()
         remaining = self._hide_remaining_ms
         self._hide_remaining_ms = None
         if remaining is not None and self._state in (
@@ -526,8 +530,39 @@ class RecordingIndicator(QWidget):
         self._drag_moved = False
         event.accept()
 
+    def _interactive_rect_at(self, point: Any) -> str | None:
+        """Naam van het klikdoel onder ``point``, of None voor de body."""
+
+        tag = self._mode_tag_rect()
+        if tag is not None and tag.contains(point):
+            return "tag"
+        retry = self._retry_rect()
+        if retry is not None and retry.contains(point):
+            return "retry"
+        if self._state == RecordingState.RECORDING:
+            if self._stop_rect().contains(point):
+                return "control"
+        elif self._state == RecordingState.IDLE and self._dest_pill.idle_visible:
+            if self._record_rect().contains(point):
+                return "control"
+            if self._dismiss_rect().contains(point):
+                return "dismiss"
+        return None
+
+    def _update_hover(self, point: Any) -> None:
+        """Cursor + hover-markering bijwerken (canvas: body = open hand)."""
+
+        target = self._interactive_rect_at(point)
+        if target != self._hovered_control:
+            self._hovered_control = target
+            self.update()
+        shape = Qt.CursorShape.ArrowCursor if target is not None else Qt.CursorShape.OpenHandCursor
+        if self.cursor().shape() != shape:
+            self.setCursor(shape)
+
     def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         if self._drag_offset is None:
+            self._update_hover(event.position().toPoint())
             event.ignore()
             return
         target = event.globalPosition().toPoint() - self._drag_offset
@@ -572,6 +607,14 @@ class RecordingIndicator(QWidget):
         if bold:
             font.setWeight(QFont.Weight.DemiBold)
         return font
+
+    def _control_fill(self, token: str, *, target: str = "control") -> QColor:
+        """Knopvulling, +6% helderheid als de cursor erboven hangt (canvas)."""
+
+        color = QColor(token)
+        if self._hovered_control == target:
+            color = color.lighter(106)
+        return color
 
     def _border_color(self) -> QColor:
         """1 px capsulerand; tint volgt de state-kleur (canvas 1a)."""
@@ -707,7 +750,7 @@ class RecordingIndicator(QWidget):
         halo.setAlpha(36)
         painter.setBrush(halo)
         painter.drawEllipse(record)
-        painter.setBrush(QColor(COLOR_RECORDING))
+        painter.setBrush(self._control_fill(COLOR_RECORDING))
         inner = 13
         painter.drawEllipse(
             record.center().x() - inner // 2 + 1, record.center().y() - inner // 2 + 1, inner, inner
@@ -788,7 +831,7 @@ class RecordingIndicator(QWidget):
         # Canvas 04/10: gevulde knop 36×36 radius 12 met wit vierkant 12×12 —
         # leest als knop, niet als vlak.
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(COLOR_RECORDING))
+        painter.setBrush(self._control_fill(COLOR_RECORDING))
         painter.drawRoundedRect(QRectF(stop), 12, 12)
         painter.setBrush(QColor("#FFFFFF"))
         square = 12.0
@@ -1064,7 +1107,7 @@ class RecordingIndicator(QWidget):
             # Gevulde amber knop met donkere tekst: de enige actie in deze
             # state, dus hij mag de aandacht trekken.
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(COLOR_ERROR))
+            painter.setBrush(self._control_fill(COLOR_ERROR, target="retry"))
             painter.drawRoundedRect(QRectF(retry), 10, 10)
             painter.setPen(QColor("#151719"))
             painter.setFont(self._font(11, bold=True))
