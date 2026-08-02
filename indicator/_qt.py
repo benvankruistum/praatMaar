@@ -64,9 +64,11 @@ from ._contract import (
     chunk_led_snapshot,
     clamp_indicator_xy,
     destination_display_name,
+    destination_path_label,
     drain_status_queue,
     elapsed_label,
     get_transcription_progress,
+    hotkey_chips,
     normalize_indicator_position,
     preset_indicator_xy,
     snapshot_levels,
@@ -117,6 +119,7 @@ class RecordingIndicator(QWidget):
         self._stop_requested = False
         self._hotkey_label: str | None = None
         self._recording_started_at: float | None = None
+        self._destination_path: str | None = None
 
         self._timer = QTimer(self)
         self._timer.setInterval(POLL_INTERVAL_MS)
@@ -231,8 +234,25 @@ class RecordingIndicator(QWidget):
             self._xy = xy
         self._place_window(position)
 
-    def set_destination(self, name: str | None) -> None:
+    def set_destination(self, name: str | None, path: str | None = None) -> None:
+        self._destination_path = (path or "").strip() or None
         self._dest_pill.set_destination(name)
+        self._sync_destination_tooltip()
+
+    def _sync_destination_tooltip(self) -> None:
+        """Volledig pad als tooltip.
+
+        Bij 340 px blijft er na de toets-chips en de twee knoppen ~129 px over
+        voor tekst — genoeg voor de bestemmingsnaam, niet voor naam én pad. De
+        tooltip geeft het volle pad zonder ruimte te kosten.
+        """
+
+        name = self._dest_pill.name or ""
+        path = self._destination_path or ""
+        if name and path:
+            self.setToolTip(f"{name}\n{path}")
+        else:
+            self.setToolTip(path or name)
         if self._state == RecordingState.IDLE:
             self._apply_idle_visibility()
             self.update()
@@ -535,22 +555,47 @@ class RecordingIndicator(QWidget):
     def _paint_idle(self, painter: QPainter) -> None:
         self._draw_folder(painter, self._LEFT, QColor(MUTED_COLOR))
         record, dismiss = self._record_rect(), self._dismiss_rect()
-        text_left, text_right = 40, record.left() - 8
+        text_left = 40
 
+        # Toets-chips rechts van de tekst: die reserveren hun breedte eerst,
+        # zodat de tekstkolom weet waar hij mag eindigen (canvas 01).
+        chips_left = self._draw_hotkey_chips(painter, record.left() - 10)
+        text_right = chips_left - 10
+
+        # Canvas-regelorde: status boven, bestemming eronder.
         painter.setPen(QColor(TEXT_COLOR))
         painter.setFont(self._font(14, bold=True))
         painter.drawText(
-            QRect(text_left, 11, text_right - text_left, 20),
+            QRect(text_left, 11, max(0, text_right - text_left), 20),
             Qt.AlignVCenter | Qt.AlignLeft,
-            destination_display_name(self._dest_pill.name),
+            i18n.t("state.ready"),
         )
-        subline = i18n.t("state.ready")
-        if self._hotkey_label:
-            subline = f"{subline} · {self._hotkey_label}"
+
+        # Regel 2: naam én pad — je ziet wát actief is en wáár het landt.
+        name = destination_display_name(self._dest_pill.name)
         painter.setPen(QColor(SUBTLE_COLOR))
         painter.setFont(self._font(11))
+        available = max(0, text_right - text_left)
+        metrics = painter.fontMetrics()
+        subline = name
+        path_label = destination_path_label(self._destination_path)
+        if path_label and path_label != name:
+            if not name:
+                subline = metrics.elidedText(path_label, Qt.TextElideMode.ElideMiddle, available)
+            else:
+                # Naam blijft heel; alleen het pad krimpt (midden-ellipsis) tot
+                # wat er overblijft. Onder ~40 px is een padrestje onleesbaar,
+                # dan valt het pad weg i.p.v. "O…s" te tonen.
+                separator = " · "
+                room = available - metrics.horizontalAdvance(name + separator)
+                if room >= 40:
+                    subline = (
+                        name
+                        + separator
+                        + metrics.elidedText(path_label, Qt.TextElideMode.ElideMiddle, room)
+                    )
         painter.drawText(
-            QRect(text_left, 31, text_right - text_left, 16),
+            QRect(text_left, 31, available, 16),
             Qt.AlignVCenter | Qt.AlignLeft,
             subline,
         )
@@ -655,6 +700,35 @@ class RecordingIndicator(QWidget):
             3,
             3,
         )
+
+    def _draw_hotkey_chips(self, painter: QPainter, right_x: int) -> int:
+        """Sneltoets als omrande toetsjes; retourneert de linkerrand.
+
+        Chips lezen op 11 px sneller dan "Ctrl+Alt+R" als doorlopende tekst
+        (canvas 01). Zonder sneltoets verandert er niets aan de layout.
+        """
+
+        chips = hotkey_chips(self._hotkey_label)
+        if not chips:
+            return right_x
+
+        painter.setFont(self._font(10))
+        metrics = painter.fontMetrics()
+        pad_x, gap, height = 5, 4, 18
+        widths = [metrics.horizontalAdvance(chip) + pad_x * 2 for chip in chips]
+        total = sum(widths) + gap * (len(chips) - 1)
+        left = right_x - total
+        y = (INDICATOR_HEIGHT - height) / 2.0
+
+        x = float(left)
+        for chip, width in zip(chips, widths, strict=True):
+            painter.setPen(QPen(QColor(255, 255, 255, 46)))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(QRectF(x, y, width, height), 4, 4)
+            painter.setPen(QColor(SUBTLE_COLOR))
+            painter.drawText(QRectF(x, y, width, height), Qt.AlignCenter, chip)
+            x += width + gap
+        return int(left)
 
     def _draw_mode_tag(self, painter: QPainter, right_x: int) -> int:
         painter.setFont(self._font(11, bold=True))

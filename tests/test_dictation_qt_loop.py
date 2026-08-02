@@ -29,7 +29,7 @@ class _FakeIndicator:
         self.state_listener = None
         self.on_context_menu = None
 
-    def set_destination(self, _destination: str | None) -> None:
+    def set_destination(self, _destination: str | None, _path: str | None = None) -> None:
         pass
 
     def set_hotkey_label(self, _text: str | None) -> None:

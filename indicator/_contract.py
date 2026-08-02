@@ -247,6 +247,39 @@ def destination_display_name(name: str | None) -> str:
     return cleaned[: limit - 1] + "…"
 
 
+def destination_path_label(path: str | None, limit: int = 40) -> str:
+    """Laatste twee padsegmenten, met midden-ellipsis als het niet past.
+
+    Canvas 01 toont niet het volle pad maar de staart ("Opnames /
+    Klantgesprekken"): dat is het stuk dat de gebruiker onderscheidt. Bij een
+    te lang resultaat knippen we in het mídden, zodat begin én einde leesbaar
+    blijven — het einde is bij paden juist het meest onderscheidend.
+    """
+
+    if not path:
+        return ""
+    cleaned = str(path).strip().replace("\\", "/").rstrip("/")
+    if not cleaned:
+        return ""
+    segments = [segment for segment in cleaned.split("/") if segment]
+    label = " / ".join(segments[-2:]) if segments else ""
+    if len(label) <= limit:
+        return label
+    keep = limit - 1
+    head = keep // 2
+    tail = keep - head
+    return f"{label[:head]}…{label[-tail:]}"
+
+
+def hotkey_chips(label: str | None) -> list[str]:
+    """Splitst "Ctrl+Alt+R" in losse toetsen voor de chip-weergave (canvas 01)."""
+
+    if not label:
+        return []
+    parts = [part.strip() for part in str(label).split("+")]
+    return [part for part in parts if part]
+
+
 class DestinationPillModel:
     """
     Zichtbaarheid van de sticky-bestemmingspill (geen GUI).

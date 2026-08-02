@@ -747,7 +747,18 @@ def _handle_destination_command(kind: str, name: str | None) -> None:
     indicator = _indicator
     if indicator is not None:
         active = ACTIVE_DESTINATION
-        indicator.call_on_main(lambda: indicator.set_destination(active))
+        active_path = _active_destination_path()
+        indicator.call_on_main(lambda: indicator.set_destination(active, active_path))
+
+
+def _active_destination_path() -> str | None:
+    """Map van de actieve bestemming, voor de padregel in de Idle-pill."""
+
+    item = destinations.find_destination(ACTIVE_DESTINATION, DESTINATIONS)
+    if item is None:
+        return None
+    path = str(item.get("path") or "").strip()
+    return path or None
 
 
 def _set_mic_attention(needed: bool) -> None:
@@ -1111,7 +1122,7 @@ def apply_settings(
     if position_changed:
         indicator.set_position(new_position, xy=INDICATOR_XY)
 
-    indicator.set_destination(ACTIVE_DESTINATION)
+    indicator.set_destination(ACTIVE_DESTINATION, _active_destination_path())
 
     if _tray is not None:
         _tray.refresh_language()
@@ -1223,7 +1234,7 @@ def main() -> None:
         on_control_release=pill_control_release,
     )
     _indicator = indicator
-    indicator.set_destination(ACTIVE_DESTINATION)
+    indicator.set_destination(ACTIVE_DESTINATION, _active_destination_path())
     indicator.set_hotkey_label(hotkeys.format_hotkey(HOTKEY_TOKENS))
     # Eenmalige ready-cue na splash (niet bij elke settings-save).
     indicator.show_ready_cue()
