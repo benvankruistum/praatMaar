@@ -1,6 +1,6 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-08-01.
+Laatst bijgewerkt: 2026-08-03.
 
 **v1.0.0-scope (Accepted):** Windows core-dictation is de primaire belofte;
 Meeting Buddy / Local LLM / chunk-transcriptie blijven experimenteel opt-in;
@@ -44,7 +44,7 @@ Aandachtspunten, nog niet als distributie-build geverifieerd:
 - **Modules:** in-process uitbreidingen + event-journal (`modules/`, tray
   **Modules**); inbox-spiegel; optionele incrementele/chunk-transcriptie
   ([ADR-0003](adr/0003-hybrid-module-system.md))
-- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.3.0`; richting
+- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.4.0`; richting
   **v1.0.0** volgens scope-spec hierboven)
 
 ## Experimentele modules
