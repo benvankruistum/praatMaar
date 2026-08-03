@@ -482,10 +482,42 @@ def load_model(reporter: Splash) -> WhisperModel:
 
 
 def hotkey_is_pressed() -> bool:
-    """Controleert of de volledige ingestelde sneltoets is ingedrukt."""
+    """Controleert of de volledige ingestelde sneltoets is ingedrukt.
+
+    De press/release-boekhouding alléén is niet betrouwbaar: levert een release
+    een andere token op dan de press (andere vk, ander teken doordat Shift het
+    verandert, of een vk die niet in de tabel staat), dan blijft die token voor
+    altijd staan. Bij sneltoets Shift+Esc vuurde daarna alléén Shift de toggle.
+
+    Daarom: zodra de boekhouding zégt dat de combinatie volledig is, vragen we
+    het OS om de échte toetsstatus. Spooktokens worden opgeruimd, zodat de
+    volgende druk weer klopt. Kan het platform het niet vertellen (macOS/Linux),
+    dan blijft het gedrag zoals het was.
+    """
 
     with state_lock:
-        return bool(HOTKEY_TOKENS) and HOTKEY_TOKENS.issubset(pressed_tokens)
+        if not HOTKEY_TOKENS:
+            return False
+        if not HOTKEY_TOKENS.issubset(pressed_tokens):
+            return False
+        wanted = set(HOTKEY_TOKENS)
+
+    try:
+        down = host.keys_physically_down(wanted)
+    except Exception:
+        # Nooit de sneltoets blokkeren op een falende OS-query.
+        return True
+
+    if down is None:
+        return True
+
+    stale = wanted - down
+    if not stale:
+        return True
+
+    with state_lock:
+        pressed_tokens.difference_update(stale)
+    return False
 
 
 def wait_until_modifier_keys_released(
@@ -503,10 +535,23 @@ def wait_until_modifier_keys_released(
 
     while True:
         with state_lock:
-            still_pressed = bool(pressed_tokens.intersection(relevant))
+            still_pressed = set(pressed_tokens.intersection(relevant))
 
         if not still_pressed:
             return
+
+        # Zelfde zelfherstel als in hotkey_is_pressed: een spooktoken zou hier
+        # anders élke plak-actie de volle time-out laten uitzitten.
+        try:
+            down = host.keys_physically_down(still_pressed)
+        except Exception:
+            down = None
+        if down is not None:
+            stale = still_pressed - down
+            if stale:
+                with state_lock:
+                    pressed_tokens.difference_update(stale)
+                continue
 
         if time.monotonic() - started >= timeout:
             return

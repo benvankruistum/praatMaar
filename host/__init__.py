@@ -54,6 +54,14 @@ class Host(Protocol):
         """De OS-conforme map voor gebruikersdata (config, transcripts, herstel)."""
         ...
 
+    def keys_physically_down(self, tokens: set[str]) -> set[str] | None:
+        """Welke van ``tokens`` op dit moment fysiek ingedrukt zijn.
+
+        Geeft ``None`` als het platform dat niet kan vertellen; de aanroeper valt
+        dan terug op zijn eigen press/release-boekhouding.
+        """
+        ...
+
     def acquire_single_instance(self) -> bool:
         """
         Claimt de single-instance-grendel. True als dit de enige (eerste) instantie
@@ -115,6 +123,12 @@ def set_autostart(enabled: bool) -> None:
 
 def is_autostart_enabled() -> bool:
     return get_default().is_autostart_enabled()
+
+
+def keys_physically_down(tokens: set[str]) -> set[str] | None:
+    """Zie ``Host.keys_physically_down``."""
+
+    return get_default().keys_physically_down(tokens)
 
 
 def app_dir() -> Path:

@@ -52,6 +52,34 @@ _VK_TO_TOKEN = {
 for _i in range(1, 25):
     _VK_TO_TOKEN[0x6F + _i] = f"f{_i}"  # VK_F1=0x70 … VK_F24
 
+# Token -> virtuele toetscode, voor het opvragen van de échte toetsstatus bij het
+# OS. Nodig omdat press/release-boekhouding alleen klopt als beide events dezelfde
+# token opleveren; bij Shift+Esc gebeurde dat niet (zie #44 en
+# tests/test_hotkey_physical_state.py).
+_MODIFIER_VKS = {
+    "shift": 0x10,  # VK_SHIFT
+    "ctrl": 0x11,  # VK_CONTROL
+    "alt": 0x12,  # VK_MENU
+    "cmd": 0x5B,  # VK_LWIN (rechter Win wordt apart gecheckt)
+}
+
+
+def token_to_vk(token: str) -> int | None:
+    """Virtuele toetscode voor een hotkey-token, of None als die onbekend is."""
+
+    if not token:
+        return None
+    key = token.lower()
+    if key in _MODIFIER_VKS:
+        return _MODIFIER_VKS[key]
+    if len(key) == 1 and (key.isdigit() or ("a" <= key <= "z")):
+        return ord(key.upper())
+    for vk, mapped in _VK_TO_TOKEN.items():
+        if mapped == key:
+            return vk
+    return None
+
+
 # Nette weergave per token (Windows-default); macOS overschrijft via _display_names().
 _DISPLAY_NAMES_WIN = {
     "ctrl": "Ctrl",
