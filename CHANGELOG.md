@@ -9,30 +9,59 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Added
 
-- **WASAPI-loopback** voor Meeting Buddy via `pyaudiowpatch` (Windows): echte
-  per-uitvoer capture i.p.v. Stereo Mix / niet-werkende sounddevice-loopback;
-  mee in `requirements.txt`, `pyproject.toml` en de Windows PyInstaller-spec.
-- **v1.0.0 support-scope** productbesluit (Windows core primair; MB/LLM
-  experimenteel; unsigned; macOS vanuit bron) —
-  [spec](docs/superpowers/specs/2026-08-01-v1-support-scope-product.md).
-- **Dicteercyclus UX-states** Accepted-spec (focus-safe errors, preparing,
-  busy-zichtbaarheid, ERROR next-step, transient ready-cue) —
-  [spec](docs/superpowers/specs/2026-08-01-dicteercyclus-ux-states-product.md).
-- **Dicteercyclus UX implementation plan** (PREPARING, non-modal errors, busy,
-  ready-cue) —
-  [plan](docs/superpowers/plans/2026-08-01-dicteercyclus-ux-states.md).
-
 ### Changed
-
-- Docs honesty: STATUS/README/Help/SECURITY/CONTEXT/ADR-0003 en locales
-  afgestemd op PySide6/`indicator._qt`, journal zonder transcripttekst, en de
-  v1.0-platformmatrix.
 
 ### Fixed
 
-- **Dicteercyclus UX:** geen false “Opname” vóór mic-ready (`PREPARING`); mic-fouten
-  zonder focus-stealende modal; ERROR-pill met next-step-subline; zichtbare busy
-  bij hotkey tijdens verwerking; korte ready-cue na splash.
+## [0.4.0] - 2026-08-03
+
+### Added
+
+- **Meetinggeluid werkt echt** (Windows): Meeting Buddy neemt het gekozen
+  uitvoerapparaat op via WASAPI-loopback (`pyaudiowpatch`) in plaats van de
+  niet-werkende sounddevice-loopback of een "Stereo Mix" die op moderne
+  Windows-installaties vrijwel altijd ontbreekt.
+- **Spreker-onderscheid met één microfoon:** deelnemers worden als `spk_1`,
+  `spk_2`, … in het meetingtranscript gemarkeerd.
+- **Aparte geluidsbalkjes per bron** in de Meeting Buddy-overlay: je ziet of het
+  van de microfoon of van het meetinggeluid komt.
+- **Chunk-transcriptie** voor incrementele transcriptie: audio wordt in stukken
+  verwerkt op stilte of een tijdvenster, met LED-indicatie in de status-pill.
+- **Duidelijker dicteercyclus:** de pill toont "Voorbereiden…" zolang de
+  microfoon opengaat (geen valse "Opname" meer), meldt fouten zonder het
+  actieve venster te stelen, en geeft na het starten kort "Klaar om op te nemen".
+- **Status-pill vernieuwd** conform het canvas-voorstel: looptijd tijdens
+  opname, gevulde stopknop, voortgangsbalk met percentage bij transcriberen,
+  sneltoets als losse toetsvakjes, een "Opnieuw"-knop bij een mislukte opname,
+  en een klikbare modus-tag om tussen toggle en push-to-talk te wisselen.
+- **Live samenvatting als bullets:** 3–5 punten, gevoed met alleen het nieuwe
+  transcript sinds de vorige ronde, en weggeschreven als sectie
+  `## Samenvatting` in het meeting-`.md`.
+- **v1.0.0 support-scope** vastgelegd (Windows als kern; Meeting Buddy en Local
+  LLM experimenteel; macOS vanuit broncode) —
+  [spec](docs/superpowers/specs/2026-08-01-v1-support-scope-product.md).
+
+### Changed
+
+- Documentatie (STATUS, README, Help, SECURITY, CONTEXT, ADR-0003 en de
+  locales) afgestemd op de Qt-UI, het journal zonder transcripttekst en de
+  v1.0-platformmatrix.
+- De status-pill verbruikt minder energie: in rust wordt niet meer geschilderd
+  en zakt de pollfrequentie van 20 naar 4 keer per seconde.
+
+### Fixed
+
+- **Sneltoets bleef "hangen":** na gebruik van bijvoorbeeld Shift+Esc kon
+  daarna alléén Shift de opname starten. De app controleert nu bij Windows of
+  de toetsen echt ingedrukt zijn in plaats van te vertrouwen op de eigen
+  administratie, en ruimt achtergebleven toetsen op.
+- Hetzelfde probleem zorgde ervoor dat plakken tot 3 seconden kon wachten; die
+  vertraging is weg.
+- De app blijft licht van kleur wanneer Windows in donkere modus staat.
+- Openstaande dialogen worden bij sluiten volledig vrijgegeven, en "map openen"
+  meldt een fout in plaats van stil te falen bij een offline netwerkmap.
+
+## [0.3.0] - 2026-07-28
 
 ### Added
 
@@ -185,7 +214,8 @@ Eerste publieke Windows-release (tag `v0.1.0`).
 - Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
 - `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`
 
-[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/benvankruistum/praatMaar/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/benvankruistum/praatMaar/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/benvankruistum/praatMaar/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/benvankruistum/praatMaar/releases/tag/v0.1.0

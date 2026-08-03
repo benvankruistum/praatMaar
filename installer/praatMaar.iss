@@ -13,7 +13,7 @@
 
 #define MyAppName "praatMaar"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.3.0"
+  #define MyAppVersion "0.4.0"
 #endif
 #define MyAppPublisher "Ben van Kruistum"
 #define MyAppURL "https://github.com/benvankruistum/praatMaar"
