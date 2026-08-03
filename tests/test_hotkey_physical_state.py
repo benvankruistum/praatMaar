@@ -9,7 +9,27 @@ eerdere, gedeeltelijke fix; deze test dekt de hele klasse.
 
 from __future__ import annotations
 
+import pytest
+
 import hotkeys
+
+
+@pytest.fixture(autouse=True)
+def _restore_dictation_hotkey_state():
+    """Globale sneltoets-state herstellen.
+
+    `dictation` bouwt op moduleniveau een echte sessie; HOTKEY_TOKENS en
+    pressed_tokens laten muteren zonder herstel vervuilt latere tests.
+    """
+
+    import dictation
+
+    tokens = set(dictation.HOTKEY_TOKENS)
+    pressed = set(dictation.pressed_tokens)
+    yield
+    dictation.HOTKEY_TOKENS = tokens
+    dictation.pressed_tokens.clear()
+    dictation.pressed_tokens.update(pressed)
 
 
 def test_token_to_vk_covers_modifiers() -> None:
