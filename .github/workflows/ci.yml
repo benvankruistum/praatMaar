@@ -61,4 +61,4 @@ jobs:
         # dumpen i.p.v. 15 minuten stilte (de suite heeft join-paden).
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -q -o faulthandler_timeout=120
+        run: python -m pytest -q -o faulthandler_timeout=20 --durations=15
