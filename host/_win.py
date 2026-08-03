@@ -73,6 +73,43 @@ class WinHost:
         self._mutex = handle
         return True
 
+    def keys_physically_down(self, tokens: set[str]) -> set[str] | None:
+        """Vraagt Windows welke tokens nu echt ingedrukt zijn (GetAsyncKeyState).
+
+        De press/release-boekhouding van de listener kan uit de pas lopen wanneer
+        een release een andere token oplevert dan de press — bij Shift+Esc bleef
+        "esc" dan hangen en vuurde Shift alleen de sneltoets. Deze check is de
+        waarheid van het OS; onbekende tokens laten we buiten beschouwing.
+        """
+
+        import ctypes
+
+        import hotkeys
+
+        try:
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+        except OSError:
+            return None
+
+        # Hoogste bit gezet = toets is op dit moment ingedrukt.
+        down_mask = 0x8000
+        down: set[str] = set()
+        for token in tokens:
+            vk = hotkeys.token_to_vk(token)
+            if vk is None:
+                # Niet te controleren: neem het token op gezag van de listener aan,
+                # anders zou een exotische toets de sneltoets blokkeren.
+                down.add(token)
+                continue
+            state = user32.GetAsyncKeyState(vk)
+            pressed = bool(state & down_mask)
+            if not pressed and token == "cmd":
+                # Rechter Windows-toets heeft een eigen vk.
+                pressed = bool(user32.GetAsyncKeyState(0x5C) & down_mask)
+            if pressed:
+                down.add(token)
+        return down
+
     def is_autostart_enabled(self) -> bool:
         import winreg
 

@@ -73,6 +73,12 @@ class LinuxHost:
         self._lock = handle
         return True
 
+    def keys_physically_down(self, tokens: set[str]) -> set[str] | None:
+        """Geen betrouwbare bron voor de fysieke toetsstatus op dit platform."""
+
+        del tokens
+        return None
+
     def is_autostart_enabled(self) -> bool:
         return self._desktop_path().exists()
 

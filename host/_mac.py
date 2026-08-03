@@ -69,6 +69,12 @@ class MacHost:
         self._lock = handle
         return True
 
+    def keys_physically_down(self, tokens: set[str]) -> set[str] | None:
+        """Geen betrouwbare bron voor de fysieke toetsstatus op dit platform."""
+
+        del tokens
+        return None
+
     def _plist_path(self) -> Path:
         return Path.home() / "Library" / "LaunchAgents" / f"{_AGENT_LABEL}.plist"
 
