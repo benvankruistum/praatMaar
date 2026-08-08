@@ -5,6 +5,7 @@ from __future__ import annotations
 import i18n
 from mic_errors import (
     classify_mic_error,
+    device_identity,
     first_input_device_index,
     format_recording_start_error,
     has_input_device,
@@ -84,3 +85,41 @@ def test_refresh_portaudio_reinitializes() -> None:
     refresh_portaudio(FakeSd)
     assert calls == ["term", "term", "init"]
     assert FakeSd._initialized == 1
+
+
+def test_device_identity_default_input() -> None:
+    class FakeSd:
+        @staticmethod
+        def query_devices(*, kind: str | None = None, **_kwargs):
+            assert kind == "input"
+            return {"name": "Default Mic", "hostapi": 0}
+
+    assert device_identity(FakeSd(), None) == ("Default Mic", 0)
+
+
+def test_device_identity_pinned_index() -> None:
+    class FakeSd:
+        @staticmethod
+        def query_devices(device=None, **_kwargs):
+            assert device == 3
+            return {"name": "Headset", "hostapi": 1}
+
+    assert device_identity(FakeSd(), 3) == ("Headset", 1)
+
+
+def test_device_identity_invalid_returns_none() -> None:
+    class FakeSd:
+        @staticmethod
+        def query_devices(*_args, **_kwargs):
+            raise RuntimeError("missing")
+
+    assert device_identity(FakeSd(), 9) is None
+
+
+def test_device_identity_empty_name_returns_none() -> None:
+    class FakeSd:
+        @staticmethod
+        def query_devices(*_args, **_kwargs):
+            return {"name": "", "hostapi": 0}
+
+    assert device_identity(FakeSd(), None) is None

@@ -13,6 +13,12 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Fixed
 
+- **Warme microfoon volgt headset/default opnieuw:** bij start van de
+  dicteercyclus (en na mic-wijziging in Instellingen) heropent praatMaar de
+  stream alleen als de PortAudio device-identiteit is gewijzigd — geen app-
+  herstart meer nodig na Bluetooth verbinden terwijl de app al draaide
+  ([ADR-0006](docs/adr/0006-mic-lazy-rebind.md)).
+
 ## [0.4.0] - 2026-08-03
 
 ### Added

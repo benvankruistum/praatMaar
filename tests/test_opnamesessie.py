@@ -61,6 +61,41 @@ class FakeSoundDevice:
         self.stream = FakeStream()
         self.input_stream_calls = 0
         self._fresh_stream_each_open = False
+        self.default_input: dict[str, Any] = {
+            "name": "Default Mic",
+            "hostapi": 0,
+            "max_input_channels": 1,
+        }
+        self.devices_by_index: dict[int, dict[str, Any]] = {
+            0: {
+                "name": "Default Mic",
+                "hostapi": 0,
+                "max_input_channels": 1,
+            },
+            1: {
+                "name": "Headset",
+                "hostapi": 0,
+                "max_input_channels": 1,
+            },
+        }
+
+    def query_devices(self, *args: Any, kind: str | None = None, **_kwargs: Any) -> Any:
+        if kind == "input":
+            return dict(self.default_input)
+        if args:
+            device = int(args[0])
+            info = self.devices_by_index.get(device)
+            if info is None:
+                raise ValueError(f"missing device {device}")
+            return dict(info)
+        # Volledige lijst (first_input_device_index / enumeratie).
+        if not self.devices_by_index:
+            return []
+        max_index = max(self.devices_by_index)
+        return [
+            dict(self.devices_by_index.get(i, {"name": f"missing-{i}", "max_input_channels": 0}))
+            for i in range(max_index + 1)
+        ]
 
     def InputStream(self, **kwargs: Any) -> FakeStream:
         self.input_stream_calls += 1
@@ -671,3 +706,93 @@ def test_ensure_stream_skips_portaudio_refresh_when_modules_capture(
     session._has_external_streams = lambda: False
     session._ensure_stream()
     assert calls == [1]
+
+
+def test_warm_stream_reused_when_device_identity_unchanged(
+    session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    session.warm_microphone = True
+    sd._fresh_stream_each_open = True
+    session.warmup_microphone()
+    assert sd.input_stream_calls == 1
+    assert session._bound_device_identity == ("Default Mic", 0)
+    assert sd.last_callback is not None
+    sd.last_callback(np.zeros((160, 1), dtype=np.float32), 160, None, None)
+
+    session._ensure_stream()
+    assert sd.input_stream_calls == 1
+
+
+def test_warm_stream_keeps_alive_when_identity_unavailable(
+    session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Geen query_devices-info → geen force-reopen van een levende stream."""
+
+    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    session.warm_microphone = True
+    sd._fresh_stream_each_open = True
+    session.warmup_microphone()
+    assert sd.last_callback is not None
+    sd.last_callback(np.zeros((160, 1), dtype=np.float32), 160, None, None)
+    session._bound_device_identity = None
+
+    def boom(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("no devices")
+
+    sd.query_devices = boom  # type: ignore[method-assign]
+    session._ensure_stream()
+    assert sd.input_stream_calls == 1
+
+
+def test_warm_stream_reopens_when_device_identity_changes(
+    session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    session.warm_microphone = True
+    sd._fresh_stream_each_open = True
+    session.warmup_microphone()
+    first = sd.stream
+    assert sd.input_stream_calls == 1
+    assert sd.last_callback is not None
+    sd.last_callback(np.zeros((160, 1), dtype=np.float32), 160, None, None)
+
+    sd.default_input = {
+        "name": "BT Headset",
+        "hostapi": 0,
+        "max_input_channels": 1,
+    }
+    session._ensure_stream()
+    assert sd.input_stream_calls == 2
+    assert first.closed
+    assert session._bound_device_identity == ("BT Headset", 0)
+    assert session._audio_stream is sd.stream
+
+
+def test_resolve_clears_pinned_device_when_gone(session: Opnamesessie, sd: FakeSoundDevice) -> None:
+    session.microphone_device = 99
+    device = session._resolve_input_device(sd)
+    assert device is None
+    assert session.microphone_device is None
+
+
+def test_ensure_stream_opens_default_after_pinned_gone(
+    session: Opnamesessie, sd: FakeSoundDevice
+) -> None:
+    session.microphone_device = 99
+    session._ensure_stream()
+    assert session.microphone_device is None
+    assert sd.input_stream_calls == 1
+    assert session._bound_device_identity == ("Default Mic", 0)
+
+
+def test_stop_audio_stream_clears_bound_device_identity(
+    session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    session.warm_microphone = True
+    session.warmup_microphone()
+    assert session._bound_device_identity is not None
+    session.refresh_input_device()
+    assert session._audio_stream is None
+    assert session._bound_device_identity is None
