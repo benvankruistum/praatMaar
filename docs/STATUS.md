@@ -1,6 +1,6 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-08-03.
+Laatst bijgewerkt: 2026-08-08.
 
 **v1.0.0-scope (Accepted):** Windows core-dictation is de primaire belofte;
 Meeting Buddy / Local LLM / chunk-transcriptie blijven experimenteel opt-in;
@@ -33,6 +33,8 @@ Aandachtspunten, nog niet als distributie-build geverifieerd:
 ## Werkt op Windows (core / v1.0-belofte)
 
 - Dicteercyclus (opname → Faster-Whisper → klembord/plakken)
+- Lazy mic-rebind bij dicteerstart / Instellingen-opslaan (device-identiteit;
+  geen OS-watcher) — [ADR-0006](adr/0006-mic-lazy-rebind.md)
 - Status-pill zonder focus te stelen (`indicator._qt` + Win32 no-activate flags)
 - Systeemvak: Instellingen, Bestemmingen, Modules, Help (PySide6-dialogen)
 - Meertaligheid UI + spraak (`nl`/`en`/`de`)

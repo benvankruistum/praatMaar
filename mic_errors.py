@@ -85,6 +85,34 @@ def first_input_device_index(sounddevice_mod: Any) -> int | None:
     return None
 
 
+def device_identity(
+    sounddevice_mod: Any, device: int | None
+) -> tuple[str, int] | None:
+    """Stabiele PortAudio-identiteit: ``(name, hostapi)``, of None.
+
+    ``device is None`` peilt de huidige OS-/PortAudio-default input
+    (``query_devices(kind="input")``). Alleen raw index is niet genoeg —
+    indices schuiven bij hotplug.
+    """
+
+    try:
+        if device is None:
+            info = sounddevice_mod.query_devices(kind="input")
+        else:
+            info = sounddevice_mod.query_devices(device)
+    except Exception:
+        return None
+
+    try:
+        name = str(info.get("name", "") or "").strip()
+        hostapi = int(info.get("hostapi", -1))
+    except (TypeError, ValueError, AttributeError):
+        return None
+    if not name:
+        return None
+    return (name, hostapi)
+
+
 def refresh_portaudio(sounddevice_mod: Any) -> None:
     """
     Herstart PortAudio zodat hotplug (Bluetooth) zichtbaar wordt.

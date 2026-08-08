@@ -20,6 +20,11 @@ the README.
 Microphone failures do not open a blocking dialog: the status pill and tray icon
 show what went wrong; the checklist lives in Settings.
 
+**Switching microphones:** praatMaar rebinds the input device at the **start of a
+dictation cycle** and when you save a different mic in Settings (useful after a
+Bluetooth headset connects). It does not auto-switch while idle — start dictation
+or save Settings.
+
 ## What are destinations?
 
 A **destination** is a name linked to a folder on your computer. When you dictate,

@@ -55,6 +55,7 @@ from indicator import (
 )
 from indicator._contract import transcription_percent
 from mic_errors import (
+    device_identity,
     first_input_device_index,
     format_recording_start_error,
     refresh_portaudio,
@@ -202,6 +203,8 @@ class Opnamesessie:
         self._last_audio_callback_at: float | None = None
         # Geen callbacks langer dan dit → stream als dood beschouwen.
         self._stream_stale_after_seconds = 1.5
+        # Device-identiteit bij laatste succesvolle open (lazy rebind).
+        self._bound_device_identity: tuple[str, int] | None = None
         self._audio_chunks: list[Any] = []
         self._session_id: str | None = None
         self._last_partial_transcript: str | None = None
@@ -607,9 +610,21 @@ class Opnamesessie:
         return (now - last) <= self._stream_stale_after_seconds
 
     def _ensure_stream(self) -> None:
-        """Start één InputStream als die nog niet loopt. Heropent dode warme streams."""
+        """Start één InputStream als die nog niet loopt. Heropent dode of stale warme streams."""
 
         if self._audio_stream is not None and not self._stream_is_alive():
+            self.stop_audio_stream()
+
+        if self._audio_stream is not None:
+            # Peek zonder refresh_portaudio: terminate zou de eigen warme stream killen.
+            _, sd_peek, _ = self._require_audio()
+            desired = self._desired_device_identity(sd_peek)
+            if (
+                desired is not None
+                and self._bound_device_identity is not None
+                and desired == self._bound_device_identity
+            ):
+                return
             self.stop_audio_stream()
 
         with self._lock:
@@ -632,6 +647,12 @@ class Opnamesessie:
             if device is None:
                 raise first_exc
             self._open_input_stream(sd, device)
+
+    def _desired_device_identity(self, sd: Any) -> tuple[str, int] | None:
+        """Identity die we nu willen binden (na preference-clear indien nodig)."""
+
+        resolved = self._resolve_input_device(sd)
+        return device_identity(sd, resolved)
 
     def _refresh_portaudio_if_safe(self, sd: Any) -> bool:
         """Herenumereer PortAudio alleen als er app-breed geen streams open zijn.
@@ -678,6 +699,7 @@ class Opnamesessie:
             self._audio_stream = stream
             self._stream_opened_at = time.monotonic()
             self._last_audio_callback_at = None
+            self._bound_device_identity = device_identity(sd, device)
 
     def audio_callback(
         self,
@@ -804,6 +826,7 @@ class Opnamesessie:
             self._audio_stream = None
             self._stream_opened_at = None
             self._last_audio_callback_at = None
+            self._bound_device_identity = None
 
         if stream is None:
             return

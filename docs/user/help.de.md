@@ -20,6 +20,11 @@ Privacy in der README.
 Mikrofonfehler öffnen keinen blockierenden Dialog: Status-Pille und Tray zeigen
 das Problem; die Checkliste steht in den Einstellungen.
 
+**Mikrofon wechseln:** praatMaar bindet das Eingabegerät beim **Start eines
+Diktierzyklus** neu und wenn Sie in den Einstellungen ein anderes Mikrofon
+speichern (hilfreich nach Bluetooth-Headset). Kein automatischer Wechsel im
+Leerlauf — Diktat starten oder Einstellungen speichern.
+
 ## Was sind Ziele?
 
 Ein **Ziel** ist ein Name, der mit einem Ordner auf Ihrem Computer verknüpft ist. Beim
