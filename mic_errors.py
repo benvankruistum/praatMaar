@@ -85,9 +85,7 @@ def first_input_device_index(sounddevice_mod: Any) -> int | None:
     return None
 
 
-def device_identity(
-    sounddevice_mod: Any, device: int | None
-) -> tuple[str, int] | None:
+def device_identity(sounddevice_mod: Any, device: int | None) -> tuple[str, int] | None:
     """Stabiele PortAudio-identiteit: ``(name, hostapi)``, of None.
 
     ``device is None`` peilt de huidige OS-/PortAudio-default input

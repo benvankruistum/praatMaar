@@ -724,6 +724,27 @@ def test_warm_stream_reused_when_device_identity_unchanged(
     assert sd.input_stream_calls == 1
 
 
+def test_warm_stream_keeps_alive_when_identity_unavailable(
+    session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Geen query_devices-info → geen force-reopen van een levende stream."""
+
+    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    session.warm_microphone = True
+    sd._fresh_stream_each_open = True
+    session.warmup_microphone()
+    assert sd.last_callback is not None
+    sd.last_callback(np.zeros((160, 1), dtype=np.float32), 160, None, None)
+    session._bound_device_identity = None
+
+    def boom(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("no devices")
+
+    sd.query_devices = boom  # type: ignore[method-assign]
+    session._ensure_stream()
+    assert sd.input_stream_calls == 1
+
+
 def test_warm_stream_reopens_when_device_identity_changes(
     session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -748,9 +769,7 @@ def test_warm_stream_reopens_when_device_identity_changes(
     assert session._audio_stream is sd.stream
 
 
-def test_resolve_clears_pinned_device_when_gone(
-    session: Opnamesessie, sd: FakeSoundDevice
-) -> None:
+def test_resolve_clears_pinned_device_when_gone(session: Opnamesessie, sd: FakeSoundDevice) -> None:
     session.microphone_device = 99
     device = session._resolve_input_device(sd)
     assert device is None

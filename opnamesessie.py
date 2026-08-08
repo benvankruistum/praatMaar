@@ -619,11 +619,15 @@ class Opnamesessie:
             # Peek zonder refresh_portaudio: terminate zou de eigen warme stream killen.
             _, sd_peek, _ = self._require_audio()
             desired = self._desired_device_identity(sd_peek)
-            if (
-                desired is not None
-                and self._bound_device_identity is not None
-                and desired == self._bound_device_identity
-            ):
+            bound = self._bound_device_identity
+            if desired is not None and bound is not None and desired == bound:
+                return
+            if desired is None and bound is None:
+                # Geen identity beschikbaar (bijv. query faalt): warme stream houden.
+                return
+            if desired is not None and bound is None:
+                # Stream leeft al; identity alsnog vastleggen zonder reopen.
+                self._bound_device_identity = desired
                 return
             self.stop_audio_stream()
 

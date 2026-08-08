@@ -44,6 +44,18 @@ class FakeSoundDevice:
     def __init__(self) -> None:
         self.last_callback: Any = None
         self.stream = FakeStream()
+        self.default_input: dict[str, Any] = {
+            "name": "Default Mic",
+            "hostapi": 0,
+            "max_input_channels": 1,
+        }
+
+    def query_devices(self, *args: Any, kind: str | None = None, **_kwargs: Any) -> Any:
+        if kind == "input" or not args:
+            if kind == "input":
+                return dict(self.default_input)
+            return [dict(self.default_input)]
+        raise ValueError(f"missing device {args[0]}")
 
     def InputStream(self, **kwargs: Any) -> FakeStream:
         self.last_callback = kwargs.get("callback")
