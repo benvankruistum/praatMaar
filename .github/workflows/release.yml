@@ -1,8 +1,8 @@
 name: Release
 
-# Push een versie-tag → Windows-build → GitHub Release met Setup.exe + zip.
+# Push een versie-tag → Windows + macOS builds → GitHub Release.
 # Voorbeeld: git tag v0.2.0 && git push origin v0.2.0
-# Versie-checklist: docs/release-windows.md
+# Versie-checklist: docs/release-windows.md · docs/release-macos.md
 on:
   push:
     tags:
@@ -66,6 +66,103 @@ jobs:
           Get-ChildItem release -ErrorAction SilentlyContinue | Format-Table Name, Length -AutoSize
           Get-ChildItem installer\Output -ErrorAction SilentlyContinue | Format-Table Name, Length -AutoSize
 
+      - name: Upload Windows artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: |
+            release/praatMaar-Setup-*.exe
+            release/praatMaar-*-windows-x64.zip
+          if-no-files-found: error
+
+  macos:
+    # Apple Silicon (arm64); zip-naam: praatMaar-*-macos-arm64.zip
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            v="${{ inputs.version }}"
+          else
+            v="${{ github.ref_name }}"
+          fi
+          v="${v#v}"
+          if [ -z "$v" ]; then
+            echo "Geen versie gevonden" >&2
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Building version $v"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -e ".[build]"
+          python -c "import PyInstaller; print(PyInstaller.__version__)"
+
+      - name: Build (.app + zip)
+        env:
+          CI: "true"
+        run: |
+          chmod +x scripts/build-macos.sh
+          ./scripts/build-macos.sh "${{ steps.ver.outputs.version }}"
+
+      - name: List artefacts
+        run: ls -la release
+
+      - name: Upload macOS artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: release/praatMaar-*-macos-*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            v="${{ inputs.version }}"
+          else
+            v="${{ github.ref_name }}"
+          fi
+          v="${v#v}"
+          if [ -z "$v" ]; then
+            echo "Geen versie gevonden" >&2
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Download Windows artefacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: release
+
+      - name: Download macOS artefacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-release
+          path: release
+
+      - name: List release files
+        run: ls -la release
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -76,15 +173,22 @@ jobs:
           fail_on_unmatched_files: true
           body: |
             ## Downloads
-            - **Setup** (`praatMaar-Setup-*.exe`) — aanbevolen, installeert naar `%LOCALAPPDATA%\praatMaar`
-            - **Portable zip** — uitpakken en `praatMaar.exe` starten
+            - **Windows Setup** (`praatMaar-Setup-*.exe`) — aanbevolen, installeert naar `%LOCALAPPDATA%\praatMaar`
+            - **Windows portable zip** — uitpakken en `praatMaar.exe` starten
+            - **macOS Apple Silicon zip** (`praatMaar-*-macos-arm64.zip`) — uitpakken en `praatMaar.app` openen
 
+            ### Windows
             Unsigned indie-build: SmartScreen kan waarschuwen → **Meer info** → **Toch uitvoeren**.
             Zie [docs/release-windows.md](https://github.com/benvankruistum/praatMaar/blob/main/docs/release-windows.md).
+
+            ### macOS
+            Unsigned indie-build: Gatekeeper kan blokkeren → rechtsklik → **Open**, of `xattr -cr praatMaar.app`.
+            Zie [docs/release-macos.md](https://github.com/benvankruistum/praatMaar/blob/main/docs/release-macos.md).
 
             Eerste start downloadt het Whisper-model (eenmalig; daarna lokaal).
           files: |
             release/praatMaar-Setup-*.exe
             release/praatMaar-*-windows-x64.zip
+            release/praatMaar-*-macos-*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

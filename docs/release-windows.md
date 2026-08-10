@@ -104,4 +104,5 @@ certificaat is de structurele fix (later, optioneel).
 
 - Authenticode / `signtool`
 - Microsoft Store / MSIX
-- Automatische macOS-release in dezelfde workflow (apart, zie release-macos)
+- macOS signing/notarisatie (macOS zip wel via dezelfde release-workflow; zie
+  [release-macos.md](release-macos.md))

@@ -13,8 +13,27 @@ Het Whisper-model wordt NIET meegebundeld: het wordt bij de eerste start
 """
 
 import sys
+from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
+
+
+def _project_version() -> str:
+    """Lees project.version uit pyproject.toml (fallback voor oudere Python)."""
+    try:
+        import tomllib
+    except ImportError:  # pragma: no cover
+        import tomli as tomllib  # type: ignore
+
+    path = Path("pyproject.toml")
+    with path.open("rb") as fh:
+        return tomllib.load(fh)["project"]["version"]
+
+
+try:
+    _VERSION = _project_version()
+except Exception:
+    _VERSION = "0.0.0"
 
 datas = [
     ("locales", "locales"),
@@ -166,8 +185,8 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleName": "praatMaar",
             "CFBundleDisplayName": "praatMaar",
-            "CFBundleShortVersionString": "0.1.0",
-            "CFBundleVersion": "0.1.0",
+            "CFBundleShortVersionString": _VERSION,
+            "CFBundleVersion": _VERSION,
             "NSHighResolutionCapable": True,
             "NSMicrophoneUsageDescription": (
                 "praatMaar heeft microfoontoegang nodig om spraak op te nemen "
