@@ -90,6 +90,8 @@ Geïmplementeerd én runtime-geverifieerd op Apple Silicon (vanuit bron,
 - TCC: Microfoon + Toegankelijkheid verplicht —
   [macos-permissions.md](macos-permissions.md)
 - Build-docs: [release-macos.md](release-macos.md), `packaging/macos/entitlements.plist`
+- CI-release: unsigned `praatMaar-*-macos-arm64.zip` via `macos-14` in
+  `.github/workflows/release.yml` (`scripts/build-macos.sh`)
 
 ### Runtime-check (2026-07-18 / 2026-07-19)
 
@@ -110,7 +112,8 @@ Op een echte Mac (arm64), vanuit bron (`python dictation.py` via Cursor):
    [ux-states spec](superpowers/specs/2026-08-01-dicteercyclus-ux-states-product.md) ·
    [impl plan](superpowers/plans/2026-08-01-dicteercyclus-ux-states.md).
 2. **v1.0.0 uitbrengen** wanneer `/release-readiness` groen is voor Windows
-   core (Setup/zip via Actions). macOS `.app`/signing later.
+   core (Setup/zip via Actions). macOS unsigned zip zit in dezelfde
+   release-workflow; signing/notarisatie later.
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
 3. Meeting Buddy: Teams-loopback-acceptatie afronden vóór eventuele graduation.
 4. Experimentele Local LLM + agenda-review: gebruikersvalidatie (blijft

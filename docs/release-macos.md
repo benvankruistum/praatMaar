@@ -22,8 +22,10 @@ VERSION=0.4.0   # gelijk aan pyproject.toml
 cd dist && zip -r "praatMaar-${VERSION}-macos-arm64.zip" praatMaar.app
 ```
 
-Er is nog **geen** automatische GitHub Actions macOS-release; artefacten
-handmatig uploaden of later een `macos-latest`-job toevoegen.
+Automatische release: bij tag `v*` bouwt `.github/workflows/release.yml` op
+`macos-14` (Apple Silicon) een unsigned `praatMaar-*-macos-arm64.zip` en uploadt
+die samen met de Windows-artefacten naar de GitHub Release. Lokaal bouwen blijft
+mogelijk via `scripts/build-macos.sh`.
 
 ## Vereisten op de bouw-Mac
 
@@ -44,22 +46,29 @@ handmatig uploaden of later een `macos-latest`-job toevoegen.
 
 ## Lokaal bouwen
 
+Aanbevolen (PyInstaller + zip onder `release/`):
+
+```bash
+chmod +x scripts/build-macos.sh
+./scripts/build-macos.sh          # versie uit pyproject.toml
+# of: ./scripts/build-macos.sh 0.4.0
+```
+
+Handmatig:
+
 ```bash
 pyinstaller praatMaar.spec --clean
 ```
 
-Resultaat: `dist/praatMaar.app`.
+Resultaat: `dist/praatMaar.app` (en via het script:
+`release/praatMaar-<versie>-macos-arm64.zip` op Apple Silicon).
 
 De Qt/PySide6-runtime maakt de `.app` merkbaar groter dan de vroegere
 Tk-gebaseerde UI. Er geldt geen harde groottelimiet; controleer alleen dat de
 bundle volledig is en functioneel start.
 
-Optioneel zippen (versie gelijk aan `pyproject.toml`):
-
-```bash
-VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-cd dist && zip -r "praatMaar-${VERSION}-macos-arm64.zip" praatMaar.app
-```
+`CFBundleShortVersionString` / `CFBundleVersion` komen uit `pyproject.toml`
+(via `praatMaar.spec`).
 
 Het Whisper-model zit **niet** in de bundle; eerste start downloadt het naar
 `~/Library/Caches/huggingface` (of de HF-cache van de gebruiker).
@@ -90,6 +99,6 @@ bundle-id — tot je een `.app` gebruikt.
 ## Wat we bewust niet doen (nu)
 
 - Cross-compile vanaf Windows/Linux
-- Universal2 fat binary
+- Universal2 fat binary / Intel (`macos-13`) CI-artefact
 - Mac App Store
-- Automatische GitHub Actions macOS-release (kan later op `macos-latest`)
+- Code signing / notarisatie in CI (Apple Developer ID secrets)
