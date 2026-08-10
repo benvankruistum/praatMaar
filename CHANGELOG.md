@@ -20,6 +20,11 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Changed
 
+- **Pill-transcriptie-voortgang is hybride:** tijdens de finale Whisper-run
+  beweegt de balk op een tijdschatting (audio × RTF) en trekt omhoog bij
+  segment-voortgang — geen lange stilstand op `0%`
+  ([spec](docs/superpowers/specs/2026-08-10-hybrid-transcription-progress-design.md)).
+
 ### Fixed
 
 ## [0.5.0] - 2026-08-10
