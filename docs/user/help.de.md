@@ -12,6 +12,10 @@
 **Windows-Installer** sind nicht digital signiert. Bei „Windows hat Ihren PC
 geschützt“: **Weitere Informationen** → **Trotzdem ausführen**.
 
+**macOS (Apple Silicon):** GitHub Releases enthalten eine unsignierte
+`praatMaar-*-macos-arm64.zip`. Bei Gatekeeper: Rechtsklick → **Öffnen**, oder
+`xattr -cr praatMaar.app`.
+
 **Datenschutz (kurz):** Spracherkennung läuft lokal. Sensible Dateien liegen
 unter `%APPDATA%\praatMaar\` (Transkripte, Recovery, Inbox, Logs). Siehe auch
 Privacy in der README.

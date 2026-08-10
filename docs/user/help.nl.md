@@ -12,6 +12,10 @@
 **Windows-installatie:** downloads zijn niet digitaal ondertekend. Bij
 “Windows beschermde je pc”: **Meer info** → **Toch uitvoeren**.
 
+**macOS (Apple Silicon):** uit GitHub Releases komt een unsigned
+`praatMaar-*-macos-arm64.zip`. Bij Gatekeeper: rechtsklik → **Open**, of
+`xattr -cr praatMaar.app`.
+
 **Privacy (kort):** spraak-naar-tekst gebeurt lokaal. Gevoelige bestanden staan
 onder `%APPDATA%\praatMaar\` (transcripts, recovery, inbox, logs). Zie ook
 Privacy in de README.

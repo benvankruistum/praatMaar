@@ -83,8 +83,8 @@ git tag -a vX.Y.Z -m "praatMaar vX.Y.Z"
 git push origin vX.Y.Z   # only with confirmation
 ```
 
-Pushing `v*` triggers Windows Release Actions (`docs/release-windows.md`).
-macOS `.app` remains manual (`docs/release-macos.md`).
+Pushing `v*` triggers the Release Actions workflow (Windows + macOS arm64 zip;
+see `docs/release-windows.md` / `docs/release-macos.md`).
 
 ### 8. Report
 
