@@ -25,6 +25,10 @@ Diktierzyklus** neu und wenn Sie in den Einstellungen ein anderes Mikrofon
 speichern (hilfreich nach Bluetooth-Headset). Kein automatischer Wechsel im
 Leerlauf — Diktat starten oder Einstellungen speichern.
 
+**Whisper:** unter Einstellungen → **Whisper** können Sie Qualität (Beam),
+Stillefilter (VAD), Prompt/Hotwords und Schwellen anpassen. Das Whisper-
+**Modell** (base/small/medium) bleibt unter Erweitert und braucht einen Neustart.
+
 ## Was sind Ziele?
 
 Ein **Ziel** ist ein Name, der mit einem Ordner auf Ihrem Computer verknüpft ist. Beim

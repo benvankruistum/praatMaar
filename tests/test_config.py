@@ -45,3 +45,35 @@ def test_normalize_model_name_falls_back_on_unknown() -> None:
     assert normalize_model_name("") == "small"
     assert normalize_model_name(None) == "small"
     assert "small" in KNOWN_MODELS
+
+
+def test_whisper_settings_from_config_defaults() -> None:
+    settings = config.whisper_settings_from_config({})
+    assert settings["whisper_beam_size"] == 5
+    assert settings["whisper_vad_filter"] is True
+    assert settings["whisper_vad_min_silence_ms"] == 300
+    assert settings["whisper_condition_on_previous_text"] is False
+    assert settings["whisper_no_speech_threshold"] == 0.6
+    assert settings["whisper_initial_prompt"] == ""
+    assert settings["whisper_hotwords"] == ""
+
+
+def test_whisper_settings_from_config_clamps_and_strips() -> None:
+    settings = config.whisper_settings_from_config(
+        {
+            "whisper_beam_size": 99,
+            "whisper_vad_filter": 0,
+            "whisper_vad_min_silence_ms": 10,
+            "whisper_condition_on_previous_text": 1,
+            "whisper_no_speech_threshold": 2.5,
+            "whisper_initial_prompt": "  hallo  ",
+            "whisper_hotwords": " praatMaar, Teams ",
+        }
+    )
+    assert settings["whisper_beam_size"] == 10
+    assert settings["whisper_vad_filter"] is False
+    assert settings["whisper_vad_min_silence_ms"] == 100
+    assert settings["whisper_condition_on_previous_text"] is True
+    assert settings["whisper_no_speech_threshold"] == 1.0
+    assert settings["whisper_initial_prompt"] == "hallo"
+    assert settings["whisper_hotwords"] == "praatMaar, Teams"

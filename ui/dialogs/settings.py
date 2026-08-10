@@ -13,19 +13,24 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QRadioButton,
     QScrollArea,
+    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+import config
 import destinations
 import hotkeys
 import i18n
@@ -160,12 +165,15 @@ class SettingsDialog(QDialog):
         self._tabs = QTabWidget()
         self._general_tab = QWidget()
         self._language_tab = QWidget()
+        self._whisper_tab = QWidget()
         self._advanced_tab = QWidget()
         self._tabs.addTab(self._general_tab, i18n.t("settings.tab.general"))
         self._tabs.addTab(self._language_tab, i18n.t("settings.tab.language"))
+        self._tabs.addTab(self._whisper_tab, i18n.t("settings.tab.whisper"))
         self._tabs.addTab(self._advanced_tab, i18n.t("settings.tab.advanced"))
         self._build_general()
         self._build_language()
+        self._build_whisper()
         self._build_advanced()
         outer.addWidget(self._tabs, 1)
 
@@ -336,6 +344,113 @@ class SettingsDialog(QDialog):
         ui_layout.addWidget(_labeled_row(i18n.t("settings.ui_language"), self.ui_language))
         layout.addWidget(ui_box)
         layout.addStretch(1)
+
+    def _build_whisper(self) -> None:
+        whisper = config.whisper_settings_from_config(self._current)
+
+        scroll = QScrollArea(self._whisper_tab)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        body = QWidget()
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(18, 18, 18, 20)
+        layout.setSpacing(14)
+
+        quality = QVBoxLayout()
+        quality.setSpacing(10)
+        quality.addWidget(_section_title(i18n.t("settings.whisper.section.quality")))
+        self.whisper_beam_size = QSpinBox()
+        self.whisper_beam_size.setRange(1, 10)
+        self.whisper_beam_size.setValue(int(whisper["whisper_beam_size"]))
+        quality.addWidget(
+            _labeled_row(i18n.t("settings.whisper.beam_size"), self.whisper_beam_size)
+        )
+        quality.addWidget(_hint(i18n.t("settings.whisper.beam_size.hint")))
+        self.whisper_condition_on_previous = QCheckBox()
+        cond_row = QWidget()
+        cond_layout = QHBoxLayout(cond_row)
+        cond_layout.setContentsMargins(0, 0, 0, 0)
+        cond_layout.setSpacing(9)
+        cond_layout.addWidget(self.whisper_condition_on_previous, 0, Qt.AlignmentFlag.AlignTop)
+        cond_text = QVBoxLayout()
+        cond_text.setSpacing(2)
+        cond_title = QLabel(i18n.t("settings.whisper.condition_on_previous"))
+        cond_title.setObjectName("optionTitle")
+        cond_text.addWidget(cond_title)
+        cond_text.addWidget(_hint(i18n.t("settings.whisper.condition_on_previous.hint")))
+        cond_layout.addLayout(cond_text, 1)
+        self.whisper_condition_on_previous.setChecked(
+            bool(whisper["whisper_condition_on_previous_text"])
+        )
+        quality.addWidget(cond_row)
+        self.whisper_no_speech = QDoubleSpinBox()
+        self.whisper_no_speech.setRange(0.0, 1.0)
+        self.whisper_no_speech.setSingleStep(0.05)
+        self.whisper_no_speech.setDecimals(2)
+        self.whisper_no_speech.setValue(float(whisper["whisper_no_speech_threshold"]))
+        quality.addWidget(
+            _labeled_row(i18n.t("settings.whisper.no_speech_threshold"), self.whisper_no_speech)
+        )
+        quality.addWidget(_hint(i18n.t("settings.whisper.no_speech_threshold.hint")))
+        layout.addLayout(quality)
+
+        vad_box = QFrame()
+        vad_box.setObjectName("settingsSection")
+        vad_layout = QVBoxLayout(vad_box)
+        vad_layout.setContentsMargins(0, 8, 0, 0)
+        vad_layout.setSpacing(10)
+        vad_layout.addWidget(_section_title(i18n.t("settings.whisper.section.vad")))
+        self.whisper_vad_filter, vad_row = _checkbox_with_hint(
+            i18n.t("settings.whisper.vad_filter"),
+            i18n.t("settings.whisper.vad_filter.hint"),
+        )
+        self.whisper_vad_filter.setChecked(bool(whisper["whisper_vad_filter"]))
+        vad_layout.addWidget(vad_row)
+        self.whisper_vad_min_silence = QSpinBox()
+        self.whisper_vad_min_silence.setRange(100, 5000)
+        self.whisper_vad_min_silence.setSingleStep(50)
+        self.whisper_vad_min_silence.setSuffix(" ms")
+        self.whisper_vad_min_silence.setValue(int(whisper["whisper_vad_min_silence_ms"]))
+        vad_layout.addWidget(
+            _labeled_row(
+                i18n.t("settings.whisper.vad_min_silence"),
+                self.whisper_vad_min_silence,
+            )
+        )
+        vad_layout.addWidget(_hint(i18n.t("settings.whisper.vad_min_silence.hint")))
+        self.whisper_vad_filter.toggled.connect(self.whisper_vad_min_silence.setEnabled)
+        self.whisper_vad_min_silence.setEnabled(self.whisper_vad_filter.isChecked())
+        layout.addWidget(vad_box)
+
+        prompt_box = QFrame()
+        prompt_box.setObjectName("settingsSection")
+        prompt_layout = QVBoxLayout(prompt_box)
+        prompt_layout.setContentsMargins(0, 8, 0, 0)
+        prompt_layout.setSpacing(10)
+        prompt_layout.addWidget(_section_title(i18n.t("settings.whisper.section.prompt")))
+        self.whisper_initial_prompt = QPlainTextEdit()
+        self.whisper_initial_prompt.setPlaceholderText(
+            i18n.t("settings.whisper.initial_prompt.placeholder")
+        )
+        self.whisper_initial_prompt.setPlainText(str(whisper["whisper_initial_prompt"]))
+        self.whisper_initial_prompt.setFixedHeight(88)
+        prompt_layout.addWidget(_field_label(i18n.t("settings.whisper.initial_prompt")))
+        prompt_layout.addWidget(self.whisper_initial_prompt)
+        prompt_layout.addWidget(_hint(i18n.t("settings.whisper.initial_prompt.hint")))
+        self.whisper_hotwords = QLineEdit()
+        self.whisper_hotwords.setPlaceholderText(i18n.t("settings.whisper.hotwords.placeholder"))
+        self.whisper_hotwords.setText(str(whisper["whisper_hotwords"]))
+        prompt_layout.addWidget(
+            _labeled_row(i18n.t("settings.whisper.hotwords"), self.whisper_hotwords)
+        )
+        prompt_layout.addWidget(_hint(i18n.t("settings.whisper.hotwords.hint")))
+        layout.addWidget(prompt_box)
+
+        layout.addStretch(1)
+        scroll.setWidget(body)
+        tab_layout = QVBoxLayout(self._whisper_tab)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+        tab_layout.addWidget(scroll)
 
     def _build_advanced(self) -> None:
         layout = QVBoxLayout(self._advanced_tab)
@@ -600,6 +715,15 @@ class SettingsDialog(QDialog):
                 "model": self.model.currentData(),
                 "speech_language": self.speech_language.currentData(),
                 "ui_language": self.ui_language.currentData(),
+                "whisper_beam_size": int(self.whisper_beam_size.value()),
+                "whisper_vad_filter": self.whisper_vad_filter.isChecked(),
+                "whisper_vad_min_silence_ms": int(self.whisper_vad_min_silence.value()),
+                "whisper_condition_on_previous_text": (
+                    self.whisper_condition_on_previous.isChecked()
+                ),
+                "whisper_no_speech_threshold": float(self.whisper_no_speech.value()),
+                "whisper_initial_prompt": self.whisper_initial_prompt.toPlainText(),
+                "whisper_hotwords": self.whisper_hotwords.text(),
             }
         )
         self.accept()
