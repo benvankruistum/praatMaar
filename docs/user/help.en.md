@@ -29,6 +29,10 @@ dictation cycle** and when you save a different mic in Settings (useful after a
 Bluetooth headset connects). It does not auto-switch while idle — start dictation
 or save Settings.
 
+**Whisper:** under Settings → **Whisper** you can tune quality (beam), the
+silence filter (VAD), prompt/hotwords, and related thresholds. The Whisper
+**model** (base/small/medium) stays under Advanced and still needs a restart.
+
 ## What are destinations?
 
 A **destination** is a name linked to a folder on your computer. When you dictate,

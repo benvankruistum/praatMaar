@@ -13,6 +13,10 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
   geslaagde dicteer-transcripts (datum/tijd); klik zet de tekst opnieuw op het
   klembord (geen auto-plak)
   ([spec](docs/superpowers/specs/2026-08-10-recent-transcripts-tray-product.md)).
+- **Whisper-tab in Instellingen:** beam size, VAD (aan/uit + min. stilte),
+  voortbouwen op vorige tekst, geen-spraak-drempel, initial prompt en hotwords —
+  live toepasbaar zonder herstart
+  ([spec](docs/superpowers/specs/2026-08-08-whisper-settings-tab-product.md)).
 
 ### Changed
 

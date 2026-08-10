@@ -16,6 +16,9 @@ class _FakeSession:
         self.is_recording = recording
         self.is_processing = processing
 
+    def transcribe_kwargs(self) -> dict[str, object]:
+        return {"language": "nl"}
+
 
 class _FakeSegment:
     def __init__(self, text: str) -> None:

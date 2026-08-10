@@ -29,6 +29,11 @@ tonen wat er misgaat; de checklist staat in Instellingen.
 opslaat (handig na Bluetooth-headset). Er is geen automatische wissel terwijl
 de app idle is — start dicteren of sla Instellingen op.
 
+**Whisper:** onder Instellingen → **Whisper** kun je kwaliteit (beam),
+stiltefilter (VAD), prompt/hotwords en gerelateerde drempels bijstellen. Het
+Whisper-**model** (base/small/medium) blijft onder Geavanceerd en vereist een
+herstart.
+
 ## Wat zijn bestemmingen?
 
 Een **bestemming** is een naam gekoppeld aan een map op je computer. Als je dicteert,
