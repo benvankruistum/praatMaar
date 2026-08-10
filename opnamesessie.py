@@ -140,6 +140,7 @@ class Opnamesessie:
         whisper_initial_prompt: str = "",
         whisper_hotwords: str = "",
         incremental_transcription: bool = False,
+        incremental_live_paste: bool = False,
         incremental_interval_seconds: float = 3.0,
         incremental_min_seconds: float = 1.5,
         incremental_chunk_mode: str = "hybrid",
@@ -181,6 +182,7 @@ class Opnamesessie:
         self.whisper_initial_prompt = str(whisper_initial_prompt or "")
         self.whisper_hotwords = str(whisper_hotwords or "")
         self.incremental_transcription = incremental_transcription
+        self.incremental_live_paste = bool(incremental_live_paste)
         self._incremental_interval_seconds = incremental_interval_seconds
         self._incremental_min_seconds = incremental_min_seconds
         self.incremental_chunk_mode = normalize_chunk_mode(incremental_chunk_mode)
@@ -207,6 +209,7 @@ class Opnamesessie:
         self._has_external_streams = has_external_streams
 
         self._lock = threading.RLock()
+        self._live_paste_lock = threading.Lock()
         self._recording = False
         self._processing = False
         self._recording_started_at: float | None = None
@@ -223,6 +226,7 @@ class Opnamesessie:
         self._session_id: str | None = None
         self._last_partial_transcript: str | None = None
         self._chunk_transcripts: list[str] = []
+        self._live_pasted_text = ""
         self._transcribed_through_samples: int = 0
         self._incremental_thread: threading.Thread | None = None
         self._incremental_stop: threading.Event | None = None
@@ -475,6 +479,58 @@ class Opnamesessie:
             return None
         return dedupe_overlap_text(previous_text, raw) or None
 
+    def _live_paste_enabled(self) -> bool:
+        """Live-plak alleen als incrementele transcriptie én live-plak aan staan."""
+
+        return bool(self.incremental_transcription and self.incremental_live_paste)
+
+    def _reset_live_paste_state(self) -> None:
+        self._live_pasted_text = ""
+
+    def _unpasted_suffix(self, transcript: str) -> str:
+        """Nog niet live geplakte staart t.o.v. `" ".join`-boekhouding."""
+
+        full = (transcript or "").strip()
+        pasted = self._live_pasted_text.strip()
+        if not full:
+            return ""
+        if not pasted:
+            return full
+        if full == pasted:
+            return ""
+        prefix = pasted + " "
+        if full.startswith(prefix):
+            return full[len(prefix) :].strip()
+        return ""
+
+    def _paste_delta(self, text: str) -> None:
+        """Plakt één chunk-/staart-delta via klembord + host.paste() (geserialiseerd)."""
+
+        delta = (text or "").strip()
+        if not delta:
+            return
+
+        with self._live_paste_lock:
+            if self._copy_text is not None:
+                try:
+                    self._copy_text(delta)
+                except Exception as exc:
+                    print(i18n.t("rec.clipboard_warn", error=exc))
+
+            self.wait_until_modifiers_clear()
+            time.sleep(self.paste_delay_seconds)
+            try:
+                self.host.paste()
+            except Exception as exc:
+                print(i18n.t("rec.paste_failed"))
+                print(i18n.t("rec.error", error=exc))
+                return
+
+            if self._live_pasted_text:
+                self._live_pasted_text = f"{self._live_pasted_text} {delta}"
+            else:
+                self._live_pasted_text = delta
+
     def _try_commit_chunk(self, reason: str) -> None:
         with self._lock:
             if not self._recording:
@@ -531,6 +587,8 @@ class Opnamesessie:
 
         if piece_text and combined:
             self._emit_partial(combined, session_id)
+        if piece_text and self._live_paste_enabled():
+            self._paste_delta(piece_text)
 
     def _incremental_loop(self) -> None:
         stop = self._incremental_stop
@@ -812,6 +870,7 @@ class Opnamesessie:
             self._last_partial_transcript = None
             self._chunk_transcripts = []
             self._transcribed_through_samples = 0
+            self._reset_live_paste_state()
 
         self._event(CycleEventType.CYCLE_STARTED, session_id=session_id)
 
@@ -903,6 +962,7 @@ class Opnamesessie:
                 self._audio_chunks.clear()
                 self._chunk_transcripts = []
                 self._transcribed_through_samples = 0
+                self._reset_live_paste_state()
             # Seinen zonder join: UI blijft snappy.
             self._stop_incremental_worker(wait=False)
             set_chunk_leds_enabled(False)
@@ -1006,6 +1066,8 @@ class Opnamesessie:
                     piece = dedupe_overlap_text(previous, raw) if raw else None
                     if piece:
                         texts.append(piece)
+                        if self._live_paste_enabled():
+                            self._paste_delta(piece)
                 except Exception as exc:
                     error_message = str(exc)
                     print()
@@ -1098,6 +1160,7 @@ class Opnamesessie:
             self._last_partial_transcript = None
             self._chunk_transcripts = []
             self._transcribed_through_samples = 0
+            self._reset_live_paste_state()
             session_id = self._session_id
 
         self._event(CycleEventType.CYCLE_CANCELLED, session_id=session_id)
@@ -1143,22 +1206,25 @@ class Opnamesessie:
             print(i18n.t("rec.no_speech"))
             return
 
+        live = self._live_paste_enabled()
         dests = self._get_destinations() if self._get_destinations else []
-        kind, name = match_command(transcript, dests)
-        if kind in ("set", "reset"):
-            if self._on_destination_command:
-                self._on_destination_command(kind, name)
-            self._event(
-                CycleEventType.DESTINATION_COMMAND,
-                transcript=transcript,
-                destination_command=kind,
-                destination_name=name,
-            )
-            if kind == "set":
-                print(i18n.t("destination.switched", name=name))
-            else:
-                print(i18n.t("destination.reset"))
-            return
+
+        if not live:
+            kind, name = match_command(transcript, dests)
+            if kind in ("set", "reset"):
+                if self._on_destination_command:
+                    self._on_destination_command(kind, name)
+                self._event(
+                    CycleEventType.DESTINATION_COMMAND,
+                    transcript=transcript,
+                    destination_command=kind,
+                    destination_name=name,
+                )
+                if kind == "set":
+                    print(i18n.t("destination.switched", name=name))
+                else:
+                    print(i18n.t("destination.reset"))
+                return
 
         print()
         print("-" * 60)
@@ -1187,6 +1253,12 @@ class Opnamesessie:
                 )
             except OSError as exc:
                 print(i18n.t("rec.save_warn", error=exc))
+
+        if live:
+            remaining = self._unpasted_suffix(transcript)
+            if remaining:
+                self._paste_delta(remaining)
+            return
 
         deliver = resolve_auto_paste(active, dests, self.auto_paste)
 
