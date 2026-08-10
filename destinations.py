@@ -71,6 +71,34 @@ def resolve_append_file(destination: dict[str, Any] | None) -> Path | None:
     return Path(raw)
 
 
+def directory_save_paths(destinations: list[dict[str, Any]]) -> list[Path]:
+    """
+    Unieke mappen van directory-bestemmingen (`file_mode=new`).
+
+    Append-bestemmingen worden overgeslagen — die schrijven naar één bestand,
+    niet naar discrete timestamp-``.txt``-bestanden.
+    """
+
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for item in destinations:
+        if resolve_file_mode(item) == FILE_MODE_APPEND:
+            continue
+        raw = str(item.get("path", "")).strip()
+        if not raw:
+            continue
+        path = Path(raw)
+        try:
+            key = str(path.resolve())
+        except OSError:
+            key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        paths.append(path)
+    return paths
+
+
 def resolve_auto_paste(
     active_name: str | None,
     destinations: list[dict[str, Any]],

@@ -114,11 +114,18 @@ def build_context_menu_entries(
     module_tray_actions: list[tuple[PraatMaarModule, ModuleAction]],
     module_tray_root_actions: list[tuple[PraatMaarModule, ModuleAction]],
     module_action_callback: ModuleActionCallback,
+    recent_transcript_entries: list[MenuEntry] | None = None,
 ) -> list[MenuEntry]:
     """Build the shared tray and recording-pill context-menu model."""
+    recent = (
+        list(recent_transcript_entries)
+        if recent_transcript_entries is not None
+        else [("disabled", i18n.t("tray.recent_transcripts.empty"))]
+    )
     entries: list[MenuEntry] = [
         ("item", i18n.t("tray.settings"), on_settings),
         ("item", i18n.t("tray.destinations"), on_destinations),
+        ("submenu", i18n.t("tray.recent_transcripts"), recent),
     ]
     module_section = _module_tray_cascade_entries(module_tray_actions, module_action_callback)
     module_section.extend(
@@ -187,6 +194,7 @@ class TrayIcon:
         | None = None,
         get_module_tray_root_actions: Callable[[], list[tuple[PraatMaarModule, ModuleAction]]]
         | None = None,
+        get_recent_transcript_entries: Callable[[], list[MenuEntry]] | None = None,
     ) -> None:
         ensure_app()
         self._on_quit = on_quit
@@ -197,6 +205,7 @@ class TrayIcon:
         self._on_module_action = on_module_action
         self._get_module_tray_actions = get_module_tray_actions
         self._get_module_tray_root_actions = get_module_tray_root_actions
+        self._get_recent_transcript_entries = get_recent_transcript_entries
         self._state = RecordingState.IDLE
         self._attention = False
         self._attention_tooltip_key = "tray.tooltip.attention_mic"
@@ -217,6 +226,9 @@ class TrayIcon:
         return lambda: self._handle_module_action(module_id, action_id)
 
     def context_menu_entries(self) -> list[MenuEntry]:
+        recent: list[MenuEntry] | None = None
+        if self._get_recent_transcript_entries is not None:
+            recent = self._get_recent_transcript_entries()
         return build_context_menu_entries(
             on_settings=self._on_settings,
             on_destinations=self._on_destinations,
@@ -230,23 +242,35 @@ class TrayIcon:
                 self._get_module_tray_root_actions() if self._get_module_tray_root_actions else []
             ),
             module_action_callback=self._module_action_callback,
+            recent_transcript_entries=recent,
         )
 
-    def _build_menu(self) -> QMenu:
-        def populate(menu: QMenu, entries: list[MenuEntry]) -> None:
-            for entry in entries:
-                if entry[0] == "separator":
-                    menu.addSeparator()
-                elif entry[0] == "item":
-                    action = QAction(entry[1], menu)
-                    action.triggered.connect(entry[2])
-                    menu.addAction(action)
-                else:
-                    submenu = menu.addMenu(entry[1])
-                    populate(submenu, entry[2])
+    @staticmethod
+    def _populate_menu(menu: QMenu, entries: list[MenuEntry]) -> None:
+        for entry in entries:
+            if entry[0] == "separator":
+                menu.addSeparator()
+            elif entry[0] == "disabled":
+                action = QAction(entry[1], menu)
+                action.setEnabled(False)
+                menu.addAction(action)
+            elif entry[0] == "item":
+                action = QAction(entry[1], menu)
+                action.triggered.connect(entry[2])
+                menu.addAction(action)
+            else:
+                submenu = menu.addMenu(entry[1])
+                TrayIcon._populate_menu(submenu, entry[2])
 
+    def _refresh_menu_contents(self) -> None:
+        """Rebuild actions so recent transcripts stay current when the menu opens."""
+        self._menu.clear()
+        self._populate_menu(self._menu, self.context_menu_entries())
+
+    def _build_menu(self) -> QMenu:
         menu = QMenu()
-        populate(menu, self.context_menu_entries())
+        self._populate_menu(menu, self.context_menu_entries())
+        menu.aboutToShow.connect(self._refresh_menu_contents)
         return menu
 
     def _build_fallback_window(self) -> QWidget:

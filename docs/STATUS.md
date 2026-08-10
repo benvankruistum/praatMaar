@@ -36,7 +36,8 @@ Aandachtspunten, nog niet als distributie-build geverifieerd:
 - Lazy mic-rebind bij dicteerstart / Instellingen-opslaan (device-identiteit;
   geen OS-watcher) — [ADR-0006](adr/0006-mic-lazy-rebind.md)
 - Status-pill zonder focus te stelen (`indicator._qt` + Win32 no-activate flags)
-- Systeemvak: Instellingen, Bestemmingen, Modules, Help (PySide6-dialogen)
+- Systeemvak: Instellingen, Bestemmingen, Recente transcripts, Modules, Help
+  (PySide6-dialogen)
 - Meertaligheid UI + spraak (`nl`/`en`/`de`)
 - Sticky bestemmingen (transcript naar gekozen map)
 - Laadscherm met model-downloadvoortgang (`ui/splash.py`)

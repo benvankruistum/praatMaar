@@ -86,6 +86,8 @@ Rechtsklik op het praatMaar-icoon in het systeemvak:
 - **Bestemmingen** — dialoog om namen en mappen toe te voegen, te wijzigen of te
   verwijderen, en de actieve bestemming in te stellen of te wissen. In die dialoog
   vind je ook knoppen om de transcriptmap of de actieve map te openen.
+- **Recente transcripts** — de laatste vijf geslaagde dicteer-transcripts
+  (datum/tijd); klik om de tekst opnieuw op het klembord te zetten (niet plakken)
 - **Modules** — uitbreidingen en incrementele transcriptie
 - **Help** — deze gebruikershandleiding
 - **Afsluiten**

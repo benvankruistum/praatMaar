@@ -1,6 +1,8 @@
 {
   "tray.settings": "Einstellungen",
   "tray.destinations": "Ziele",
+  "tray.recent_transcripts": "Letzte Transkripte",
+  "tray.recent_transcripts.empty": "Keine letzten Transkripte",
   "tray.modules": "Module",
   "tray.help": "Hilfe",
   "tray.quit": "Beenden",

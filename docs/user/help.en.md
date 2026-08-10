@@ -84,6 +84,8 @@ Right-click the praatMaar icon in the system tray:
 - **Destinations** — dialog to add, edit, or remove names and folders, and set or
   clear the active destination. In that dialog you also find buttons to open the
   transcript folder or the active folder.
+- **Recent transcripts** — the last five successful dictation transcripts
+  (date/time); click to copy the text to the clipboard again (does not paste)
 - **Modules** — enable or disable extensions and incremental transcription
 - **Help** — this user guide
 - **Quit**

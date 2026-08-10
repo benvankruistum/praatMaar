@@ -15,7 +15,9 @@ Bewust puur stdlib, net als `config.py`: geen extra dependency voor deze laag.
 
 from __future__ import annotations
 
+import re
 import shutil
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -23,6 +25,12 @@ from config import config_dir
 
 # Hoeveel transcripts we maximaal bewaren. Oudere worden opgeruimd.
 MAX_TRANSCRIPTS = 50
+
+# Hoeveel recente transcripts in het tray/pill-menu.
+RECENT_TRANSCRIPT_LIMIT = 5
+
+# Stem van `save_transcript`: `YYYY-MM-DD_HHMMSS` of `…_N` bij botsing.
+_TIMESTAMP_STEM_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\d{6})(?:_(\d+))?$")
 
 
 def transcripts_dir() -> Path:
@@ -200,3 +208,89 @@ def recovery_list_label(path: Path) -> str:
     except OSError:
         size = 0
     return f"{path.name}  ({format_size(size)})"
+
+
+@dataclass(frozen=True)
+class RecentTranscript:
+    """Één discrete timestamp-transcript voor het tray-menu."""
+
+    path: Path
+    recorded_at: datetime
+    collision_index: int | None
+    mtime: float
+
+
+def parse_transcript_stem(stem: str) -> tuple[datetime, int | None] | None:
+    """Parse `YYYY-MM-DD_HHMMSS` / `…_N`; anders ``None``."""
+
+    match = _TIMESTAMP_STEM_RE.match(stem)
+    if match is None:
+        return None
+    recorded_at = datetime.strptime(f"{match.group(1)}_{match.group(2)}", "%Y-%m-%d_%H%M%S")
+    collision = int(match.group(3)) if match.group(3) is not None else None
+    return recorded_at, collision
+
+
+def format_recent_transcript_label(item: RecentTranscript, ui_language: str = "en") -> str:
+    """Datum/tijd-label voor het menu (geen transcripttekst)."""
+
+    recorded = item.recorded_at
+    if ui_language == "nl":
+        text = recorded.strftime("%d-%m-%Y %H:%M:%S")
+    elif ui_language == "de":
+        text = recorded.strftime("%d.%m.%Y %H:%M:%S")
+    else:
+        text = recorded.strftime("%Y-%m-%d %H:%M:%S")
+    if item.collision_index is not None:
+        text = f"{text} (#{item.collision_index})"
+    return text
+
+
+def list_recent_transcripts(
+    directories: list[Path],
+    *,
+    limit: int = RECENT_TRANSCRIPT_LIMIT,
+) -> list[RecentTranscript]:
+    """
+    Nieuwste discrete timestamp-``.txt``-bestanden over de gegeven mappen.
+
+    Slaat ontoegankelijke mappen en niet-passende namen over. Geen recursie.
+    """
+
+    if limit <= 0:
+        return []
+
+    found: list[RecentTranscript] = []
+    for directory in directories:
+        try:
+            if not directory.is_dir():
+                continue
+            files = [path for path in directory.glob("*.txt") if path.is_file()]
+        except OSError:
+            continue
+        for path in files:
+            parsed = parse_transcript_stem(path.stem)
+            if parsed is None:
+                continue
+            recorded_at, collision_index = parsed
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                continue
+            found.append(
+                RecentTranscript(
+                    path=path,
+                    recorded_at=recorded_at,
+                    collision_index=collision_index,
+                    mtime=mtime,
+                )
+            )
+
+    found.sort(key=lambda item: (item.mtime, item.path.name), reverse=True)
+    return found[:limit]
+
+
+def read_transcript_text(path: Path) -> str:
+    """Leest een transcriptbestand als UTF-8-tekst."""
+
+    return Path(path).read_text(encoding="utf-8")
