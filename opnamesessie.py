@@ -132,6 +132,13 @@ class Opnamesessie:
         delete_temp_audio: bool = True,
         mode: str = "toggle",
         warm_microphone: bool = False,
+        whisper_beam_size: int = 5,
+        whisper_vad_filter: bool = True,
+        whisper_vad_min_silence_ms: int = 300,
+        whisper_condition_on_previous_text: bool = False,
+        whisper_no_speech_threshold: float = 0.6,
+        whisper_initial_prompt: str = "",
+        whisper_hotwords: str = "",
         incremental_transcription: bool = False,
         incremental_interval_seconds: float = 3.0,
         incremental_min_seconds: float = 1.5,
@@ -166,6 +173,13 @@ class Opnamesessie:
         self.delete_temp_audio = delete_temp_audio
         self.mode = mode
         self.warm_microphone = warm_microphone
+        self.whisper_beam_size = int(whisper_beam_size)
+        self.whisper_vad_filter = bool(whisper_vad_filter)
+        self.whisper_vad_min_silence_ms = int(whisper_vad_min_silence_ms)
+        self.whisper_condition_on_previous_text = bool(whisper_condition_on_previous_text)
+        self.whisper_no_speech_threshold = float(whisper_no_speech_threshold)
+        self.whisper_initial_prompt = str(whisper_initial_prompt or "")
+        self.whisper_hotwords = str(whisper_hotwords or "")
         self.incremental_transcription = incremental_transcription
         self._incremental_interval_seconds = incremental_interval_seconds
         self._incremental_min_seconds = incremental_min_seconds
@@ -564,11 +578,7 @@ class Opnamesessie:
             with self._whisper.locked_model() as model:
                 segments, _info = model.transcribe(
                     str(temporary_path),
-                    language=self.language,
-                    beam_size=5,
-                    vad_filter=True,
-                    vad_parameters={"min_silence_duration_ms": 300},
-                    condition_on_previous_text=False,
+                    **self.transcribe_kwargs(),
                 )
                 text_parts: list[str] = []
                 for segment in segments:
@@ -583,6 +593,28 @@ class Opnamesessie:
                     os.remove(temporary_path)
                 except OSError:
                     pass
+
+    def transcribe_kwargs(self) -> dict[str, Any]:
+        """Faster-Whisper ``transcribe``-kwargs uit sessie-instellingen."""
+
+        kwargs: dict[str, Any] = {
+            "language": self.language,
+            "beam_size": max(1, int(self.whisper_beam_size)),
+            "vad_filter": bool(self.whisper_vad_filter),
+            "condition_on_previous_text": bool(self.whisper_condition_on_previous_text),
+            "no_speech_threshold": float(self.whisper_no_speech_threshold),
+        }
+        if self.whisper_vad_filter:
+            kwargs["vad_parameters"] = {
+                "min_silence_duration_ms": max(0, int(self.whisper_vad_min_silence_ms)),
+            }
+        prompt = str(self.whisper_initial_prompt or "").strip()
+        if prompt:
+            kwargs["initial_prompt"] = prompt
+        hotwords = str(self.whisper_hotwords or "").strip()
+        if hotwords:
+            kwargs["hotwords"] = hotwords
+        return kwargs
 
     def _require_audio(self) -> tuple[Any, Any, Any]:
         if self._np is None or self._sd is None or self._write_wav is None:
@@ -1207,11 +1239,7 @@ class Opnamesessie:
             with self._whisper.locked_model() as model:
                 segments, _info = model.transcribe(
                     str(temporary_path),
-                    language=self.language,
-                    beam_size=5,
-                    vad_filter=True,
-                    vad_parameters={"min_silence_duration_ms": 300},
-                    condition_on_previous_text=False,
+                    **self.transcribe_kwargs(),
                 )
                 text_parts: list[str] = []
                 for segment in segments:

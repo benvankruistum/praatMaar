@@ -9,6 +9,11 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Added
 
+- **Whisper-tab in Instellingen:** beam size, VAD (aan/uit + min. stilte),
+  voortbouwen op vorige tekst, geen-spraak-drempel, initial prompt en hotwords —
+  live toepasbaar zonder herstart
+  ([spec](docs/superpowers/specs/2026-08-08-whisper-settings-tab-product.md)).
+
 ### Changed
 
 ### Fixed

@@ -97,6 +97,15 @@ AUTO_PASTE = True
 # Default uit: privacyvriendelijker, vooral bij automatisch meestarten.
 WARM_MICROPHONE = False
 
+# Faster-Whisper transcribe-opties (Instellingen → Whisper).
+WHISPER_BEAM_SIZE = config.DEFAULT_WHISPER_BEAM_SIZE
+WHISPER_VAD_FILTER = config.DEFAULT_WHISPER_VAD_FILTER
+WHISPER_VAD_MIN_SILENCE_MS = config.DEFAULT_WHISPER_VAD_MIN_SILENCE_MS
+WHISPER_CONDITION_ON_PREVIOUS_TEXT = config.DEFAULT_WHISPER_CONDITION_ON_PREVIOUS_TEXT
+WHISPER_NO_SPEECH_THRESHOLD = config.DEFAULT_WHISPER_NO_SPEECH_THRESHOLD
+WHISPER_INITIAL_PROMPT = config.DEFAULT_WHISPER_INITIAL_PROMPT
+WHISPER_HOTWORDS = config.DEFAULT_WHISPER_HOTWORDS
+
 # Korte wachttijd voordat Ctrl+V wordt uitgevoerd.
 PASTE_DELAY_SECONDS = 0.30
 
@@ -135,6 +144,14 @@ if "auto_paste" in _user_config:
     AUTO_PASTE = bool(_user_config["auto_paste"])
 if "warm_microphone" in _user_config:
     WARM_MICROPHONE = bool(_user_config["warm_microphone"])
+_whisper_cfg = config.whisper_settings_from_config(_user_config)
+WHISPER_BEAM_SIZE = _whisper_cfg["whisper_beam_size"]
+WHISPER_VAD_FILTER = _whisper_cfg["whisper_vad_filter"]
+WHISPER_VAD_MIN_SILENCE_MS = _whisper_cfg["whisper_vad_min_silence_ms"]
+WHISPER_CONDITION_ON_PREVIOUS_TEXT = _whisper_cfg["whisper_condition_on_previous_text"]
+WHISPER_NO_SPEECH_THRESHOLD = _whisper_cfg["whisper_no_speech_threshold"]
+WHISPER_INITIAL_PROMPT = _whisper_cfg["whisper_initial_prompt"]
+WHISPER_HOTWORDS = _whisper_cfg["whisper_hotwords"]
 if "indicator_position" in _user_config:
     from indicator._contract import normalize_indicator_position, sanitize_indicator_xy
 
@@ -620,6 +637,13 @@ def _user_config_dict() -> dict[str, Any]:
         "microphone_device": MICROPHONE_DEVICE,
         "auto_paste": AUTO_PASTE,
         "warm_microphone": WARM_MICROPHONE,
+        "whisper_beam_size": WHISPER_BEAM_SIZE,
+        "whisper_vad_filter": WHISPER_VAD_FILTER,
+        "whisper_vad_min_silence_ms": WHISPER_VAD_MIN_SILENCE_MS,
+        "whisper_condition_on_previous_text": WHISPER_CONDITION_ON_PREVIOUS_TEXT,
+        "whisper_no_speech_threshold": WHISPER_NO_SPEECH_THRESHOLD,
+        "whisper_initial_prompt": WHISPER_INITIAL_PROMPT,
+        "whisper_hotwords": WHISPER_HOTWORDS,
         "indicator_position": INDICATOR_POSITION,
         "indicator_xy": list(INDICATOR_XY) if INDICATOR_XY is not None else None,
         "mode": MODE,
@@ -685,11 +709,7 @@ def retranscribe_recovery_wav(path: Path) -> str:
     with shared_whisper.locked_model() as whisper_model:
         segments, _info = whisper_model.transcribe(
             str(resolved),
-            language=LANGUAGE,
-            beam_size=5,
-            vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 300},
-            condition_on_previous_text=False,
+            **session.transcribe_kwargs(),
         )
         text_parts: list[str] = []
         for segment in segments:
@@ -865,6 +885,13 @@ def _build_session() -> Opnamesessie:
         delete_temp_audio=DELETE_TEMP_AUDIO,
         mode=MODE,
         warm_microphone=WARM_MICROPHONE,
+        whisper_beam_size=WHISPER_BEAM_SIZE,
+        whisper_vad_filter=WHISPER_VAD_FILTER,
+        whisper_vad_min_silence_ms=WHISPER_VAD_MIN_SILENCE_MS,
+        whisper_condition_on_previous_text=WHISPER_CONDITION_ON_PREVIOUS_TEXT,
+        whisper_no_speech_threshold=WHISPER_NO_SPEECH_THRESHOLD,
+        whisper_initial_prompt=WHISPER_INITIAL_PROMPT,
+        whisper_hotwords=WHISPER_HOTWORDS,
         incremental_transcription=INCREMENTAL_TRANSCRIPTION,
         incremental_chunk_mode=INCREMENTAL_CHUNK_MODE,
         incremental_vad_ms=INCREMENTAL_VAD_MS,
@@ -1022,6 +1049,13 @@ def current_settings() -> dict[str, Any]:
         "microphone_device": MICROPHONE_DEVICE,
         "auto_paste": AUTO_PASTE,
         "warm_microphone": WARM_MICROPHONE,
+        "whisper_beam_size": WHISPER_BEAM_SIZE,
+        "whisper_vad_filter": WHISPER_VAD_FILTER,
+        "whisper_vad_min_silence_ms": WHISPER_VAD_MIN_SILENCE_MS,
+        "whisper_condition_on_previous_text": WHISPER_CONDITION_ON_PREVIOUS_TEXT,
+        "whisper_no_speech_threshold": WHISPER_NO_SPEECH_THRESHOLD,
+        "whisper_initial_prompt": WHISPER_INITIAL_PROMPT,
+        "whisper_hotwords": WHISPER_HOTWORDS,
         "indicator_position": INDICATOR_POSITION,
         "indicator_xy": list(INDICATOR_XY) if INDICATOR_XY is not None else None,
         "mode": MODE,
@@ -1053,6 +1087,9 @@ def apply_settings(
 
     global MODEL_NAME, MICROPHONE_DEVICE, AUTO_PASTE, INDICATOR_POSITION, INDICATOR_XY
     global MODE, HOTKEY_TOKENS, LANGUAGE, WARM_MICROPHONE
+    global WHISPER_BEAM_SIZE, WHISPER_VAD_FILTER, WHISPER_VAD_MIN_SILENCE_MS
+    global WHISPER_CONDITION_ON_PREVIOUS_TEXT, WHISPER_NO_SPEECH_THRESHOLD
+    global WHISPER_INITIAL_PROMPT, WHISPER_HOTWORDS
     global DESTINATIONS, ACTIVE_DESTINATION, MODULES_CONFIG, INCREMENTAL_TRANSCRIPTION
     global INCREMENTAL_CHUNK_MODE, INCREMENTAL_VAD_MS, INCREMENTAL_CHUNK_SECONDS
 
@@ -1078,6 +1115,32 @@ def apply_settings(
     MICROPHONE_DEVICE = new_settings.get("microphone_device", MICROPHONE_DEVICE)
     AUTO_PASTE = bool(new_settings.get("auto_paste", AUTO_PASTE))
     WARM_MICROPHONE = bool(new_settings.get("warm_microphone", WARM_MICROPHONE))
+    _whisper = config.whisper_settings_from_config(
+        {
+            "whisper_beam_size": new_settings.get("whisper_beam_size", WHISPER_BEAM_SIZE),
+            "whisper_vad_filter": new_settings.get("whisper_vad_filter", WHISPER_VAD_FILTER),
+            "whisper_vad_min_silence_ms": new_settings.get(
+                "whisper_vad_min_silence_ms", WHISPER_VAD_MIN_SILENCE_MS
+            ),
+            "whisper_condition_on_previous_text": new_settings.get(
+                "whisper_condition_on_previous_text", WHISPER_CONDITION_ON_PREVIOUS_TEXT
+            ),
+            "whisper_no_speech_threshold": new_settings.get(
+                "whisper_no_speech_threshold", WHISPER_NO_SPEECH_THRESHOLD
+            ),
+            "whisper_initial_prompt": new_settings.get(
+                "whisper_initial_prompt", WHISPER_INITIAL_PROMPT
+            ),
+            "whisper_hotwords": new_settings.get("whisper_hotwords", WHISPER_HOTWORDS),
+        }
+    )
+    WHISPER_BEAM_SIZE = _whisper["whisper_beam_size"]
+    WHISPER_VAD_FILTER = _whisper["whisper_vad_filter"]
+    WHISPER_VAD_MIN_SILENCE_MS = _whisper["whisper_vad_min_silence_ms"]
+    WHISPER_CONDITION_ON_PREVIOUS_TEXT = _whisper["whisper_condition_on_previous_text"]
+    WHISPER_NO_SPEECH_THRESHOLD = _whisper["whisper_no_speech_threshold"]
+    WHISPER_INITIAL_PROMPT = _whisper["whisper_initial_prompt"]
+    WHISPER_HOTWORDS = _whisper["whisper_hotwords"]
     INDICATOR_POSITION = new_position
     INDICATOR_XY = new_xy
 
@@ -1143,6 +1206,13 @@ def apply_settings(
     session.mode = MODE
     session.language = LANGUAGE
     session.warm_microphone = WARM_MICROPHONE
+    session.whisper_beam_size = WHISPER_BEAM_SIZE
+    session.whisper_vad_filter = WHISPER_VAD_FILTER
+    session.whisper_vad_min_silence_ms = WHISPER_VAD_MIN_SILENCE_MS
+    session.whisper_condition_on_previous_text = WHISPER_CONDITION_ON_PREVIOUS_TEXT
+    session.whisper_no_speech_threshold = WHISPER_NO_SPEECH_THRESHOLD
+    session.whisper_initial_prompt = WHISPER_INITIAL_PROMPT
+    session.whisper_hotwords = WHISPER_HOTWORDS
     session.incremental_transcription = INCREMENTAL_TRANSCRIPTION
     session.incremental_chunk_mode = INCREMENTAL_CHUNK_MODE
     session.incremental_vad_ms = INCREMENTAL_VAD_MS

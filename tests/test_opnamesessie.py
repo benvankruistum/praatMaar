@@ -796,3 +796,30 @@ def test_stop_audio_stream_clears_bound_device_identity(
     session.refresh_input_device()
     assert session._audio_stream is None
     assert session._bound_device_identity is None
+
+
+def test_transcribe_kwargs_defaults_and_optional_prompt(session: Opnamesessie) -> None:
+    kwargs = session.transcribe_kwargs()
+    assert kwargs["language"] == "nl"
+    assert kwargs["beam_size"] == 5
+    assert kwargs["vad_filter"] is True
+    assert kwargs["vad_parameters"] == {"min_silence_duration_ms": 300}
+    assert kwargs["condition_on_previous_text"] is False
+    assert kwargs["no_speech_threshold"] == 0.6
+    assert "initial_prompt" not in kwargs
+    assert "hotwords" not in kwargs
+
+    session.whisper_vad_filter = False
+    session.whisper_beam_size = 3
+    session.whisper_initial_prompt = "  praatMaar  "
+    session.whisper_hotwords = "Teams, Zoom"
+    session.whisper_condition_on_previous_text = True
+    session.whisper_no_speech_threshold = 0.4
+    kwargs = session.transcribe_kwargs()
+    assert kwargs["beam_size"] == 3
+    assert kwargs["vad_filter"] is False
+    assert "vad_parameters" not in kwargs
+    assert kwargs["initial_prompt"] == "praatMaar"
+    assert kwargs["hotwords"] == "Teams, Zoom"
+    assert kwargs["condition_on_previous_text"] is True
+    assert kwargs["no_speech_threshold"] == 0.4
