@@ -25,6 +25,5 @@
 
 ## Post-tag
 
-- [ ] GitHub Windows Release workflow OK
-- [ ] Optional macOS PyInstaller build
-- [ ] Smoke dictation once
+- [ ] GitHub Release workflow OK (Windows Setup/zip + macOS arm64 zip)
+- [ ] Smoke dictation once (Windows; optioneel macOS `.app`)

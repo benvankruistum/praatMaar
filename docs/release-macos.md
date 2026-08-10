@@ -12,13 +12,13 @@ Windows-builds: [release-windows.md](release-windows.md).
 ## Versie
 
 Gebruik dezelfde versiestring als Windows (`pyproject.toml`, CHANGELOG, git-tag).
-Huidige gepubliceerde tag: **v0.3.0**. Cut op deze lijn: **v0.4.0**
-(CHANGELOG-sectie; macOS-port zit in die release).
+Huidige gepubliceerde tag: **v0.4.0**. Cut op deze lijn: **v0.5.0**
+(CHANGELOG-sectie; macOS unsigned zip via dezelfde Release-workflow).
 
 Zip-naamvoorbeeld:
 
 ```bash
-VERSION=0.4.0   # gelijk aan pyproject.toml
+VERSION=0.5.0   # gelijk aan pyproject.toml
 cd dist && zip -r "praatMaar-${VERSION}-macos-arm64.zip" praatMaar.app
 ```
 
@@ -51,7 +51,7 @@ Aanbevolen (PyInstaller + zip onder `release/`):
 ```bash
 chmod +x scripts/build-macos.sh
 ./scripts/build-macos.sh          # versie uit pyproject.toml
-# of: ./scripts/build-macos.sh 0.4.0
+# of: ./scripts/build-macos.sh 0.5.0
 ```
 
 Handmatig:

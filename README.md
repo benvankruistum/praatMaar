@@ -44,6 +44,15 @@ Builds zijn **niet digitaal ondertekend** (indie/OSS). Als Windows waarschuwt
 
 Details: [docs/release-windows.md](docs/release-windows.md).
 
+### Kant-en-klare build (macOS, Apple Silicon)
+
+Zelfde [Releases](https://github.com/benvankruistum/praatMaar/releases)-pagina:
+
+- **macOS zip** (`praatMaar-*-macos-arm64.zip`) — uitpakken en `praatMaar.app` openen
+
+Unsigned: Gatekeeper kan blokkeren → rechtsklik → **Open**, of
+`xattr -cr praatMaar.app`. Details: [docs/release-macos.md](docs/release-macos.md).
+
 ### Vanuit broncode (Windows)
 
 ```powershell
@@ -133,7 +142,7 @@ Zie ook [SECURITY.md](SECURITY.md).
 
 - Windows: [docs/release-windows.md](docs/release-windows.md) (versie-checklist + tag)
 - macOS: [docs/release-macos.md](docs/release-macos.md)
-- Changelog: [CHANGELOG.md](CHANGELOG.md) — gepubliceerd `v0.4.0`; richting
+- Changelog: [CHANGELOG.md](CHANGELOG.md) — gepubliceerd `v0.5.0`; richting
   `v1.0.0` onder Unreleased / scope-spec
 
 ```text

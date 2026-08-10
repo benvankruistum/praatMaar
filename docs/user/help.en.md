@@ -12,6 +12,10 @@
 **Windows installers** are not code-signed. If Windows shows “Windows protected
 your PC”: **More info** → **Run anyway**.
 
+**macOS (Apple Silicon):** GitHub Releases include an unsigned
+`praatMaar-*-macos-arm64.zip`. If Gatekeeper blocks it: right-click → **Open**,
+or run `xattr -cr praatMaar.app`.
+
 **Privacy (short):** speech-to-text runs locally. Sensitive files live under
 `%APPDATA%\praatMaar\` (transcripts, recovery, inbox, logs). See also Privacy in
 the README.

@@ -13,6 +13,18 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Fixed
 
+## [0.5.0] - 2026-08-10
+
+### Added
+
+- **macOS-release via GitHub Actions:** bij tag `v*` bouwt CI op Apple Silicon
+  (`macos-14`) een unsigned `praatMaar-*-macos-arm64.zip` en publiceert die
+  samen met de Windows Setup/zip. Lokaal: `scripts/build-macos.sh`.
+  Gatekeeper: rechtsklik → Open, of `xattr -cr praatMaar.app`
+  ([docs/release-macos.md](docs/release-macos.md)).
+
+### Fixed
+
 - **Warme microfoon volgt headset/default opnieuw:** bij start van de
   dicteercyclus (en na mic-wijziging in Instellingen) heropent praatMaar de
   stream alleen als de PortAudio device-identiteit is gewijzigd — geen app-
@@ -220,7 +232,8 @@ Eerste publieke Windows-release (tag `v0.1.0`).
 - Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
 - `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`
 
-[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/benvankruistum/praatMaar/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/benvankruistum/praatMaar/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/benvankruistum/praatMaar/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/benvankruistum/praatMaar/compare/v0.1.0...v0.2.0
