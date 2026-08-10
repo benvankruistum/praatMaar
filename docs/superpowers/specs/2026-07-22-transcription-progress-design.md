@@ -1,7 +1,9 @@
 # Design: transcriptie-voortgang op de pill
 
 Datum: 2026-07-22  
-Status: approved
+Status: superseded — zie
+[2026-08-10-hybrid-transcription-progress-design.md](2026-08-10-hybrid-transcription-progress-design.md)
+voor hybride tijd + segment %
 
 ## Doel
 

@@ -53,7 +53,7 @@ from indicator import (
 from indicator import (
     reset_levels as default_reset_levels,
 )
-from indicator._contract import transcription_percent
+from indicator._contract import get_transcription_progress, transcription_percent
 from mic_errors import (
     device_identity,
     first_input_device_index,
@@ -62,6 +62,7 @@ from mic_errors import (
 )
 from modules._contract import CycleEvent, CycleEventType
 from modules.whisper import SharedWhisper
+from transcription_progress import TranscriptionProgressTicker
 
 # RMS onder deze drempel telt als stilte voor chunk-VAD (v1, eenvoudig).
 _CHUNK_SILENCE_RMS = 0.01
@@ -984,10 +985,10 @@ class Opnamesessie:
         final_state = RecordingState.IDLE
         error_message: str | None = None
         recovery_kept: Path | None = None
+        ticker: TranscriptionProgressTicker | None = None
 
         try:
             print(i18n.t("rec.transcribing"))
-            set_transcription_progress(0)
             texts = list(chunk_texts)
             previous = " ".join(texts).strip()
             audio = self._concat_audio(chunks)
@@ -1001,6 +1002,9 @@ class Opnamesessie:
                 overlap = int(self.sample_rate * OVERLAP_SECONDS)
                 slice_start = max(0, tail_start - overlap) if previous else tail_start
                 piece_audio = audio[slice_start:total]
+                piece_seconds = piece_audio.shape[0] / float(self.sample_rate)
+                ticker = TranscriptionProgressTicker(piece_seconds)
+                ticker.start()
                 try:
                     raw = self._transcribe_chunks_to_text([piece_audio.reshape(-1, 1)])
                     piece = dedupe_overlap_text(previous, raw) if raw else None
@@ -1024,7 +1028,11 @@ class Opnamesessie:
                 timing.whisper_s = time.perf_counter() - whisper_started
 
             transcript = " ".join(t for t in texts if t).strip()
-            set_transcription_progress(100)
+            if ticker is not None:
+                ticker.stop(100)
+                ticker = None
+            else:
+                set_transcription_progress(100)
             if transcript:
                 deliver_started = time.perf_counter()
                 self._apply_transcript(transcript)
@@ -1052,6 +1060,9 @@ class Opnamesessie:
                     print(i18n.t("rec.recovery_preserve_warn", error=preserve_exc))
 
         finally:
+            if ticker is not None:
+                ticker.stop(None)
+                ticker = None
             if temporary_path is not None and temporary_path.exists():
                 if final_state == RecordingState.ERROR and recovery_kept is None:
                     if self._preserve_audio is not None:
@@ -1222,10 +1233,10 @@ class Opnamesessie:
         final_state = RecordingState.IDLE
         error_message: str | None = None
         recovery_kept: Path | None = None
+        ticker: TranscriptionProgressTicker | None = None
 
         try:
             print(i18n.t("rec.transcribing"))
-            set_transcription_progress(0)
 
             sample_count = sum(chunk.shape[0] for chunk in chunks)
             duration_seconds = sample_count / float(self.sample_rate)
@@ -1234,6 +1245,9 @@ class Opnamesessie:
             wav_started = time.perf_counter()
             temporary_path = self.create_temporary_wav(chunks)
             timing.wav_s = time.perf_counter() - wav_started
+
+            ticker = TranscriptionProgressTicker(duration_seconds)
+            ticker.start()
 
             whisper_started = time.perf_counter()
             with self._whisper.locked_model() as model:
@@ -1245,17 +1259,20 @@ class Opnamesessie:
                 for segment in segments:
                     end = float(getattr(segment, "end", 0.0) or 0.0)
                     percent = transcription_percent(end, duration_seconds)
-                    set_transcription_progress(percent)
-                    bucket = percent // 25
+                    ticker.note_segment(percent)
+                    shown = get_transcription_progress()
+                    bucket_source = shown if shown is not None else percent
+                    bucket = bucket_source // 25
                     if bucket > last_logged_bucket and bucket >= 1:
-                        print(i18n.t("rec.transcribing_progress", percent=percent))
+                        print(i18n.t("rec.transcribing_progress", percent=bucket_source))
                         last_logged_bucket = bucket
                     text = segment.text.strip()
                     if text:
                         text_parts.append(text)
             timing.whisper_s = time.perf_counter() - whisper_started
 
-            set_transcription_progress(100)
+            ticker.stop(100)
+            ticker = None
             deliver_started = time.perf_counter()
             self._apply_transcript(" ".join(text_parts).strip())
             timing.deliver_s = time.perf_counter() - deliver_started
@@ -1268,6 +1285,9 @@ class Opnamesessie:
             print(i18n.t("rec.error", error=exc))
 
         finally:
+            if ticker is not None:
+                ticker.stop(None)
+                ticker = None
             if temporary_path is not None and temporary_path.exists():
                 if final_state == RecordingState.ERROR:
                     if self._preserve_audio is not None:
