@@ -9,6 +9,14 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [0.6.0] - 2026-08-10
+
+### Added
+
 - **Recente transcripts in het systeemvak:** cascade met de laatste vijf
   geslaagde dicteer-transcripts (datum/tijd); klik zet de tekst opnieuw op het
   klembord (geen auto-plak)
@@ -246,7 +254,8 @@ Eerste publieke Windows-release (tag `v0.1.0`).
 - Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
 - `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`
 
-[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/benvankruistum/praatMaar/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/benvankruistum/praatMaar/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/benvankruistum/praatMaar/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/benvankruistum/praatMaar/compare/v0.2.0...v0.3.0
