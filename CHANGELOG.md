@@ -9,6 +9,11 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Added
 
+- **Recente transcripts in het systeemvak:** cascade met de laatste vijf
+  geslaagde dicteer-transcripts (datum/tijd); klik zet de tekst opnieuw op het
+  klembord (geen auto-plak)
+  ([spec](docs/superpowers/specs/2026-08-10-recent-transcripts-tray-product.md)).
+
 ### Changed
 
 ### Fixed

@@ -612,6 +612,57 @@ def _copy_to_clipboard_via_qt(text: str) -> None:
     done.wait(timeout=1.0)
 
 
+def _recent_transcript_search_dirs() -> list[Path]:
+    """Default transcripts-map plus directory-bestemmingen (geen append)."""
+
+    dirs: list[Path] = [recovery.transcripts_dir()]
+    seen: set[str] = set()
+    try:
+        seen.add(str(dirs[0].resolve()))
+    except OSError:
+        seen.add(str(dirs[0]))
+    for path in destinations.directory_save_paths(DESTINATIONS):
+        try:
+            key = str(path.resolve())
+        except OSError:
+            key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        dirs.append(path)
+    return dirs
+
+
+def _copy_recent_transcript_to_clipboard(path: Path) -> None:
+    """Zet een bewaard transcript opnieuw op het klembord (geen plakken)."""
+
+    try:
+        text = recovery.read_transcript_text(path)
+    except OSError as exc:
+        print(i18n.t("rec.clipboard_warn", error=exc))
+        return
+    try:
+        _copy_to_clipboard(text)
+        print(i18n.t("rec.clipboard"))
+    except Exception as exc:
+        print(i18n.t("rec.clipboard_warn", error=exc))
+
+
+def _recent_transcript_menu_entries() -> list[tuple]:
+    """Tray/pill-submenu: max. 5 recente timestamp-transcripts of empty state."""
+
+    items = recovery.list_recent_transcripts(_recent_transcript_search_dirs())
+    if not items:
+        return [("disabled", i18n.t("tray.recent_transcripts.empty"))]
+    entries: list[tuple] = []
+    language = i18n.ui_language()
+    for item in items:
+        label = recovery.format_recent_transcript_label(item, language)
+        path = item.path
+        entries.append(("item", label, lambda p=path: _copy_recent_transcript_to_clipboard(p)))
+    return entries
+
+
 def _user_config_dict() -> dict[str, Any]:
     """Snapshot van alle persistente gebruikersinstellingen."""
 
@@ -1375,6 +1426,7 @@ def main() -> None:
         on_module_action=run_module_action,
         get_module_tray_actions=lambda: tray_action_entries(list(module_bus.modules)),
         get_module_tray_root_actions=lambda: tray_root_action_entries(list(module_bus.modules)),
+        get_recent_transcript_entries=_recent_transcript_menu_entries,
     )
     _tray = tray
 

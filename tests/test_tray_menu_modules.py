@@ -188,9 +188,50 @@ def test_menu_order_with_module_cascade() -> None:
     )
 
     labels = [entry[1] for entry in entries if entry[0] in {"item", "submenu"}]
-    assert labels.index(i18n.t("tray.settings")) < labels.index(
+    assert labels.index(i18n.t("tray.settings")) < labels.index(i18n.t("tray.destinations"))
+    assert labels.index(i18n.t("tray.destinations")) < labels.index(
+        i18n.t("tray.recent_transcripts")
+    )
+    assert labels.index(i18n.t("tray.recent_transcripts")) < labels.index(
         i18n.t("modules.meeting_buddy.name")
     )
     assert labels.index(i18n.t("modules.meeting_buddy.name")) < labels.index(i18n.t("tray.modules"))
     assert labels.index(i18n.t("tray.modules")) < labels.index(i18n.t("tray.help"))
     assert labels.index(i18n.t("tray.help")) < labels.index(i18n.t("tray.quit"))
+
+
+def test_recent_transcripts_empty_state_in_cascade() -> None:
+    i18n.set_ui_language("en")
+    entries = build_context_menu_entries(
+        on_settings=_noop,
+        on_destinations=_noop,
+        on_modules=_noop,
+        on_help=_noop,
+        on_quit=_noop,
+        module_tray_actions=[],
+        module_tray_root_actions=[],
+        module_action_callback=lambda module_id, action_id: _noop,
+    )
+    cascade = _find_submenu(entries, i18n.t("tray.recent_transcripts"))
+    assert cascade is not None
+    children = cascade[2]
+    assert children == [("disabled", i18n.t("tray.recent_transcripts.empty"))]
+
+
+def test_recent_transcripts_custom_entries() -> None:
+    i18n.set_ui_language("en")
+    on_copy = _noop
+    entries = build_context_menu_entries(
+        on_settings=_noop,
+        on_destinations=_noop,
+        on_modules=_noop,
+        on_help=_noop,
+        on_quit=_noop,
+        module_tray_actions=[],
+        module_tray_root_actions=[],
+        module_action_callback=lambda module_id, action_id: _noop,
+        recent_transcript_entries=[("item", "2026-08-10 14:30:05", on_copy)],
+    )
+    cascade = _find_submenu(entries, i18n.t("tray.recent_transcripts"))
+    assert cascade is not None
+    assert cascade[2] == [("item", "2026-08-10 14:30:05", on_copy)]

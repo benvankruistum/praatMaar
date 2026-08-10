@@ -82,6 +82,8 @@ Rechtsklick auf das praatMaar-Symbol im Infobereich:
 - **Ziele** — Dialog zum Hinzufügen, Ändern oder Entfernen von Namen und Ordnern sowie
   zum Setzen oder Löschen des aktiven Ziels. In diesem Dialog finden Sie auch
   Schaltflächen zum Öffnen des Transkriptordners oder des aktiven Ordners.
+- **Letzte Transkripte** — die letzten fünf erfolgreichen Diktat-Transkripte
+  (Datum/Uhrzeit); Klick kopiert den Text erneut in die Zwischenablage (kein Einfügen)
 - **Module** — Erweiterungen ein-/ausschalten und inkrementelle Transkription
 - **Hilfe** — diese Benutzeranleitung
 - **Beenden**

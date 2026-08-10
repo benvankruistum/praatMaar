@@ -1,6 +1,8 @@
 {
   "tray.settings": "Settings",
   "tray.destinations": "Destinations",
+  "tray.recent_transcripts": "Recent transcripts",
+  "tray.recent_transcripts.empty": "No recent transcripts",
   "tray.modules": "Modules",
   "tray.help": "Help",
   "tray.quit": "Quit",
