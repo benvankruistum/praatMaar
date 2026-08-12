@@ -77,3 +77,45 @@ def test_whisper_settings_from_config_clamps_and_strips() -> None:
     assert settings["whisper_no_speech_threshold"] == 1.0
     assert settings["whisper_initial_prompt"] == "hallo"
     assert settings["whisper_hotwords"] == "praatMaar, Teams"
+
+
+def test_dictation_presets_table_and_normalize() -> None:
+    assert config.normalize_dictation_preset("fast") == "fast"
+    assert config.normalize_dictation_preset(" Balanced ") == "balanced"
+    assert config.normalize_dictation_preset("nope") is None
+    assert config.normalize_dictation_preset("") is None
+    assert config.dictation_preset_values("fast") == {
+        "model": "base",
+        "whisper_beam_size": 1,
+        "whisper_vad_filter": True,
+        "whisper_vad_min_silence_ms": 300,
+    }
+    assert config.dictation_preset_values("unknown") is None
+
+
+def test_match_dictation_preset_exact_and_custom() -> None:
+    assert config.match_dictation_preset(config.dictation_preset_values("balanced")) == "balanced"
+    assert config.match_dictation_preset(config.dictation_preset_values("accurate")) == "accurate"
+    assert (
+        config.match_dictation_preset(
+            {
+                "model": "base",
+                "whisper_beam_size": 1,
+                "whisper_vad_filter": True,
+                "whisper_vad_min_silence_ms": 300,
+            }
+        )
+        == "fast"
+    )
+    # Beam wijkt af → aangepast
+    assert (
+        config.match_dictation_preset(
+            {
+                "model": "small",
+                "whisper_beam_size": 3,
+                "whisper_vad_filter": True,
+                "whisper_vad_min_silence_ms": 300,
+            }
+        )
+        is None
+    )

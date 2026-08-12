@@ -28,6 +28,30 @@ _save_lock = threading.Lock()
 KNOWN_MODELS = ("base", "small", "medium")
 DEFAULT_MODEL = "small"
 
+# Named snelheid/kwaliteit-presets (Instellingen → Geavanceerd). Alleen model +
+# veilige beam/VAD-defaults; geen GPU/device, geen prompt/hotwords.
+DICTATION_PRESET_IDS = ("fast", "balanced", "accurate")
+DICTATION_PRESETS: dict[str, dict[str, Any]] = {
+    "fast": {
+        "model": "base",
+        "whisper_beam_size": 1,
+        "whisper_vad_filter": True,
+        "whisper_vad_min_silence_ms": 300,
+    },
+    "balanced": {
+        "model": "small",
+        "whisper_beam_size": 5,
+        "whisper_vad_filter": True,
+        "whisper_vad_min_silence_ms": 300,
+    },
+    "accurate": {
+        "model": "medium",
+        "whisper_beam_size": 5,
+        "whisper_vad_filter": True,
+        "whisper_vad_min_silence_ms": 300,
+    },
+}
+
 # Faster-Whisper transcribe-defaults (gelijk aan eerdere hardcodes in Opnamesessie).
 DEFAULT_WHISPER_BEAM_SIZE = 5
 DEFAULT_WHISPER_VAD_FILTER = True
@@ -146,6 +170,41 @@ def whisper_settings_from_config(raw: dict[str, Any] | None = None) -> dict[str,
             max_chars=_WHISPER_HOTWORDS_MAX_CHARS,
         ),
     }
+
+
+def normalize_dictation_preset(value: Any) -> str | None:
+    """Geeft een bekende preset-id terug, of ``None`` bij onbekend/leeg."""
+
+    if value is None:
+        return None
+    name = str(value).strip().lower()
+    return name if name in DICTATION_PRESET_IDS else None
+
+
+def dictation_preset_values(preset_id: str) -> dict[str, Any] | None:
+    """Kopie van de presetwaarden, of ``None`` bij onbekende id."""
+
+    normalized = normalize_dictation_preset(preset_id)
+    if normalized is None:
+        return None
+    return dict(DICTATION_PRESETS[normalized])
+
+
+def match_dictation_preset(settings: dict[str, Any] | None = None) -> str | None:
+    """Match model + beam/VAD tegen een named preset; anders ``None`` (aangepast)."""
+
+    data = settings if isinstance(settings, dict) else {}
+    model = normalize_model_name(data.get("model", DEFAULT_MODEL))
+    whisper = whisper_settings_from_config(data)
+    for preset_id, values in DICTATION_PRESETS.items():
+        if (
+            model == values["model"]
+            and whisper["whisper_beam_size"] == values["whisper_beam_size"]
+            and bool(whisper["whisper_vad_filter"]) == bool(values["whisper_vad_filter"])
+            and whisper["whisper_vad_min_silence_ms"] == values["whisper_vad_min_silence_ms"]
+        ):
+            return preset_id
+    return None
 
 
 def config_dir() -> Path:

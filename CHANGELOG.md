@@ -9,6 +9,10 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Added
 
+- **Dicteerpresets** in Instellingen → Geavanceerd: Snel / Gebalanceerd /
+  Nauwkeurig zetten model + veilige beam/VAD-defaults (geen systeemsmeting)
+  ([spec](docs/superpowers/specs/2026-08-11-dictation-presets-product.md)).
+
 ### Changed
 
 ### Fixed

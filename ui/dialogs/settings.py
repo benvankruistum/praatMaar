@@ -456,12 +456,43 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self._advanced_tab)
         layout.setContentsMargins(18, 18, 18, 20)
         layout.setSpacing(12)
-        layout.addWidget(_section_title(i18n.t("settings.model")))
+
+        layout.addWidget(_section_title(i18n.t("settings.preset.section")))
+        layout.addWidget(_hint(i18n.t("settings.preset.intro")))
+        self._preset_group = QButtonGroup(self)
+        self._preset_group.setExclusive(True)
+        self._preset_buttons: dict[str, QRadioButton] = {}
+        preset_col = QVBoxLayout()
+        preset_col.setSpacing(8)
+        for preset_id in config.DICTATION_PRESET_IDS:
+            radio = QRadioButton(i18n.t(f"settings.preset.{preset_id}"))
+            radio.setProperty("preset_id", preset_id)
+            self._preset_group.addButton(radio)
+            self._preset_buttons[preset_id] = radio
+            row = QVBoxLayout()
+            row.setSpacing(2)
+            row.addWidget(radio)
+            row.addWidget(_hint(i18n.t(f"settings.preset.{preset_id}.hint")))
+            preset_col.addLayout(row)
+        layout.addLayout(preset_col)
+        self._preset_custom_hint = _hint(i18n.t("settings.preset.custom"))
+        self._preset_custom_hint.hide()
+        layout.addWidget(self._preset_custom_hint)
+        self._preset_group.buttonClicked.connect(self._on_preset_clicked)
+        self._preset_updating = False
+
+        model_box = QFrame()
+        model_box.setObjectName("settingsSection")
+        model_layout = QVBoxLayout(model_box)
+        model_layout.setContentsMargins(0, 18, 0, 0)
+        model_layout.setSpacing(10)
+        model_layout.addWidget(_section_title(i18n.t("settings.model")))
         self.model = _combo(
             [(model, model) for model in MODELS], str(self._current.get("model", "small"))
         )
-        layout.addWidget(_labeled_row(i18n.t("settings.model"), self.model))
-        layout.addWidget(_hint(i18n.t("settings.model.restart")))
+        model_layout.addWidget(_labeled_row(i18n.t("settings.model"), self.model))
+        model_layout.addWidget(_hint(i18n.t("settings.model.restart")))
+        layout.addWidget(model_box)
 
         recovery_box = QFrame()
         recovery_box.setObjectName("settingsSection")
@@ -496,6 +527,69 @@ class SettingsDialog(QDialog):
         layout.addWidget(recovery_box)
         layout.addStretch(1)
         self._refresh_recovery()
+        self._sync_preset_selection_from_fields()
+        self.model.currentIndexChanged.connect(self._on_preset_fields_changed)
+        self.whisper_beam_size.valueChanged.connect(self._on_preset_fields_changed)
+        self.whisper_vad_filter.toggled.connect(self._on_preset_fields_changed)
+        self.whisper_vad_min_silence.valueChanged.connect(self._on_preset_fields_changed)
+
+    def _preset_field_snapshot(self) -> dict[str, Any]:
+        return {
+            "model": self.model.currentData(),
+            "whisper_beam_size": int(self.whisper_beam_size.value()),
+            "whisper_vad_filter": self.whisper_vad_filter.isChecked(),
+            "whisper_vad_min_silence_ms": int(self.whisper_vad_min_silence.value()),
+        }
+
+    def _set_combo_data(self, combo: QComboBox, value: Any) -> None:
+        index = combo.findData(value)
+        combo.setCurrentIndex(index if index >= 0 else 0)
+
+    def _apply_preset_to_fields(self, preset_id: str) -> None:
+        values = config.dictation_preset_values(preset_id)
+        if values is None:
+            return
+        self._preset_updating = True
+        try:
+            self._set_combo_data(self.model, values["model"])
+            self.whisper_beam_size.setValue(int(values["whisper_beam_size"]))
+            self.whisper_vad_filter.setChecked(bool(values["whisper_vad_filter"]))
+            self.whisper_vad_min_silence.setValue(int(values["whisper_vad_min_silence_ms"]))
+            self.whisper_vad_min_silence.setEnabled(self.whisper_vad_filter.isChecked())
+        finally:
+            self._preset_updating = False
+        self._sync_preset_selection_from_fields()
+
+    def _on_preset_clicked(self, button: QRadioButton) -> None:
+        preset_id = str(button.property("preset_id") or "")
+        if preset_id in config.DICTATION_PRESET_IDS:
+            self._apply_preset_to_fields(preset_id)
+
+    def _clear_preset_radios(self) -> None:
+        self._preset_group.setExclusive(False)
+        for radio in self._preset_buttons.values():
+            radio.setChecked(False)
+        self._preset_group.setExclusive(True)
+
+    def _sync_preset_selection_from_fields(self) -> None:
+        matched = config.match_dictation_preset(self._preset_field_snapshot())
+        self._preset_updating = True
+        try:
+            if matched is None:
+                self._clear_preset_radios()
+                self._preset_custom_hint.show()
+            else:
+                self._preset_custom_hint.hide()
+                radio = self._preset_buttons.get(matched)
+                if radio is not None and not radio.isChecked():
+                    radio.setChecked(True)
+        finally:
+            self._preset_updating = False
+
+    def _on_preset_fields_changed(self, *_args: Any) -> None:
+        if self._preset_updating:
+            return
+        self._sync_preset_selection_from_fields()
 
     def _token_caption(self, token: str) -> str:
         special = {
@@ -703,29 +797,31 @@ class SettingsDialog(QDialog):
 
     def _save(self) -> None:
         self._stop_capture(confirm=True)
-        self._on_apply(
-            {
-                "microphone_device": self.mic.currentData(),
-                "indicator_position": self.position.currentData(),
-                "mode": "ptt" if self.mode_ptt.isChecked() else "toggle",
-                "hotkey": list(self._hotkey_tokens),
-                "autostart": self.autostart.isChecked(),
-                "auto_paste": self.auto_paste.isChecked(),
-                "warm_microphone": self.warm_microphone.isChecked(),
-                "model": self.model.currentData(),
-                "speech_language": self.speech_language.currentData(),
-                "ui_language": self.ui_language.currentData(),
-                "whisper_beam_size": int(self.whisper_beam_size.value()),
-                "whisper_vad_filter": self.whisper_vad_filter.isChecked(),
-                "whisper_vad_min_silence_ms": int(self.whisper_vad_min_silence.value()),
-                "whisper_condition_on_previous_text": (
-                    self.whisper_condition_on_previous.isChecked()
-                ),
-                "whisper_no_speech_threshold": float(self.whisper_no_speech.value()),
-                "whisper_initial_prompt": self.whisper_initial_prompt.toPlainText(),
-                "whisper_hotwords": self.whisper_hotwords.text(),
-            }
-        )
+        snapshot = {
+            "microphone_device": self.mic.currentData(),
+            "indicator_position": self.position.currentData(),
+            "mode": "ptt" if self.mode_ptt.isChecked() else "toggle",
+            "hotkey": list(self._hotkey_tokens),
+            "autostart": self.autostart.isChecked(),
+            "auto_paste": self.auto_paste.isChecked(),
+            "warm_microphone": self.warm_microphone.isChecked(),
+            "model": self.model.currentData(),
+            "speech_language": self.speech_language.currentData(),
+            "ui_language": self.ui_language.currentData(),
+            "whisper_beam_size": int(self.whisper_beam_size.value()),
+            "whisper_vad_filter": self.whisper_vad_filter.isChecked(),
+            "whisper_vad_min_silence_ms": int(self.whisper_vad_min_silence.value()),
+            "whisper_condition_on_previous_text": (self.whisper_condition_on_previous.isChecked()),
+            "whisper_no_speech_threshold": float(self.whisper_no_speech.value()),
+            "whisper_initial_prompt": self.whisper_initial_prompt.toPlainText(),
+            "whisper_hotwords": self.whisper_hotwords.text(),
+        }
+        matched = config.match_dictation_preset(snapshot)
+        if matched is not None:
+            snapshot["dictation_preset"] = matched
+        else:
+            snapshot["dictation_preset"] = None
+        self._on_apply(snapshot)
         self.accept()
 
     def reject(self) -> None:

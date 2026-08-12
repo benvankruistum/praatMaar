@@ -121,6 +121,11 @@ Op een echte Mac (arm64), vanuit bron (`python dictation.py` via Cursor):
 4. Experimentele Local LLM + agenda-review: gebruikersvalidatie (blijft
    experimenteel tot dan).
 
+Dicteerpresets (Snel / Gebalanceerd / Nauwkeurig) zitten op branch
+`cursor/dictation-presets`
+([spec](superpowers/specs/2026-08-11-dictation-presets-product.md)); na merge
+naar “Werkt” verplaatsen. Geen metende setup-wizard in v1.0.
+
 ## Historische handoffs
 
 - [HANDOFF-meeting-buddy-teams-loopback.md](HANDOFF-meeting-buddy-teams-loopback.md)

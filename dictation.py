@@ -152,6 +152,7 @@ WHISPER_CONDITION_ON_PREVIOUS_TEXT = _whisper_cfg["whisper_condition_on_previous
 WHISPER_NO_SPEECH_THRESHOLD = _whisper_cfg["whisper_no_speech_threshold"]
 WHISPER_INITIAL_PROMPT = _whisper_cfg["whisper_initial_prompt"]
 WHISPER_HOTWORDS = _whisper_cfg["whisper_hotwords"]
+DICTATION_PRESET = config.match_dictation_preset(_user_config)
 if "indicator_position" in _user_config:
     from indicator._contract import normalize_indicator_position, sanitize_indicator_xy
 
@@ -695,6 +696,7 @@ def _user_config_dict() -> dict[str, Any]:
         "whisper_no_speech_threshold": WHISPER_NO_SPEECH_THRESHOLD,
         "whisper_initial_prompt": WHISPER_INITIAL_PROMPT,
         "whisper_hotwords": WHISPER_HOTWORDS,
+        "dictation_preset": DICTATION_PRESET,
         "indicator_position": INDICATOR_POSITION,
         "indicator_xy": list(INDICATOR_XY) if INDICATOR_XY is not None else None,
         "mode": MODE,
@@ -1107,6 +1109,7 @@ def current_settings() -> dict[str, Any]:
         "whisper_no_speech_threshold": WHISPER_NO_SPEECH_THRESHOLD,
         "whisper_initial_prompt": WHISPER_INITIAL_PROMPT,
         "whisper_hotwords": WHISPER_HOTWORDS,
+        "dictation_preset": DICTATION_PRESET,
         "indicator_position": INDICATOR_POSITION,
         "indicator_xy": list(INDICATOR_XY) if INDICATOR_XY is not None else None,
         "mode": MODE,
@@ -1141,6 +1144,7 @@ def apply_settings(
     global WHISPER_BEAM_SIZE, WHISPER_VAD_FILTER, WHISPER_VAD_MIN_SILENCE_MS
     global WHISPER_CONDITION_ON_PREVIOUS_TEXT, WHISPER_NO_SPEECH_THRESHOLD
     global WHISPER_INITIAL_PROMPT, WHISPER_HOTWORDS
+    global DICTATION_PRESET
     global DESTINATIONS, ACTIVE_DESTINATION, MODULES_CONFIG, INCREMENTAL_TRANSCRIPTION
     global INCREMENTAL_CHUNK_MODE, INCREMENTAL_VAD_MS, INCREMENTAL_CHUNK_SECONDS
 
@@ -1192,6 +1196,14 @@ def apply_settings(
     WHISPER_NO_SPEECH_THRESHOLD = _whisper["whisper_no_speech_threshold"]
     WHISPER_INITIAL_PROMPT = _whisper["whisper_initial_prompt"]
     WHISPER_HOTWORDS = _whisper["whisper_hotwords"]
+    DICTATION_PRESET = config.match_dictation_preset(
+        {
+            "model": MODEL_NAME,
+            "whisper_beam_size": WHISPER_BEAM_SIZE,
+            "whisper_vad_filter": WHISPER_VAD_FILTER,
+            "whisper_vad_min_silence_ms": WHISPER_VAD_MIN_SILENCE_MS,
+        }
+    )
     INDICATOR_POSITION = new_position
     INDICATOR_XY = new_xy
 
