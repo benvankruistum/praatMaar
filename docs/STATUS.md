@@ -1,6 +1,10 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-08-10.
+Laatst bijgewerkt: 2026-08-11.
+
+**Architectuur (strangler):** composition root `app/` + `dicteercyclus/`
+(ADR-0007); dunne `dictation.py`-entry. Behaviour freeze t.o.v. v1.0-scope —
+zie [composition-root design](superpowers/specs/2026-08-11-composition-root-strangler-design.md).
 
 **v1.0.0-scope (Accepted):** Windows core-dictation is de primaire belofte;
 Meeting Buddy / Local LLM / chunk-transcriptie blijven experimenteel opt-in;
@@ -109,13 +113,15 @@ Op een echte Mac (arm64), vanuit bron (`python dictation.py` via Cursor):
 
 ## Open / roadmap
 
-1. **Dicteercyclus UX Must** — implementatie op feature-branch (PREPARING,
-   non-modal errors, busy, ready-cue); AC-smoke op Windows nog open:
+1. **Dicteercyclus UX Must** — code op nieuwe seams (`dicteercyclus` /
+   `app` / indicator): PREPARING, non-modal errors, busy, ready-cue.
+   **AC-smoke op Windows** (AC-01–06) nog open vóór v1.0-tag:
    [ux-states spec](superpowers/specs/2026-08-01-dicteercyclus-ux-states-product.md) ·
    [impl plan](superpowers/plans/2026-08-01-dicteercyclus-ux-states.md).
 2. **v1.0.0 uitbrengen** wanneer `/release-readiness` groen is voor Windows
-   core (Setup/zip via Actions). macOS unsigned zip zit in dezelfde
-   release-workflow; signing/notarisatie later.
+   core (Setup/zip via Actions), inclusief packaged smoke na ADR-0007-
+   strangler. macOS unsigned zip zit in dezelfde release-workflow;
+   signing/notarisatie later.
    Zie [release-windows.md](release-windows.md) / [release-macos.md](release-macos.md).
 3. Meeting Buddy: Teams-loopback-acceptatie afronden vóór eventuele graduation.
 4. Experimentele Local LLM + agenda-review: gebruikersvalidatie (blijft

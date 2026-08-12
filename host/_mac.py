@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 from . import APP_NAME
+from ._launch import dictation_script_path
 
 # Reverse-DNS label voor de LaunchAgent.
 _AGENT_LABEL = "nl.wulf.praatmaar"
@@ -27,7 +28,7 @@ class MacHost:
     def paste(self) -> None:
         # Quartz CGEvents i.p.v. pyautogui/pynput: die raken TSM en crashen
         # op macOS 26+ vanaf een niet-main-thread.
-        from mac_input import paste_command_v
+        from ._mac_paste import paste_command_v
 
         paste_command_v()
 
@@ -114,5 +115,4 @@ class MacHost:
 
         # Vanuit broncode: de huidige Python + het hoofdscript, één map boven
         # deze adapter.
-        script = Path(__file__).resolve().parent.parent / "dictation.py"
-        return [sys.executable, str(script)]
+        return [sys.executable, str(dictation_script_path())]

@@ -161,6 +161,7 @@
   "rec.transcribing_progress": "  Transkription: {percent}%",
   "rec.no_speech": "Kein gesprochener Text erkannt.",
   "rec.transcript_header": "TRANSKRIPT",
+  "rec.transcript_chars": "Transkriptlänge: {count} Zeichen (Text nicht protokolliert).",
   "rec.saved": "Transkript gespeichert: {path}",
   "rec.saved_only": "Nur gespeichert (keine Zwischenablage/Einfügen für dieses Ziel).",
   "rec.save_warn": "Warnung: Transkript konnte nicht gespeichert werden: {error}",

@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from . import APP_NAME
+from ._launch import dictation_script_path
 
 
 class LinuxHost:
@@ -112,5 +113,4 @@ class LinuxHost:
         if getattr(sys, "frozen", False):
             return f'"{sys.executable}"'
 
-        script = Path(__file__).resolve().parent.parent / "dictation.py"
-        return f'"{sys.executable}" "{script}"'
+        return f'"{sys.executable}" "{dictation_script_path()}"'

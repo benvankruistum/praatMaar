@@ -23,18 +23,31 @@ een OS-specifieke plak-toets aan.
 - Buiten scope van de seam (voorlopig): het no-activate indicator-venster — een
   ander soort, GUI-toolkit-gebonden seam.
 
+### composition root (`app`)
+
+De ene plek die de applicatie samenstelt: splash/startup, `AppRuntime`,
+settings-apply, hotkey-routing en wiring naar `Opnamesessie`, tray en modules.
+Package `app/`; `dictation.py` blijft alleen de dunne entry (`main` → `app.run`).
+Geen import-time `Opnamesessie` — sessie-constructie en model-download horen in
+`run`/bootstrap na splash-intent. Publieke seams (`host`, indicator-contract,
+`ModuleBus` / `CycleEvent`) blijven erbuiten stabiel. Beslissing:
+[ADR-0007](docs/adr/0007-application-composition-root.md).
+
 ### dicteercyclus
 
 De toestandsketen van één dicteeractie: opname → transcriberen → geannuleerd →
-fout, terug naar idle. Gemodelleerd als `RecordingState` in `indicator.py`. De
-lifecycle-logica zit in `Opnamesessie` (`opnamesessie.py`); `dictation.py` is de
-entrypoint (splash, hotkeys, tray, wiring).
+fout, terug naar idle. Gemodelleerd als `RecordingState` in
+`indicator._contract`. De lifecycle-logica zit in `Opnamesessie`
+(`dicteercyclus/`; root `opnamesessie.py` is een compat-façade). Wiring
+(splash, hotkeys, tray) hoort in de composition root (`app/`); `dictation.py`
+is alleen de dunne entry.
 
 ### Opnamesessie
 
 De runtime van één dicteercyclus: microfoonbuffer, transcriptie-thread,
-klembord/plakken via geïnjecteerde `Host` en recovery-hooks. Module:
-`opnamesessie.py`. Toetsenbordrouting blijft in `dictation.py`.
+klembord/plakken via geïnjecteerde `Host` en recovery-hooks. Package
+`dicteercyclus/` (`session` + `mic_stream` / `incremental` / `delivery`).
+Toetsenbordrouting zit in `app.hotkey_router` (via composition root).
 
 ### indicator (pill)
 

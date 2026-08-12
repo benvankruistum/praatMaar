@@ -71,6 +71,8 @@ py-modules = [
     "i18n",
 ]
 packages = [
+    "app",
+    "dicteercyclus",
     "host",
     "indicator",
     "modules",
