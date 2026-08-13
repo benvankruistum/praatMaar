@@ -13,6 +13,22 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
   settings, hotkey router, run/startup) en `dicteercyclus/` (Opnamesessie-
   façade + mic/incremental/delivery); dunne `dictation.py`-entry; geen
   import-time sessie.
+
+### Changed
+
+- **Privacy:** console/log print geen volle transcripttekst meer (alleen
+  lengte); `SECURITY.md` documenteert optionele Local LLM / Ollama.
+- **Meeting Buddy stop:** dictation-pill/hotkey stopt alleen de dicteercyclus;
+  MB heeft eigen overlay/tray-stop.
+- **macOS paste:** Quartz ⌘V weer achter `host` (`host/_mac_paste.py`) na
+  verwijdering van root-`mac_input`.
+
+### Fixed
+
+## [0.6.0] - 2026-08-10
+
+### Added
+
 - **Recente transcripts in het systeemvak:** cascade met de laatste vijf
   geslaagde dicteer-transcripts (datum/tijd); klik zet de tekst opnieuw op het
   klembord (geen auto-plak)
@@ -24,12 +40,10 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Changed
 
-- **Privacy:** console/log print geen volle transcripttekst meer (alleen
-  lengte); `SECURITY.md` documenteert optionele Local LLM / Ollama.
-- **Meeting Buddy stop:** dictation-pill/hotkey stopt alleen de dicteercyclus;
-  MB heeft eigen overlay/tray-stop.
-- **macOS paste:** Quartz ⌘V weer achter `host` (`host/_mac_paste.py`) na
-  verwijdering van root-`mac_input`.
+- **Pill-transcriptie-voortgang is hybride:** tijdens de finale Whisper-run
+  beweegt de balk op een tijdschatting (audio × RTF) en trekt omhoog bij
+  segment-voortgang — geen lange stilstand op `0%`
+  ([spec](docs/superpowers/specs/2026-08-10-hybrid-transcription-progress-design.md)).
 
 ### Fixed
 
@@ -252,7 +266,8 @@ Eerste publieke Windows-release (tag `v0.1.0`).
 - Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
 - `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`
 
-[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/benvankruistum/praatMaar/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/benvankruistum/praatMaar/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/benvankruistum/praatMaar/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/benvankruistum/praatMaar/compare/v0.2.0...v0.3.0
