@@ -127,6 +127,11 @@ Op een echte Mac (arm64), vanuit bron (`python dictation.py` via Cursor):
 4. Experimentele Local LLM + agenda-review: gebruikersvalidatie (blijft
    experimenteel tot dan).
 
+Dicteerpresets (Snel / Gebalanceerd / Nauwkeurig) staan in Instellingen →
+Geavanceerd
+([spec](superpowers/specs/2026-08-11-dictation-presets-product.md)). Geen
+metende setup-wizard in v1.0.
+
 ## Historische handoffs
 
 - [HANDOFF-meeting-buddy-teams-loopback.md](HANDOFF-meeting-buddy-teams-loopback.md)

@@ -121,6 +121,7 @@ WHISPER_CONDITION_ON_PREVIOUS_TEXT = _whisper_cfg["whisper_condition_on_previous
 WHISPER_NO_SPEECH_THRESHOLD = _whisper_cfg["whisper_no_speech_threshold"]
 WHISPER_INITIAL_PROMPT = _whisper_cfg["whisper_initial_prompt"]
 WHISPER_HOTWORDS = _whisper_cfg["whisper_hotwords"]
+DICTATION_PRESET = config.match_dictation_preset(_user_config)
 if "indicator_position" in _user_config:
     from indicator._contract import normalize_indicator_position, sanitize_indicator_xy
 
@@ -206,6 +207,7 @@ _runtime = build_runtime(
     whisper_no_speech_threshold=WHISPER_NO_SPEECH_THRESHOLD,
     whisper_initial_prompt=WHISPER_INITIAL_PROMPT,
     whisper_hotwords=WHISPER_HOTWORDS,
+    dictation_preset=DICTATION_PRESET,
     paste_delay_seconds=PASTE_DELAY_SECONDS,
     minimum_recording_seconds=MINIMUM_RECORDING_SECONDS,
     delete_temp_audio=DELETE_TEMP_AUDIO,
@@ -259,6 +261,7 @@ def _sync_runtime_from_globals() -> None:
     _runtime.whisper_no_speech_threshold = WHISPER_NO_SPEECH_THRESHOLD
     _runtime.whisper_initial_prompt = WHISPER_INITIAL_PROMPT
     _runtime.whisper_hotwords = WHISPER_HOTWORDS
+    _runtime.dictation_preset = DICTATION_PRESET
     _runtime.indicator_position = INDICATOR_POSITION
     _runtime.indicator_xy = INDICATOR_XY
     _runtime.mode = MODE

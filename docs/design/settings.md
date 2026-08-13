@@ -60,6 +60,7 @@ duidelijk maken (korte helpertekst).
 
 | Sectie | Controls |
 |--------|----------|
+| Presets | Snel / Gebalanceerd / Nauwkeurig — zet model + beam/VAD; Opslaan nodig |
 | Whisper-model | base / small / medium + hint: wijziging pas na herstart |
 | Herstel-audio | Lijst WAV’s · empty state · status · Map openen · Verwijderen · Alles wissen · Opnieuw transcriberen |
 
@@ -104,7 +105,7 @@ Dit is de meest “speciale” control — verdient een duidelijk **listening**-
 1. Algemeen — alle secties, normale staat
 2. Sneltoets luisteren — Opnemen… actief
 3. Taal — beide comboboxen + korte uitleg
-4. Geavanceerd — model + herstel met 2–3 bestanden
+4. Geavanceerd — presets + model + herstel met 2–3 bestanden
 5. Herstel leeg
 6. Herstel bezig
 7. Optioneel: fout sneltoets (alleen modifiers)

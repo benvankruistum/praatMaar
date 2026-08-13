@@ -39,6 +39,7 @@ class AppRuntime:
     whisper_no_speech_threshold: float = 0.6
     whisper_initial_prompt: str = ""
     whisper_hotwords: str = ""
+    dictation_preset: str | None = None
     paste_delay_seconds: float = 0.30
     minimum_recording_seconds: float = 0.30
     delete_temp_audio: bool = True

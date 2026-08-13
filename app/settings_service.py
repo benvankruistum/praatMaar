@@ -40,6 +40,7 @@ def user_config_dict(state: Any) -> dict[str, Any]:
         ),
         "whisper_initial_prompt": _get(state, "WHISPER_INITIAL_PROMPT", "whisper_initial_prompt"),
         "whisper_hotwords": _get(state, "WHISPER_HOTWORDS", "whisper_hotwords"),
+        "dictation_preset": _get(state, "DICTATION_PRESET", "dictation_preset"),
         "indicator_position": _get(state, "INDICATOR_POSITION", "indicator_position"),
         "indicator_xy": list(xy) if xy is not None else None,
         "mode": _get(state, "MODE", "mode"),
@@ -173,6 +174,14 @@ def apply_settings(
     whisper_no_speech_threshold = _whisper["whisper_no_speech_threshold"]
     whisper_initial_prompt = _whisper["whisper_initial_prompt"]
     whisper_hotwords = _whisper["whisper_hotwords"]
+    dictation_preset = config.match_dictation_preset(
+        {
+            "model": model_name,
+            "whisper_beam_size": whisper_beam_size,
+            "whisper_vad_filter": whisper_vad_filter,
+            "whisper_vad_min_silence_ms": whisper_vad_min_silence_ms,
+        }
+    )
     indicator_position = new_position
     indicator_xy = new_xy
 
@@ -257,6 +266,7 @@ def apply_settings(
     )
     _set(state, "WHISPER_INITIAL_PROMPT", "whisper_initial_prompt", whisper_initial_prompt)
     _set(state, "WHISPER_HOTWORDS", "whisper_hotwords", whisper_hotwords)
+    _set(state, "DICTATION_PRESET", "dictation_preset", dictation_preset)
     _set(state, "INDICATOR_POSITION", "indicator_position", indicator_position)
     _set(state, "INDICATOR_XY", "indicator_xy", indicator_xy)
     _set(state, "MODE", "mode", mode)
