@@ -10,6 +10,7 @@ import pytest
 from modules._builtin.meeting_buddy.agenda_dialog import (
     AgendaDialogResult,
     can_start_meeting,
+    capture_setup_platform,
     library_sections,
     show_agenda_dialog,
 )
@@ -20,10 +21,23 @@ def test_agenda_dialog_result_fields() -> None:
         agenda_text="Budget\nPlanning",
         path=Path("/tmp/Budget.md"),
         start=True,
+        enable_loopback=True,
+        loopback_device=3,
     )
     assert result.agenda_text == "Budget\nPlanning"
     assert result.path == Path("/tmp/Budget.md")
     assert result.start is True
+    assert result.enable_loopback is True
+    assert result.loopback_device == 3
+
+
+def test_capture_setup_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("modules._builtin.meeting_buddy.agenda_dialog.sys.platform", "win32")
+    assert capture_setup_platform() == "windows"
+    monkeypatch.setattr("modules._builtin.meeting_buddy.agenda_dialog.sys.platform", "darwin")
+    assert capture_setup_platform() == "macos"
+    monkeypatch.setattr("modules._builtin.meeting_buddy.agenda_dialog.sys.platform", "linux")
+    assert capture_setup_platform() == "other"
 
 
 def test_agenda_dialog_result_is_frozen() -> None:

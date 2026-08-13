@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import Any, Literal
 from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -24,6 +26,7 @@ from PySide6.QtWidgets import (
 import i18n
 from ui.app import ensure_app
 from ui.theme import TOKENS
+from ui.widgets import ToggleSwitch
 
 from .agenda_store import (
     default_new_path,
@@ -34,7 +37,19 @@ from .agenda_store import (
     save_agenda,
     touch_recent,
 )
+from .devices import list_loopback_output_devices
 from .prep import parse_agenda
+from .properties_dialog import device_selection_maps
+
+CaptureSetupPlatform = Literal["windows", "macos", "other"]
+
+
+def capture_setup_platform() -> CaptureSetupPlatform:
+    if sys.platform == "win32":
+        return "windows"
+    if sys.platform == "darwin":
+        return "macos"
+    return "other"
 
 
 @dataclass(frozen=True)
@@ -42,6 +57,8 @@ class AgendaDialogResult:
     agenda_text: str
     path: Path | None
     start: bool
+    enable_loopback: bool = False
+    loopback_device: int | None = None
 
 
 def can_start_meeting(body: str) -> bool:
@@ -160,6 +177,8 @@ class _AgendaDialog(QDialog):
         path: Path | None,
         app_dir: Path,
         mode: Literal["start", "edit"],
+        enable_loopback: bool = False,
+        loopback_device: int | None = None,
         parent: QWidget | None,
     ) -> None:
         super().__init__(parent)
@@ -204,6 +223,13 @@ class _AgendaDialog(QDialog):
         self._topic_count = QLabel()
         self._topic_count.setObjectName("hintLabel")
         col.addWidget(self._topic_count)
+        if mode == "start":
+            col.addWidget(
+                self._build_capture_setup(
+                    enable_loopback=enable_loopback,
+                    loopback_device=loopback_device,
+                )
+            )
         grid.addWidget(left, 1)
 
         # --- library (right) ---
@@ -267,6 +293,84 @@ class _AgendaDialog(QDialog):
                 "modules.meeting_buddy.dialog.saved_as", name=self._current_path.name
             )
         self._topic_count.setText(count)
+
+    def _build_capture_setup(
+        self,
+        *,
+        enable_loopback: bool,
+        loopback_device: int | None,
+    ) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("agendaCaptureSetup")
+        box = QVBoxLayout(frame)
+        box.setContentsMargins(0, 8, 0, 0)
+        box.setSpacing(8)
+
+        title = QLabel(i18n.t("modules.meeting_buddy.dialog.capture_title").upper())
+        title.setObjectName("sectionLabel")
+        box.addWidget(title)
+
+        platform = capture_setup_platform()
+        desc = QLabel(
+            i18n.t(
+                "modules.meeting_buddy.dialog.capture_loopback_desc"
+                if platform == "windows"
+                else "modules.meeting_buddy.dialog.capture_mic_only_desc"
+            )
+        )
+        desc.setObjectName("hintLabel")
+        desc.setWordWrap(True)
+        box.addWidget(desc)
+
+        self._loopback_device = loopback_device
+        if platform == "windows":
+            self._loopback = ToggleSwitch()
+            self._loopback.setChecked(enable_loopback)
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(12)
+            toggle_label = QLabel(i18n.t("modules.meeting_buddy.settings.loopback_title"))
+            toggle_label.setObjectName("mbTitle")
+            row.addWidget(toggle_label, 1)
+            row.addWidget(self._loopback, 0, Qt.AlignmentFlag.AlignTop)
+            box.addLayout(row)
+
+            devices = list_loopback_output_devices()
+            labels, self._device_values, _, current = device_selection_maps(
+                devices, loopback_device
+            )
+            self._device = QComboBox()
+            self._device.addItems(labels)
+            if current in labels:
+                self._device.setCurrentText(current)
+            self._device.setEnabled(enable_loopback)
+            self._loopback.toggled.connect(self._device.setEnabled)
+            device_row = QHBoxLayout()
+            device_row.setContentsMargins(0, 0, 0, 0)
+            device_row.setSpacing(12)
+            device_label = QLabel(i18n.t("modules.meeting_buddy.dialog.capture_loopback_device"))
+            device_label.setObjectName("fieldLabel")
+            device_label.setFixedWidth(150)
+            device_row.addWidget(device_label)
+            device_row.addWidget(self._device, 1)
+            box.addLayout(device_row)
+        else:
+            self._loopback = None
+            self._device = None
+            self._device_values = {}
+
+        return frame
+
+    def _capture_settings(self) -> tuple[bool, int | None]:
+        if self._mode != "start" or capture_setup_platform() != "windows":
+            return False, None
+        assert self._loopback is not None
+        assert self._device is not None
+        enabled = self._loopback.isChecked()
+        if not enabled:
+            return False, None
+        label = self._device.currentText()
+        return True, self._device_values.get(label, self._loopback_device)
 
     @staticmethod
     def _date_label(path: Path) -> str | None:
@@ -385,7 +489,14 @@ class _AgendaDialog(QDialog):
         if self._require_topics():
             if self._current_path is not None:
                 touch_recent(self._app_dir, self._current_path)
-            self._result = AgendaDialogResult(self._body(), self._current_path, True)
+            enable_loopback, loopback_device = self._capture_settings()
+            self._result = AgendaDialogResult(
+                self._body(),
+                self._current_path,
+                True,
+                enable_loopback=enable_loopback,
+                loopback_device=loopback_device,
+            )
             self.accept()
 
     def _close_edit(self) -> None:
@@ -399,6 +510,8 @@ def show_agenda_dialog(
     path: Path | None,
     app_dir: Path,
     mode: Literal["start", "edit"],
+    enable_loopback: bool = False,
+    loopback_device: int | None = None,
     parent: Any = None,
 ) -> AgendaDialogResult | None:
     """Show agenda UI; return ``None`` on cancel (start mode only)."""
@@ -408,6 +521,8 @@ def show_agenda_dialog(
         path=path,
         app_dir=app_dir,
         mode=mode,
+        enable_loopback=enable_loopback,
+        loopback_device=loopback_device,
         parent=parent if isinstance(parent, QWidget) else None,
     )
     dialog.setWindowModality(Qt.WindowModality.ApplicationModal)

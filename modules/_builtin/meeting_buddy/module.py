@@ -190,6 +190,8 @@ class MeetingBuddyModule:
             path=self._agenda_path,
             app_dir=app_dir,
             mode=mode,  # type: ignore[arg-type]
+            enable_loopback=orchestrator.loopback_requested,
+            loopback_device=orchestrator.loopback_device,
         )
         if result is None:
             return
@@ -207,6 +209,18 @@ class MeetingBuddyModule:
                 i18n.t("modules.meeting_buddy.dialog.empty_agenda"),
             )
             return
+        prefs = load_live_summary_prefs(app_dir)
+        save_meeting_buddy_preferences(
+            app_dir,
+            enable_loopback=result.enable_loopback,
+            loopback_device=result.loopback_device,
+            transcripts_directory=load_transcripts_directory(app_dir),
+            live_summary_enabled=bool(prefs["live_summary_enabled"]),
+            agenda_review_enabled=bool(prefs["agenda_review_enabled"]),
+            llm_chunk_interval_s=float(prefs["llm_chunk_interval_s"]),
+            llm_chunk_min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
+        )
+        orchestrator.reload_config()
         self._begin_meeting()
 
     def _show_properties_dialog(self) -> None:
