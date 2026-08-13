@@ -12,6 +12,12 @@ Twee lekken die deze conftest dicht:
 
 from __future__ import annotations
 
+import os
+
+# Qt headless vóór elke PySide6-import (zelfde als CI op Windows; voorkomt macOS
+# abort in _RegisterApplication bij pytest vanuit een terminal/Cursor-sessie).
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 import tempfile
 from pathlib import Path
 

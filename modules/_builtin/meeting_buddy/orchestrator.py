@@ -241,7 +241,10 @@ class MeetingOrchestrator:
                 except Exception:
                     pass
                 self._run_final_summary_if_enabled()
-                self._last_recap_state = self._state
+                if self._live_summary_settings().enabled:
+                    self._last_recap_state = self._state
+                else:
+                    self._last_recap_state = None
                 path = self._finalize_transcript_journal()
                 try:
                     self._sessions.clear()
