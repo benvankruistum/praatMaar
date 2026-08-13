@@ -19,6 +19,7 @@ zodat tests een `FakeHost` kunnen steken.
 from __future__ import annotations
 
 import os
+import queue
 import tempfile
 import threading
 import time
@@ -173,9 +174,12 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         self._last_partial_transcript: str | None = None
         self._chunk_transcripts: list[str] = []
         self._live_pasted_text = ""
+        self._live_paste_generation = 0
         self._transcribed_through_samples: int = 0
         self._incremental_thread: threading.Thread | None = None
+        self._chunk_whisper_thread: threading.Thread | None = None
         self._incremental_stop: threading.Event | None = None
+        self._chunk_jobs: queue.Queue = queue.Queue()
         self._whisper = shared_whisper if shared_whisper is not None else SharedWhisper()
 
         self._np: Any | None = None

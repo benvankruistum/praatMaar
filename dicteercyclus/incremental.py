@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import queue
 import threading
+from dataclasses import dataclass
 from typing import Any
 
 from chunk_transcription import (
@@ -21,23 +23,55 @@ _CHUNK_FRAME_SECONDS = 0.05
 _CHUNK_POLL_SECONDS = 0.25
 
 
+@dataclass(frozen=True)
+class _ChunkWhisperJob:
+    """Audio-knip klaar voor Whisper; knip/LED gebeuren vóór deze job."""
+
+    session_id: str
+    audio_1d: Any
+    previous_text: str
+    reason: str
+    live_generation: int
+
+
 class IncrementalMixin:
     def _stop_incremental_worker(self, *, wait: bool = True) -> None:
         stop = self._incremental_stop
-        thread = self._incremental_thread
+        decision = self._incremental_thread
+        whisper_thread = self._chunk_whisper_thread
         if stop is not None:
             stop.set()
         if (
             wait
-            and thread is not None
-            and thread.is_alive()
-            and thread is not threading.current_thread()
+            and decision is not None
+            and decision.is_alive()
+            and decision is not threading.current_thread()
         ):
-            thread.join(timeout=5.0)
+            decision.join(timeout=5.0)
+        # Sentinel zodat de Whisper-worker leegloopt i.p.v. forever te blocken.
+        try:
+            self._chunk_jobs.put_nowait(None)
+        except Exception:
+            pass
+        if (
+            wait
+            and whisper_thread is not None
+            and whisper_thread.is_alive()
+            and whisper_thread is not threading.current_thread()
+        ):
+            # Medium-model chunks kunnen tientallen seconden duren; 5s was te kort
+            # waardoor finalize een enorme staart opnieuw ging Whisperen.
+            whisper_thread.join(timeout=180.0)
         self._incremental_thread = None
+        self._chunk_whisper_thread = None
         self._incremental_stop = None
         if wait:
             set_chunk_leds_enabled(False)
+            while True:
+                try:
+                    self._chunk_jobs.get_nowait()
+                except queue.Empty:
+                    break
 
     def _start_incremental_worker(self) -> None:
         if not self.incremental_transcription:
@@ -46,13 +80,25 @@ class IncrementalMixin:
 
         # Oude worker alleen seinen, niet joinen — anders blokkeert start de UI.
         self._stop_incremental_worker(wait=False)
+        while True:
+            try:
+                self._chunk_jobs.get_nowait()
+            except queue.Empty:
+                break
         set_chunk_leds_enabled(True)
         self._incremental_stop = threading.Event()
         self._incremental_thread = threading.Thread(
             target=self._incremental_loop,
             daemon=True,
+            name="praatmaar-chunk-decide",
+        )
+        self._chunk_whisper_thread = threading.Thread(
+            target=self._chunk_whisper_loop,
+            daemon=True,
+            name="praatmaar-chunk-whisper",
         )
         self._incremental_thread.start()
+        self._chunk_whisper_thread.start()
 
     def _concat_audio(self, chunks: list[Any]) -> Any:
         np, _, _ = self._require_audio()
@@ -122,6 +168,7 @@ class IncrementalMixin:
             through = self._transcribed_through_samples
             previous = " ".join(self._chunk_transcripts).strip()
             total = self._sample_count_locked()
+            live_generation = self._live_paste_generation
 
         if session_id is None or not chunks_copy or total <= through:
             return
@@ -138,8 +185,16 @@ class IncrementalMixin:
         if reason == "vad":
             cut_end = total - silence_samples
             if cut_end <= through:
-                # Open chunk is (bijna) alleen stilte — wacht op hard cap.
-                return
+                # Open chunk is (bijna) alleen stilte. Hard cap forceert alsnog
+                # een fixed-knip zodat de cursor niet vastloopt (LED + live-plak).
+                open_seconds = (total - through) / float(self.sample_rate)
+                if open_seconds < float(self._incremental_chunk_seconds):
+                    return
+                reason = "fixed"
+                cut_end = min(
+                    total,
+                    through + int(self._incremental_chunk_seconds * self.sample_rate),
+                )
         else:
             cut_end = min(
                 total,
@@ -149,28 +204,72 @@ class IncrementalMixin:
         if cut_end <= through:
             return
 
-        piece_text = self._commit_audio_slice(
-            audio=audio,
-            start_sample=through,
-            end_sample=cut_end,
-            previous_text=previous,
-        )
+        # LED meteen bij knipbesluit — niet pas ná trage Whisper.
         signal_chunk_trigger(reason)
+
+        overlap = int(self.sample_rate * OVERLAP_SECONDS)
+        slice_start = max(0, through - overlap) if previous else through
+        piece = audio[slice_start:cut_end]
+        if piece.size == 0:
+            return
 
         with self._lock:
             if self._session_id != session_id or not self._recording:
                 return
+            # Cursor opschuiven vóór Whisper, zodat de decide-loop doorgaat terwijl
+            # medium-model inferentie seconden/tientallen seconden kost.
             self._transcribed_through_samples = cut_end
-            if piece_text:
-                self._chunk_transcripts.append(piece_text)
-                combined = " ".join(self._chunk_transcripts).strip()
-            else:
-                combined = previous
 
-        if piece_text and combined:
-            self._emit_partial(combined, session_id)
-        if piece_text and self._live_paste_enabled():
-            self._paste_delta(piece_text)
+        self._chunk_jobs.put(
+            _ChunkWhisperJob(
+                session_id=session_id,
+                audio_1d=piece.copy(),
+                previous_text=previous,
+                reason=reason,
+                live_generation=live_generation,
+            )
+        )
+
+    def _chunk_whisper_loop(self) -> None:
+        """Verwerkt knip-jobs in volgorde: Whisper → partial → live-plak."""
+
+        while True:
+            stop = self._incremental_stop
+            stopping = stop is not None and stop.is_set()
+            try:
+                job = self._chunk_jobs.get(timeout=0.05 if stopping else 0.25)
+            except queue.Empty:
+                if stopping:
+                    return
+                continue
+            if job is None:
+                return
+            try:
+                self._process_chunk_job(job)
+            except Exception:
+                continue
+
+    def _process_chunk_job(self, job: _ChunkWhisperJob) -> None:
+        try:
+            raw = self._transcribe_chunks_to_text([job.audio_1d.reshape(-1, 1)])
+        except Exception:
+            return
+        if not raw:
+            return
+        piece_text = dedupe_overlap_text(job.previous_text, raw) or None
+        if not piece_text:
+            return
+
+        with self._lock:
+            if self._session_id != job.session_id:
+                return
+            self._chunk_transcripts.append(piece_text)
+            combined = " ".join(self._chunk_transcripts).strip()
+
+        if combined:
+            self._emit_partial(combined, job.session_id)
+        if self._live_paste_enabled():
+            self._paste_delta(piece_text, generation=job.live_generation)
 
     def _incremental_loop(self) -> None:
         stop = self._incremental_stop

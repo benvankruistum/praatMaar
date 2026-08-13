@@ -113,6 +113,35 @@ def test_decide_hybrid_prefers_vad_before_cap() -> None:
     )
 
 
+def test_decide_vad_hard_cap_wins_over_trailing_silence() -> None:
+    """Stilte-only open chunk op de cap mag niet als VAD blijven hangen."""
+    assert (
+        decide_chunk_cut(
+            mode="vad",
+            open_seconds=30.0,
+            trailing_silence_seconds=30.0,
+            chunk_seconds=30.0,
+            vad_ms=2000,
+            min_seconds=1.5,
+        )
+        == "fixed"
+    )
+
+
+def test_decide_hybrid_hard_cap_wins_over_trailing_silence() -> None:
+    assert (
+        decide_chunk_cut(
+            mode="hybrid",
+            open_seconds=30.0,
+            trailing_silence_seconds=30.0,
+            chunk_seconds=30.0,
+            vad_ms=2000,
+            min_seconds=1.5,
+        )
+        == "fixed"
+    )
+
+
 def test_decide_respects_min_seconds() -> None:
     assert (
         decide_chunk_cut(
