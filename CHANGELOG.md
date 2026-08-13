@@ -12,8 +12,19 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 - **Dicteerpresets** in Instellingen → Geavanceerd: Snel / Gebalanceerd /
   Nauwkeurig zetten model + veilige beam/VAD-defaults (geen systeemsmeting)
   ([spec](docs/superpowers/specs/2026-08-11-dictation-presets-product.md)).
+- **Composition-root strangler (ADR-0007):** package `app/` (`AppRuntime`,
+  settings, hotkey router, run/startup) en `dicteercyclus/` (Opnamesessie-
+  façade + mic/incremental/delivery); dunne `dictation.py`-entry; geen
+  import-time sessie.
 
 ### Changed
+
+- **Privacy:** console/log print geen volle transcripttekst meer (alleen
+  lengte); `SECURITY.md` documenteert optionele Local LLM / Ollama.
+- **Meeting Buddy stop:** dictation-pill/hotkey stopt alleen de dicteercyclus;
+  MB heeft eigen overlay/tray-stop.
+- **macOS paste:** Quartz ⌘V weer achter `host` (`host/_mac_paste.py`) na
+  verwijdering van root-`mac_input`.
 
 ### Fixed
 

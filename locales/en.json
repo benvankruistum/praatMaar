@@ -170,6 +170,7 @@
   "rec.transcribing_progress": "  Transcribing: {percent}%",
   "rec.no_speech": "No spoken text was recognized.",
   "rec.transcript_header": "TRANSCRIPT",
+  "rec.transcript_chars": "Transcript length: {count} characters (text not logged).",
   "rec.saved": "Transcript saved: {path}",
   "rec.saved_only": "Saved only (no clipboard/paste for this destination).",
   "rec.save_warn": "Warning: could not save transcript: {error}",

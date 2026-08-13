@@ -1,10 +1,10 @@
+"""Thin entry + tijdelijke re-exports (ADR-0007 composition-root strangler)."""
+
 from __future__ import annotations
 
 import signal
 import sys
 import threading
-import time
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -16,20 +16,30 @@ import hotkeys
 import i18n
 import recovery
 import win_identity
-from chunk_transcription import normalize_chunk_mode
-from indicator import (
-    RecordingIndicator,
-    RecordingState,
-    notify_state,
+from app.bootstrap import build_runtime, build_session
+from app.clipboard import copy_to_clipboard
+from app.hotkey_router import HotkeyRouter, default_signal_processing_busy
+from app.recent_transcripts import recent_transcript_menu_entries
+from app.recovery_actions import retranscribe_recovery_wav as retranscribe_recovery_wav_impl
+from app.recovery_actions import save_transcript_routed
+from app.settings_service import (
+    active_destination_path,
+    user_config_dict,
 )
+from app.settings_service import (
+    apply_settings as apply_settings_svc,
+)
+from app.settings_service import (
+    current_settings as current_settings_svc,
+)
+from chunk_transcription import normalize_chunk_mode
+from indicator import RecordingIndicator
 from modules import (
     CapabilityRegistry,
     CycleEvent,
-    CycleEventType,
     ModuleBus,
     SharedWhisper,
     load_enabled_modules,
-    modules_config_for_settings,
     noop_ui_dispatch,
     sanitize_modules_config,
     tray_action_entries,
@@ -39,12 +49,18 @@ from opnamesessie import Opnamesessie
 from splash import Splash
 from ui.app import ensure_app
 
-# De zware libraries worden bewust NIET bij import geladen, maar pas in
-# _load_dependencies() op de achtergrond-thread van het laadscherm. Zo verschijnt
-# de splash direct (de module blijft licht) en zie je de onderdelen laden.
-# Ze worden daar aan deze globals toegewezen zodat de rest van de code ze
-# ongewijzigd als `np`, `sd`, ... kan blijven gebruiken. `settings` en `tray`
-# worden lazy geïmporteerd (settings trekt zelf sounddevice binnen).
+# Intentional re-exports for app.run / monkeypatch targets.
+_ = (
+    signal,
+    app_logging,
+    win_identity,
+    Splash,
+    ensure_app,
+    tray_action_entries,
+    tray_root_action_entries,
+)
+
+# Zware libraries: pas in splash/startup.
 np = None  # numpy
 sd = None  # sounddevice
 pyperclip = None
@@ -53,9 +69,6 @@ write_wav = None  # scipy.io.wavfile.write
 WhisperModel = None  # faster_whisper.WhisperModel
 TrayIcon = None  # tray.TrayIcon
 
-# De console-meldingen gebruiken tekens als ●, ■ en ×. Op Windows valt stdout
-# terug op cp1252 zodra de uitvoer naar een bestand of pipe gaat, en dan crasht
-# een print op die tekens. Forceer UTF-8 zodat dat nooit gebeurt.
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -64,40 +77,18 @@ except (AttributeError, ValueError):
 
 
 # =========================================================
-# INSTELLINGEN
+# INSTELLINGEN (defaults + user config)
 # =========================================================
 
-# Whisper-model:
-# - "base"   = sneller, iets minder nauwkeurig
-# - "small"  = goede balans voor CPU
-# - "medium" = nauwkeuriger, maar langzamer
 MODEL_NAME = "small"
-
-# CPU-instellingen.
-# Voor een gewone Windows-computer is dit een veilige start.
 DEVICE = "cpu"
 COMPUTE_TYPE = "int8"
-
-# Spraakherkenning (Whisper). UI-taal staat apart in i18n.
 LANGUAGE = "nl"
-
-# Audio-instellingen.
 SAMPLE_RATE = 16000
 CHANNELS = 1
-
-# Laat op None staan om de standaardmicrofoon van Windows te gebruiken.
-# Vul eventueel een apparaatnummer in, bijvoorbeeld:
-# MICROPHONE_DEVICE = 2
 MICROPHONE_DEVICE: int | None = None
-
-# Automatisch plakken in het actieve invoerveld.
 AUTO_PASTE = True
-
-# Microfoonstream warm houden tussen opnames (sneller, mic blijft open).
-# Default uit: privacyvriendelijker, vooral bij automatisch meestarten.
 WARM_MICROPHONE = False
-
-# Faster-Whisper transcribe-opties (Instellingen → Whisper).
 WHISPER_BEAM_SIZE = config.DEFAULT_WHISPER_BEAM_SIZE
 WHISPER_VAD_FILTER = config.DEFAULT_WHISPER_VAD_FILTER
 WHISPER_VAD_MIN_SILENCE_MS = config.DEFAULT_WHISPER_VAD_MIN_SILENCE_MS
@@ -105,36 +96,14 @@ WHISPER_CONDITION_ON_PREVIOUS_TEXT = config.DEFAULT_WHISPER_CONDITION_ON_PREVIOU
 WHISPER_NO_SPEECH_THRESHOLD = config.DEFAULT_WHISPER_NO_SPEECH_THRESHOLD
 WHISPER_INITIAL_PROMPT = config.DEFAULT_WHISPER_INITIAL_PROMPT
 WHISPER_HOTWORDS = config.DEFAULT_WHISPER_HOTWORDS
-
-# Korte wachttijd voordat Ctrl+V wordt uitgevoerd.
 PASTE_DELAY_SECONDS = 0.30
-
-# Minimale opnameduur.
-# Zeer korte, per ongeluk gestarte opnames worden genegeerd.
 MINIMUM_RECORDING_SECONDS = 0.30
-
-# Tijdelijke audiobestanden na verwerking verwijderen.
 DELETE_TEMP_AUDIO = True
-
-# Positie van de opname-indicator: "boven-midden", "onder-midden" of
-# "laatst-geplaatst" (na slepen van de pill).
 INDICATOR_POSITION = "boven-midden"
 INDICATOR_XY: tuple[int, int] | None = None
-
-# Bedieningsmodus:
-# - "toggle" = indrukken start, nogmaals indrukken stopt en transcribeert
-# - "ptt"    = push-to-talk: ingedrukt houden neemt op, loslaten stopt
 MODE = "toggle"
-
-# De sneltoets als set tokens (zie hotkeys.py). Standaard Ctrl+Shift+Alt+Spatie.
 HOTKEY_TOKENS: set[str] = set(hotkeys.DEFAULT_HOTKEY)
 
-
-# ---------------------------------------------------------
-# Gebruikersinstellingen laden (overschrijven de defaults hierboven).
-# Bron: %APPDATA%\praatMaar\config.json — bewerkbaar via het
-# systeemvak-menu → Instellingen.
-# ---------------------------------------------------------
 _user_config = config.load_config()
 if "model" in _user_config:
     MODEL_NAME = config.normalize_model_name(_user_config["model"])
@@ -200,18 +169,62 @@ except (TypeError, ValueError):
 if INCREMENTAL_CHUNK_SECONDS <= 0:
     INCREMENTAL_CHUNK_SECONDS = 30.0
 
+# Bus/registry bij import (compat); modules laden pas in run/_reload_modules.
 shared_whisper = SharedWhisper()
 capability_registry = CapabilityRegistry()
 module_bus = ModuleBus(capabilities=capability_registry)
-module_bus.set_modules(
-    load_enabled_modules(
-        MODULES_CONFIG,
-        whisper=shared_whisper,
-        capabilities=capability_registry,
-    )
-)
 
 _ui_dispatch = noop_ui_dispatch
+_tray = None
+_indicator: RecordingIndicator | None = None
+model: Any | None = None
+
+state_lock = threading.RLock()
+pressed_tokens: set[str] = set()
+toggle_latched = False
+capturing = False
+_capture_cb: Any | None = None
+
+_runtime = build_runtime(
+    host_obj=host.default,
+    shared_whisper=shared_whisper,
+    capability_registry=capability_registry,
+    module_bus=module_bus,
+    modules_config=MODULES_CONFIG,
+    model_name=MODEL_NAME,
+    device=DEVICE,
+    compute_type=COMPUTE_TYPE,
+    language=LANGUAGE,
+    sample_rate=SAMPLE_RATE,
+    channels=CHANNELS,
+    microphone_device=MICROPHONE_DEVICE,
+    auto_paste=AUTO_PASTE,
+    warm_microphone=WARM_MICROPHONE,
+    whisper_beam_size=WHISPER_BEAM_SIZE,
+    whisper_vad_filter=WHISPER_VAD_FILTER,
+    whisper_vad_min_silence_ms=WHISPER_VAD_MIN_SILENCE_MS,
+    whisper_condition_on_previous_text=WHISPER_CONDITION_ON_PREVIOUS_TEXT,
+    whisper_no_speech_threshold=WHISPER_NO_SPEECH_THRESHOLD,
+    whisper_initial_prompt=WHISPER_INITIAL_PROMPT,
+    whisper_hotwords=WHISPER_HOTWORDS,
+    dictation_preset=DICTATION_PRESET,
+    paste_delay_seconds=PASTE_DELAY_SECONDS,
+    minimum_recording_seconds=MINIMUM_RECORDING_SECONDS,
+    delete_temp_audio=DELETE_TEMP_AUDIO,
+    indicator_position=INDICATOR_POSITION,
+    indicator_xy=INDICATOR_XY,
+    mode=MODE,
+    hotkey_tokens=set(HOTKEY_TOKENS),
+    destinations=list(DESTINATIONS),
+    active_destination=ACTIVE_DESTINATION,
+    incremental_transcription=INCREMENTAL_TRANSCRIPTION,
+    incremental_chunk_mode=INCREMENTAL_CHUNK_MODE,
+    incremental_vad_ms=INCREMENTAL_VAD_MS,
+    incremental_chunk_seconds=INCREMENTAL_CHUNK_SECONDS,
+)
+
+_hotkey_router: HotkeyRouter | None = None
+_session: Opnamesessie | None = None
 
 
 def _emit_cycle_event(event: CycleEvent) -> None:
@@ -219,7 +232,7 @@ def _emit_cycle_event(event: CycleEvent) -> None:
 
 
 def _reload_modules() -> None:
-    """Herlaadt enabled modules na een instellingenwijziging."""
+    """Herlaadt enabled modules na splash of instellingenwijziging."""
 
     module_bus.shutdown()
     module_bus.set_modules(
@@ -234,654 +247,39 @@ def _reload_modules() -> None:
         _tray.refresh_modules_menu()
 
 
-# =========================================================
-# GLOBALE STATUS (toetsenbord + wiring)
-# =========================================================
-#
-# De dicteercyclus-lifecycle zit in `Opnamesessie` (`opnamesessie.py`).
-# Hier blijven alleen de sneltoets-routing en capture-modus voor Instellingen.
-# De tokenisatie staat in hotkeys.py.
-
-state_lock = threading.RLock()
-
-# Houdt bij welke onderdelen van de combinatie zijn ingedrukt.
-pressed_tokens: set[str] = set()
-
-# Voorkomt herhaald afgaan door keyboard-repeat.
-toggle_latched = False
-
-# Terwijl het instellingen-dialoog een nieuwe sneltoets opneemt, stuurt de globale
-# listener elke toets door naar deze callback en voert géén normale actie uit
-# (zodat het opnemen de dicteeropname niet start).
-capturing = False
-_capture_cb: Any | None = None
-
-# Systeemvak (gezet in main); nodig voor live UI-taalwissel.
-_tray = None
-
-# Opname-indicator (gezet in main); nodig voor bestemmings-pill-updates.
-_indicator: RecordingIndicator | None = None
-
-
-# =========================================================
-# MODEL LADEN
-# =========================================================
-
-# Het model wordt niet meer bij import geladen, maar in main() op een
-# achtergrond-thread terwijl het laadscherm (splash.py) de voortgang toont.
-# Zo ziet de gebruiker bij een eerste, minutenlange download een venster in
-# plaats van een onzichtbare console-melding (de app draait onder pythonw).
-model: WhisperModel | None = None
-
-
-def _load_dependencies(reporter: Splash) -> None:
-    """
-    Importeert de zware libraries op de achtergrond-thread van het laadscherm en
-    meldt elke stap. Zo verschijnt de splash direct — de module-import zelf blijft
-    licht — en ziet de gebruiker welke onderdelen laden.
-
-    De modules worden aan module-globals toegewezen zodat de rest van de code ze
-    ongewijzigd als `np`, `sd`, `WhisperModel`, ... kan blijven gebruiken. Deze
-    functie draait vóór het model geladen wordt en vóór de listener/tray starten,
-    dus alle globals zijn op tijd gevuld.
-    """
-
-    global np, sd, pyperclip, keyboard, write_wav, WhisperModel, TrayIcon
-
-    total_steps = 5
-
-    def step(index: int, label: str) -> None:
-        reporter.set_status(f"{label}…")
-        # Onbepaalde ("bezig") animatie: een blokkerende import kan de balk niet
-        # tussentijds laten oplopen, dus houdt de glijdende animatie de indruk van
-        # voortgang vast. Het detail toont wél de stap-teller.
-        reporter.set_progress(None, i18n.t("splash.part", index=index, total=total_steps))
-
-    step(1, i18n.t("splash.dep.whisper"))
-    from faster_whisper import WhisperModel as _WhisperModel
-
-    WhisperModel = _WhisperModel
-
-    step(2, i18n.t("splash.dep.audio"))
-    import numpy as _np
-    from scipy.io.wavfile import write as _write_wav
-
-    np = _np
-    write_wav = _write_wav
-
-    step(3, i18n.t("splash.dep.mic"))
-    import sounddevice as _sd
-
-    sd = _sd
-
-    step(4, i18n.t("splash.dep.keyboard"))
-    import pyperclip as _pyperclip
-    from pynput import keyboard as _keyboard
-
-    keyboard = _keyboard
-    pyperclip = _pyperclip
-
-    # De sneltoets-tokenisatie in hotkeys.py koppelen aan pynput.
-    hotkeys.init(keyboard)
-
-    step(5, i18n.t("splash.dep.tray"))
-    from tray import TrayIcon as _TrayIcon
-
-    TrayIcon = _TrayIcon
-
-    session.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=write_wav)
-
-
-def _startup(reporter: Splash) -> WhisperModel:
-    """
-    De volledige opstarttaak op de achtergrond-thread van het laadscherm: eerst de
-    zware libraries importeren (zichtbaar per stap), dan het model laden/downloaden.
-    """
-
-    _load_dependencies(reporter)
-    return load_model(reporter)
-
-
-def _format_mb(num_bytes: float) -> str:
-    """Bytes als megabytes met een Nederlandse komma, bijv. '28,4'."""
-
-    return f"{num_bytes / (1024 * 1024):.1f}".replace(".", ",")
-
-
-class _DownloadTracker:
-    """
-    Verzamelt de downloadvoortgang over alle bestanden heen en meldt het
-    totale percentage aan het laadscherm.
-
-    huggingface_hub maakt per bestand een eigen tqdm-balk aan. We tellen de
-    bytes op over alle byte-balken (unit == "B") en negeren niet-byte-balken
-    (zoals de 'Fetching N files'-teller).
-    """
-
-    def __init__(self, reporter: Splash) -> None:
-        self._reporter = reporter
-        self._lock = threading.Lock()
-        self._bars: dict[int, tuple[float, float]] = {}
-
-    def update(self, bar_id: int, done: float, total: float) -> None:
-        with self._lock:
-            self._bars[bar_id] = (done, total)
-            total_done = sum(d for d, _ in self._bars.values())
-            total_all = sum(t for _, t in self._bars.values() if t)
-
-        if total_all > 0:
-            self._reporter.set_progress(
-                total_done / total_all,
-                f"{_format_mb(total_done)} / {_format_mb(total_all)} MB",
-            )
-
-
-def _download_model_with_progress(model_name: str, reporter: Splash) -> str:
-    """
-    Downloadt het model via huggingface_hub met een eigen tqdm-klasse die de
-    voortgang doorgeeft aan het laadscherm. Retourneert het lokale pad.
-
-    faster_whisper.download_model zet tqdm hard uit, dus we roepen
-    snapshot_download zelf aan om wél voortgang te krijgen.
-    """
-
-    import huggingface_hub
-    from tqdm.auto import tqdm
-
-    # Publieke fallback: private `_MODELS` kan in nieuwere faster-whisper
-    # verdwijnen. De repo-id's volgen de Systran faster-whisper-conventie.
-    _KNOWN_REPO_IDS = {
-        "tiny": "Systran/faster-whisper-tiny",
-        "tiny.en": "Systran/faster-whisper-tiny.en",
-        "base": "Systran/faster-whisper-base",
-        "base.en": "Systran/faster-whisper-base.en",
-        "small": "Systran/faster-whisper-small",
-        "small.en": "Systran/faster-whisper-small.en",
-        "medium": "Systran/faster-whisper-medium",
-        "medium.en": "Systran/faster-whisper-medium.en",
-        "large-v1": "Systran/faster-whisper-large-v1",
-        "large-v2": "Systran/faster-whisper-large-v2",
-        "large-v3": "Systran/faster-whisper-large-v3",
-        "large": "Systran/faster-whisper-large-v3",
-        "distil-large-v2": "Systran/faster-distil-whisper-large-v2",
-        "distil-medium.en": "Systran/faster-distil-whisper-medium.en",
-        "distil-small.en": "Systran/faster-distil-whisper-small.en",
-        "distil-large-v3": "Systran/faster-distil-whisper-large-v3",
-    }
-    try:
-        from faster_whisper.utils import _MODELS as _fw_models
-    except ImportError:
-        _fw_models = {}
-    repo_id = _fw_models.get(model_name) or _KNOWN_REPO_IDS.get(model_name, model_name)
-
-    # Dezelfde bestandenselectie als faster_whisper.download_model.
-    allow_patterns = [
-        "config.json",
-        "preprocessor_config.json",
-        "model.bin",
-        "tokenizer.json",
-        "vocabulary.*",
-    ]
-
-    tracker = _DownloadTracker(reporter)
-
-    class _NullSink:
-        """Slokt tqdm-uitvoer op: onder pythonw is sys.stderr None."""
-
-        def write(self, *_args: Any) -> None:
-            pass
-
-        def flush(self) -> None:
-            pass
-
-    class _ProgressTqdm(tqdm):
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            # Alleen de byte-balken meetellen (de 'Fetching N files'-teller
-            # niet). `unit` uit de kwargs lezen: self.unit bestaat niet
-            # betrouwbaar. tqdm naar een sink sturen en niet uitzetten, zodat
-            # n/total blijven bijwerken zonder ooit naar (afwezige) stderr te
-            # schrijven.
-            self._track = kwargs.get("unit") == "B"
-            kwargs["file"] = _NullSink()
-            kwargs["disable"] = False
-            super().__init__(*args, **kwargs)
-
-        def update(self, n: float | None = 1) -> bool | None:
-            displayed = super().update(n)
-            if self._track:
-                tracker.update(id(self), self.n, self.total or 0)
-            return displayed
-
-    return huggingface_hub.snapshot_download(
-        repo_id,
-        allow_patterns=allow_patterns,
-        tqdm_class=_ProgressTqdm,
-    )
-
-
-def load_model(reporter: Splash) -> WhisperModel:
-    """
-    Laadt het Whisper-model. Draait op de achtergrond-thread van het laadscherm
-    en meldt zijn voortgang via `reporter`.
-
-    Is het model nog niet in de cache aanwezig, dan wordt het eerst (eenmalig)
-    gedownload met een echte voortgangsbalk; daarna volgt het laden vanaf schijf.
-    """
-
-    from faster_whisper.utils import download_model
-
-    # Cache-check: al aanwezig? Dan geen download nodig.
-    try:
-        model_path = download_model(MODEL_NAME, local_files_only=True)
-        need_download = False
-    except Exception:
-        model_path = None
-        need_download = True
-
-    if need_download:
-        reporter.set_status(i18n.t("splash.download"))
-        reporter.set_progress(0.0, "")
-        model_path = _download_model_with_progress(MODEL_NAME, reporter)
-
-    # Laden vanaf schijf: geen betrouwbaar percentage, dus onbepaald ("bezig").
-    reporter.set_status(i18n.t("splash.loading"))
-    reporter.set_progress(None)
-
-    return WhisperModel(
-        model_path,
-        device=DEVICE,
-        compute_type=COMPUTE_TYPE,
-    )
-
-
-# =========================================================
-# HULPFUNCTIES VOOR TOETSEN
-# =========================================================
-
-
-def hotkey_is_pressed() -> bool:
-    """Controleert of de volledige ingestelde sneltoets is ingedrukt.
-
-    De press/release-boekhouding alléén is niet betrouwbaar: levert een release
-    een andere token op dan de press (andere vk, ander teken doordat Shift het
-    verandert, of een vk die niet in de tabel staat), dan blijft die token voor
-    altijd staan. Bij sneltoets Shift+Esc vuurde daarna alléén Shift de toggle.
-
-    Daarom: zodra de boekhouding zégt dat de combinatie volledig is, vragen we
-    het OS om de échte toetsstatus. Spooktokens worden opgeruimd, zodat de
-    volgende druk weer klopt. Kan het platform het niet vertellen (macOS/Linux),
-    dan blijft het gedrag zoals het was.
-    """
-
-    with state_lock:
-        if not HOTKEY_TOKENS:
-            return False
-        if not HOTKEY_TOKENS.issubset(pressed_tokens):
-            return False
-        wanted = set(HOTKEY_TOKENS)
-
-    try:
-        down = host.keys_physically_down(wanted)
-    except Exception:
-        # Nooit de sneltoets blokkeren op een falende OS-query.
-        return True
-
-    if down is None:
-        return True
-
-    stale = wanted - down
-    if not stale:
-        return True
-
-    with state_lock:
-        pressed_tokens.difference_update(stale)
-    return False
-
-
-def wait_until_modifier_keys_released(
-    timeout: float = 3.0,
-) -> None:
-    """
-    Wacht totdat de sneltoets én de modificatietoetsen zijn losgelaten.
-
-    Dit voorkomt dat automatisch plakken per ongeluk als bijvoorbeeld
-    Ctrl+Shift+V wordt uitgevoerd in plaats van Ctrl+V.
-    """
-
-    relevant = {"ctrl", "shift", "alt", "cmd"} | HOTKEY_TOKENS
-    started = time.monotonic()
-
-    while True:
-        with state_lock:
-            still_pressed = set(pressed_tokens.intersection(relevant))
-
-        if not still_pressed:
-            return
-
-        # Zelfde zelfherstel als in hotkey_is_pressed: een spooktoken zou hier
-        # anders élke plak-actie de volle time-out laten uitzitten.
-        try:
-            down = host.keys_physically_down(still_pressed)
-        except Exception:
-            down = None
-        if down is not None:
-            stale = still_pressed - down
-            if stale:
-                with state_lock:
-                    pressed_tokens.difference_update(stale)
-                continue
-
-        if time.monotonic() - started >= timeout:
-            return
-
-        time.sleep(0.05)
-
-
-def print_ready_message() -> None:
-    """Toont dat het programma weer beschikbaar is."""
-
-    print()
-    print(i18n.t("ready", hotkey=hotkeys.format_hotkey(HOTKEY_TOKENS)))
-
-
-def _copy_to_clipboard(text: str) -> None:
-    """Kopieert tekst naar het klembord.
-
-    Primair via pyperclip; als dat faalt (bijv. Linux zonder ``xclip``/``xsel``)
-    valt het terug op het Qt-klembord, gemarshald naar de Qt-main-thread.
-    """
-
-    try:
-        if pyperclip is not None:
-            pyperclip.copy(text)
-            return
-    except Exception:
-        pass
-    _copy_to_clipboard_via_qt(text)
-
-
-def _copy_to_clipboard_via_qt(text: str) -> None:
-    """Best-effort klembord-fallback via Qt (thread-veilig gemarshald)."""
-
-    from PySide6.QtCore import QThread
-    from PySide6.QtGui import QGuiApplication
-
-    app = QGuiApplication.instance()
-    if app is None:
-        raise RuntimeError("Geen Qt-applicatie voor klembord-fallback.")
-
-    def _set() -> None:
-        clipboard = QGuiApplication.clipboard()
-        if clipboard is not None:
-            clipboard.setText(text)
-
-    if QThread.currentThread() == app.thread():
-        _set()
-        return
-    done = threading.Event()
-
-    def _run() -> None:
-        try:
-            _set()
-        finally:
-            done.set()
-
-    _ui_dispatch(_run)
-    done.wait(timeout=1.0)
-
-
-def _recent_transcript_search_dirs() -> list[Path]:
-    """Default transcripts-map plus directory-bestemmingen (geen append)."""
-
-    dirs: list[Path] = [recovery.transcripts_dir()]
-    seen: set[str] = set()
-    try:
-        seen.add(str(dirs[0].resolve()))
-    except OSError:
-        seen.add(str(dirs[0]))
-    for path in destinations.directory_save_paths(DESTINATIONS):
-        try:
-            key = str(path.resolve())
-        except OSError:
-            key = str(path)
-        if key in seen:
-            continue
-        seen.add(key)
-        dirs.append(path)
-    return dirs
-
-
-def _copy_recent_transcript_to_clipboard(path: Path) -> None:
-    """Zet een bewaard transcript opnieuw op het klembord (geen plakken)."""
-
-    try:
-        text = recovery.read_transcript_text(path)
-    except OSError as exc:
-        print(i18n.t("rec.clipboard_warn", error=exc))
-        return
-    try:
-        _copy_to_clipboard(text)
-        print(i18n.t("rec.clipboard"))
-    except Exception as exc:
-        print(i18n.t("rec.clipboard_warn", error=exc))
-
-
-def _recent_transcript_menu_entries() -> list[tuple]:
-    """Tray/pill-submenu: max. 5 recente timestamp-transcripts of empty state."""
-
-    items = recovery.list_recent_transcripts(_recent_transcript_search_dirs())
-    if not items:
-        return [("disabled", i18n.t("tray.recent_transcripts.empty"))]
-    entries: list[tuple] = []
-    language = i18n.ui_language()
-    for item in items:
-        label = recovery.format_recent_transcript_label(item, language)
-        path = item.path
-        entries.append(("item", label, lambda p=path: _copy_recent_transcript_to_clipboard(p)))
-    return entries
-
-
-def _user_config_dict() -> dict[str, Any]:
-    """Snapshot van alle persistente gebruikersinstellingen."""
-
-    return {
-        "model": MODEL_NAME,
-        "microphone_device": MICROPHONE_DEVICE,
-        "auto_paste": AUTO_PASTE,
-        "warm_microphone": WARM_MICROPHONE,
-        "whisper_beam_size": WHISPER_BEAM_SIZE,
-        "whisper_vad_filter": WHISPER_VAD_FILTER,
-        "whisper_vad_min_silence_ms": WHISPER_VAD_MIN_SILENCE_MS,
-        "whisper_condition_on_previous_text": WHISPER_CONDITION_ON_PREVIOUS_TEXT,
-        "whisper_no_speech_threshold": WHISPER_NO_SPEECH_THRESHOLD,
-        "whisper_initial_prompt": WHISPER_INITIAL_PROMPT,
-        "whisper_hotwords": WHISPER_HOTWORDS,
-        "dictation_preset": DICTATION_PRESET,
-        "indicator_position": INDICATOR_POSITION,
-        "indicator_xy": list(INDICATOR_XY) if INDICATOR_XY is not None else None,
-        "mode": MODE,
-        "hotkey": hotkeys.normalize(HOTKEY_TOKENS),
-        "speech_language": LANGUAGE,
-        "ui_language": i18n.ui_language(),
-        "destinations": DESTINATIONS,
-        "active_destination": ACTIVE_DESTINATION,
-        "incremental_transcription": INCREMENTAL_TRANSCRIPTION,
-        "incremental_chunk_mode": INCREMENTAL_CHUNK_MODE,
-        "incremental_vad_ms": INCREMENTAL_VAD_MS,
-        "incremental_chunk_seconds": INCREMENTAL_CHUNK_SECONDS,
-        "modules": modules_config_for_settings(MODULES_CONFIG),
-    }
-
-
-def _save_transcript_routed(text: str) -> Path:
-    """Slaat transcript op in de actieve bestemmingsmap of de defaultmap."""
-
-    destination = destinations.find_destination(ACTIVE_DESTINATION, DESTINATIONS)
-    append_path = destinations.resolve_append_file(destination)
-    if append_path is not None:
-        return recovery.append_transcript(text, append_path)
-
-    directory = destinations.resolve_save_dir(
-        ACTIVE_DESTINATION,
-        DESTINATIONS,
-        recovery.transcripts_dir(),
-    )
-    return recovery.save_transcript(text, directory=directory)
-
-
-def retranscribe_recovery_wav(path: Path) -> str:
-    """
-    Transcribeert een recovery-WAV met het geladen model.
-
-    Blokkerend — aanroepen vanaf een achtergrondthread. Geeft het transcript
-    terug; gooit bij weigering (bezig) of lege/geen herkenning.
-    Bestemmings-stemcommando's worden bewust overgeslagen (herstel-inhoud).
-    """
-
-    if session.is_recording or session.is_processing:
-        raise RuntimeError(i18n.t("recovery.busy"))
-    if not shared_whisper.is_ready:
-        raise RuntimeError(i18n.t("model.load_failed"))
-
-    resolved = path.resolve()
-    if resolved.parent != recovery.recovery_dir().resolve():
-        raise ValueError(i18n.t("recovery.invalid_file"))
-
-    session_id = str(uuid.uuid4())
-    module_bus.emit(
-        CycleEvent(
-            type=CycleEventType.CYCLE_TRANSCRIBING,
-            session_id=session_id,
-            language=LANGUAGE,
-            mode=MODE,
-            recovery_path=str(resolved),
-            source="recovery",
-        )
-    )
-
-    with shared_whisper.locked_model() as whisper_model:
-        segments, _info = whisper_model.transcribe(
-            str(resolved),
-            **session.transcribe_kwargs(),
-        )
-        text_parts: list[str] = []
-        for segment in segments:
-            text = segment.text.strip()
-            if text:
-                text_parts.append(text)
-    transcript = " ".join(text_parts).strip()
-    if not transcript:
-        module_bus.emit(
-            CycleEvent(
-                type=CycleEventType.CYCLE_IDLE,
-                session_id=session_id,
-                source="recovery",
-            )
-        )
-        raise RuntimeError(i18n.t("rec.no_speech"))
-
-    module_bus.emit(
-        CycleEvent(
-            type=CycleEventType.CYCLE_COMPLETED,
-            session_id=session_id,
-            transcript=transcript,
-            destination=ACTIVE_DESTINATION,
-            language=LANGUAGE,
-            mode=MODE,
-            recovery_path=str(resolved),
-            source="recovery",
-        )
-    )
-
-    saved_path: Path | None = None
-    try:
-        saved_path = _save_transcript_routed(transcript)
-    except OSError as exc:
-        print(i18n.t("rec.save_warn", error=exc))
-
-    if saved_path is not None:
-        module_bus.emit(
-            CycleEvent(
-                type=CycleEventType.TRANSCRIPT_SAVED,
-                session_id=session_id,
-                transcript=transcript,
-                path=str(saved_path),
-                destination=ACTIVE_DESTINATION,
-                language=LANGUAGE,
-                mode=MODE,
-                recovery_path=str(resolved),
-                source="recovery",
-            )
-        )
-
-    module_bus.emit(
-        CycleEvent(
-            type=CycleEventType.RECOVERY_RETRANSCRIBED,
-            session_id=session_id,
-            transcript=transcript,
-            path=str(saved_path) if saved_path is not None else None,
-            recovery_path=str(resolved),
-            source="recovery",
-        )
-    )
-
-    try:
-        _copy_to_clipboard(transcript)
-    except Exception as exc:
-        print(i18n.t("rec.clipboard_warn", error=exc))
-
-    if AUTO_PASTE:
-        wait_until_modifier_keys_released()
-        time.sleep(PASTE_DELAY_SECONDS)
-        try:
-            host.paste()
-        except Exception as exc:
-            print(i18n.t("rec.paste_failed"))
-            print(i18n.t("rec.error", error=exc))
-
-    module_bus.emit(
-        CycleEvent(
-            type=CycleEventType.CYCLE_IDLE,
-            session_id=session_id,
-            source="recovery",
-        )
-    )
-
-    return transcript
-
-
-def _handle_destination_command(kind: str, name: str | None) -> None:
-    """Werkt sticky bestemming bij na een stem-commando."""
-
-    global ACTIVE_DESTINATION
-
-    if kind == "set":
-        ACTIVE_DESTINATION = name
-    elif kind == "reset":
-        ACTIVE_DESTINATION = None
-
-    config.save_config(_user_config_dict())
-
-    indicator = _indicator
-    if indicator is not None:
-        active = ACTIVE_DESTINATION
-        active_path = _active_destination_path()
-        indicator.call_on_main(lambda: indicator.set_destination(active, active_path))
-
-
-def _active_destination_path() -> str | None:
-    """Map van de actieve bestemming, voor de padregel in de Idle-pill."""
-
-    item = destinations.find_destination(ACTIVE_DESTINATION, DESTINATIONS)
-    if item is None:
-        return None
-    path = str(item.get("path") or "").strip()
-    return path or None
+def _sync_runtime_from_globals() -> None:
+    assert _runtime is not None
+    _runtime.model_name = MODEL_NAME
+    _runtime.language = LANGUAGE
+    _runtime.microphone_device = MICROPHONE_DEVICE
+    _runtime.auto_paste = AUTO_PASTE
+    _runtime.warm_microphone = WARM_MICROPHONE
+    _runtime.whisper_beam_size = WHISPER_BEAM_SIZE
+    _runtime.whisper_vad_filter = WHISPER_VAD_FILTER
+    _runtime.whisper_vad_min_silence_ms = WHISPER_VAD_MIN_SILENCE_MS
+    _runtime.whisper_condition_on_previous_text = WHISPER_CONDITION_ON_PREVIOUS_TEXT
+    _runtime.whisper_no_speech_threshold = WHISPER_NO_SPEECH_THRESHOLD
+    _runtime.whisper_initial_prompt = WHISPER_INITIAL_PROMPT
+    _runtime.whisper_hotwords = WHISPER_HOTWORDS
+    _runtime.dictation_preset = DICTATION_PRESET
+    _runtime.indicator_position = INDICATOR_POSITION
+    _runtime.indicator_xy = INDICATOR_XY
+    _runtime.mode = MODE
+    _runtime.hotkey_tokens = set(HOTKEY_TOKENS)
+    _runtime.destinations = list(DESTINATIONS)
+    _runtime.active_destination = ACTIVE_DESTINATION
+    _runtime.modules_config = MODULES_CONFIG
+    _runtime.incremental_transcription = INCREMENTAL_TRANSCRIPTION
+    _runtime.incremental_chunk_mode = INCREMENTAL_CHUNK_MODE
+    _runtime.incremental_vad_ms = INCREMENTAL_VAD_MS
+    _runtime.incremental_chunk_seconds = INCREMENTAL_CHUNK_SECONDS
+
+
+def _modules_hold_audio_streams() -> bool:
+    return any(getattr(module, "is_session_active", False) for module in module_bus.modules)
 
 
 def _set_mic_attention(needed: bool) -> None:
-    """Markeert het tray-icoon als er microfoonactie nodig is."""
-
     tray = _tray
     if tray is None:
         return
@@ -889,66 +287,62 @@ def _set_mic_attention(needed: bool) -> None:
 
 
 def _refresh_mic_attention() -> None:
-    _set_mic_attention(not session.probe_microphone())
+    _set_mic_attention(not get_session().probe_microphone())
 
 
 def _report_user_error(message: str) -> None:
-    """Markeert tray-attention bij een gebruikersfout zonder focus te stelen.
-
-    De ERROR-pill (+ next-step-hint) komt van ``Opnamesessie`` via ``notify_state``.
-    De volledige checklist blijft beschikbaar via Instellingen / Help — niet via
-    een automatische modal op de hotkey-foutpad (FR-UX-01).
-    ``message`` is al geprint door de caller.
-    """
-
     _ = message
     _set_mic_attention(True)
 
 
 def _signal_processing_busy() -> None:
-    """Zichtbare busy-feedback bij hotkey tijdens verwerking (FR-UX-03)."""
-
-    notify_state(RecordingState.TRANSCRIBING, MODE)
-    tray = _tray
-    if tray is not None:
-        tray.signal_busy()
+    default_signal_processing_busy(MODE, _tray)
 
 
-def _modules_hold_audio_streams() -> bool:
-    """True als een module (Meeting Buddy-capture) eigen audiostreams open heeft.
+def _handle_destination_command(kind: str, name: str | None) -> None:
+    global ACTIVE_DESTINATION
 
-    PortAudio herinitialiseren zou die streams eronder wegtrekken.
-    """
+    if kind == "set":
+        ACTIVE_DESTINATION = name
+    elif kind == "reset":
+        ACTIVE_DESTINATION = None
 
-    return any(getattr(module, "is_session_active", False) for module in module_bus.modules)
+    config.save_config(user_config_dict(sys.modules[__name__]))
+
+    indicator = _indicator
+    if indicator is not None:
+        active = ACTIVE_DESTINATION
+        active_path = active_destination_path(sys.modules[__name__])
+        indicator.call_on_main(lambda: indicator.set_destination(active, active_path))
+
+
+def _active_destination_path() -> str | None:
+    return active_destination_path(sys.modules[__name__])
+
+
+def _copy_to_clipboard(text: str) -> None:
+    copy_to_clipboard(text, pyperclip_mod=pyperclip, ui_dispatch=_ui_dispatch)
+
+
+def _save_transcript_routed(text: str) -> Path:
+    return save_transcript_routed(
+        text,
+        active_destination=ACTIVE_DESTINATION,
+        destinations_list=DESTINATIONS,
+    )
+
+
+def _user_config_dict() -> dict[str, Any]:
+    return user_config_dict(sys.modules[__name__])
 
 
 def _build_session() -> Opnamesessie:
-    """Bouwt de Opnamesessie met de huidige config en geïnjecteerde seams."""
+    """Bouwt de Opnamesessie met de huidige config (geen mic/model side effects)."""
 
-    return Opnamesessie(
-        host=host.default,
-        sample_rate=SAMPLE_RATE,
-        channels=CHANNELS,
-        microphone_device=MICROPHONE_DEVICE,
-        minimum_recording_seconds=MINIMUM_RECORDING_SECONDS,
-        auto_paste=AUTO_PASTE,
-        paste_delay_seconds=PASTE_DELAY_SECONDS,
-        language=LANGUAGE,
-        delete_temp_audio=DELETE_TEMP_AUDIO,
-        mode=MODE,
-        warm_microphone=WARM_MICROPHONE,
-        whisper_beam_size=WHISPER_BEAM_SIZE,
-        whisper_vad_filter=WHISPER_VAD_FILTER,
-        whisper_vad_min_silence_ms=WHISPER_VAD_MIN_SILENCE_MS,
-        whisper_condition_on_previous_text=WHISPER_CONDITION_ON_PREVIOUS_TEXT,
-        whisper_no_speech_threshold=WHISPER_NO_SPEECH_THRESHOLD,
-        whisper_initial_prompt=WHISPER_INITIAL_PROMPT,
-        whisper_hotwords=WHISPER_HOTWORDS,
-        incremental_transcription=INCREMENTAL_TRANSCRIPTION,
-        incremental_chunk_mode=INCREMENTAL_CHUNK_MODE,
-        incremental_vad_ms=INCREMENTAL_VAD_MS,
-        incremental_chunk_seconds=INCREMENTAL_CHUNK_SECONDS,
+    _sync_runtime_from_globals()
+    assert _runtime is not None
+    return build_session(
+        _runtime,
         emit_event=_emit_cycle_event,
         wait_until_modifiers_clear=wait_until_modifier_keys_released,
         on_ready=print_ready_message,
@@ -961,600 +355,137 @@ def _build_session() -> Opnamesessie:
         on_user_error=_report_user_error,
         on_mic_ready=lambda: _set_mic_attention(False),
         has_external_streams=_modules_hold_audio_streams,
-        shared_whisper=shared_whisper,
     )
 
 
-# Sessiewording bij import (na config); audio-libs en model komen later.
-session = _build_session()
+def ensure_session() -> Opnamesessie:
+    """Lazy Opnamesessie — niet bij module-import."""
+
+    global _session
+    if _session is None:
+        _session = _build_session()
+    return _session
 
 
-# =========================================================
-# TOETSENBORDLISTENER
-# =========================================================
+def get_session() -> Any:
+    """Session voor runtime: respecteer monkeypatch op module-attribuut."""
+
+    mod = sys.modules[__name__]
+    if "session" in mod.__dict__:
+        return mod.__dict__["session"]
+    return ensure_session()
+
+
+def get_hotkey_router() -> HotkeyRouter:
+    global _hotkey_router
+    if _hotkey_router is None:
+        _hotkey_router = HotkeyRouter(
+            get_session=get_session,
+            get_mode=lambda: MODE,
+            get_hotkey_tokens=lambda: HOTKEY_TOKENS,
+            keys_physically_down=lambda tokens: host.keys_physically_down(tokens),
+            signal_processing_busy=_signal_processing_busy,
+            state_lock=state_lock,
+            pressed_tokens=pressed_tokens,
+        )
+    return _hotkey_router
+
+
+def __getattr__(name: str) -> Any:
+    if name == "session":
+        return ensure_session()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def hotkey_is_pressed() -> bool:
+    return get_hotkey_router().hotkey_is_pressed()
+
+
+def wait_until_modifier_keys_released(timeout: float = 3.0) -> None:
+    get_hotkey_router().wait_until_modifier_keys_released(timeout)
+
+
+def print_ready_message() -> None:
+    print()
+    print(i18n.t("ready", hotkey=hotkeys.format_hotkey(HOTKEY_TOKENS)))
 
 
 def set_capture(callback: Any | None) -> None:
-    """
-    Zet het opnemen van een nieuwe sneltoets aan (callback) of uit (None).
-
-    Aangeroepen vanuit het instellingen-dialoog. Terwijl dit actief is, stuurt de
-    listener elke toets naar `callback(event, key)` en voert hij geen dicteeractie
-    uit. De ingedrukt-status wordt geleegd zodat er geen resten achterblijven.
-    """
-
+    get_hotkey_router().set_capture(callback)
     global _capture_cb, capturing, toggle_latched
-
-    with state_lock:
-        _capture_cb = callback
-        capturing = callback is not None
-        pressed_tokens.clear()
-        toggle_latched = False
+    _capture_cb = callback
+    capturing = callback is not None
+    # Router houdt pressed_tokens; mirror toggle_latched voor tests.
+    toggle_latched = get_hotkey_router().toggle_latched
 
 
-def on_press(
-    key: keyboard.Key | keyboard.KeyCode | None,
-) -> None:
-    """
-    Verwerkt het indrukken van toetsen.
-
-    De ingestelde sneltoets:
-        - toggle: opname aan of uit
-        - push-to-talk: opname start (loslaten stopt, zie on_release)
-    """
-
+def on_press(key: Any) -> None:
+    get_hotkey_router().on_press(key)
     global toggle_latched
-
-    # Sneltoets opnemen (instellingen): doorsturen, verder niets doen.
-    capture_cb = _capture_cb
-    if capture_cb is not None:
-        capture_cb("press", key)
-        return
-
-    token = hotkeys.key_to_token(key)
-
-    if token is not None:
-        with state_lock:
-            pressed_tokens.add(token)
-
-    if not hotkey_is_pressed():
-        return
-
-    with state_lock:
-        if toggle_latched:
-            return
-
-        toggle_latched = True
-        is_recording = session.is_recording
-        is_processing = session.is_processing
-
-    if MODE == "ptt":
-        # Push-to-talk: ingedrukt houden neemt op; loslaten stopt (on_release).
-        if is_processing:
-            print("\n" + i18n.t("dictation.busy"))
-            _signal_processing_busy()
-        elif not is_recording:
-            print("\n" + i18n.t("dictation.ptt_started"))
-            session.start()
-
-    else:
-        # Toggle: dezelfde sneltoets wisselt tussen starten en stoppen.
-        from modules._builtin.meeting_buddy.stop_routing import stop_active_meeting
-
-        if stop_active_meeting(list(module_bus.modules)):
-            print("\n" + i18n.t("modules.meeting_buddy.overlay.stopped"))
-        elif is_recording:
-            print("\n" + i18n.t("dictation.stopped_hotkey"))
-            session.stop_and_transcribe()
-        elif is_processing:
-            print("\n" + i18n.t("dictation.busy"))
-            _signal_processing_busy()
-        else:
-            print("\n" + i18n.t("dictation.started_hotkey"))
-            session.start()
+    toggle_latched = get_hotkey_router().toggle_latched
 
 
-def on_release(
-    key: keyboard.Key | keyboard.KeyCode | None,
-) -> None:
-    """
-    Verwerkt het loslaten van toetsen.
-
-    In push-to-talk stopt het loslaten van de sneltoets de opname. In toggle-modus
-    zorgt het loslaten ervoor dat dezelfde combinatie opnieuw kan afgaan.
-    """
-
+def on_release(key: Any) -> None:
+    get_hotkey_router().on_release(key)
     global toggle_latched
-
-    capture_cb = _capture_cb
-    if capture_cb is not None:
-        capture_cb("release", key)
-        return
-
-    token = hotkeys.key_to_token(key)
-
-    if token is not None:
-        with state_lock:
-            pressed_tokens.discard(token)
-
-    if not hotkey_is_pressed():
-        with state_lock:
-            was_latched = toggle_latched
-            toggle_latched = False
-
-        # Push-to-talk: zodra de sneltoets wordt losgelaten, stoppen.
-        if MODE == "ptt" and was_latched:
-            if session.is_recording:
-                print("\n" + i18n.t("dictation.ptt_stopped"))
-                session.stop_and_transcribe()
-
-
-# =========================================================
-# INSTELLINGEN TOEPASSEN (systeemvak → Instellingen)
-# =========================================================
+    toggle_latched = get_hotkey_router().toggle_latched
 
 
 def current_settings() -> dict[str, Any]:
-    """De huidige waarden, voor het vullen van het instellingen-dialoog."""
-
-    return {
-        "model": MODEL_NAME,
-        "microphone_device": MICROPHONE_DEVICE,
-        "auto_paste": AUTO_PASTE,
-        "warm_microphone": WARM_MICROPHONE,
-        "whisper_beam_size": WHISPER_BEAM_SIZE,
-        "whisper_vad_filter": WHISPER_VAD_FILTER,
-        "whisper_vad_min_silence_ms": WHISPER_VAD_MIN_SILENCE_MS,
-        "whisper_condition_on_previous_text": WHISPER_CONDITION_ON_PREVIOUS_TEXT,
-        "whisper_no_speech_threshold": WHISPER_NO_SPEECH_THRESHOLD,
-        "whisper_initial_prompt": WHISPER_INITIAL_PROMPT,
-        "whisper_hotwords": WHISPER_HOTWORDS,
-        "dictation_preset": DICTATION_PRESET,
-        "indicator_position": INDICATOR_POSITION,
-        "indicator_xy": list(INDICATOR_XY) if INDICATOR_XY is not None else None,
-        "mode": MODE,
-        "hotkey": hotkeys.normalize(HOTKEY_TOKENS),
-        "speech_language": LANGUAGE,
-        "ui_language": i18n.ui_language(),
-        "autostart": host.is_autostart_enabled(),
-        "destinations": list(DESTINATIONS),
-        "active_destination": ACTIVE_DESTINATION,
-        "incremental_transcription": INCREMENTAL_TRANSCRIPTION,
-        "incremental_chunk_mode": INCREMENTAL_CHUNK_MODE,
-        "incremental_vad_ms": INCREMENTAL_VAD_MS,
-        "incremental_chunk_seconds": INCREMENTAL_CHUNK_SECONDS,
-        "modules": modules_config_for_settings(MODULES_CONFIG),
-    }
+    return current_settings_svc(sys.modules[__name__])
 
 
 def apply_settings(
     new_settings: dict[str, Any],
     indicator: RecordingIndicator,
 ) -> None:
-    """
-    Bewaart en past gewijzigde instellingen toe. Draait op de hoofdthread
-    (het dialoog is daarheen gemarshald), dus GUI-calls zijn hier veilig.
+    apply_settings_svc(
+        sys.modules[__name__],
+        new_settings,
+        indicator,
+        session=get_session(),
+        reload_modules=_reload_modules,
+        refresh_mic_attention=_refresh_mic_attention,
+        tray=_tray,
+    )
+    _sync_runtime_from_globals()
 
-    Live: pill-positie, auto-plakken, warm-mic, modus, sneltoets, talen,
-    automatisch meestarten. Volgende opname: microfoon. Na herstart: model.
-    """
 
-    global MODEL_NAME, MICROPHONE_DEVICE, AUTO_PASTE, INDICATOR_POSITION, INDICATOR_XY
-    global MODE, HOTKEY_TOKENS, LANGUAGE, WARM_MICROPHONE
-    global WHISPER_BEAM_SIZE, WHISPER_VAD_FILTER, WHISPER_VAD_MIN_SILENCE_MS
-    global WHISPER_CONDITION_ON_PREVIOUS_TEXT, WHISPER_NO_SPEECH_THRESHOLD
-    global WHISPER_INITIAL_PROMPT, WHISPER_HOTWORDS
-    global DICTATION_PRESET
-    global DESTINATIONS, ACTIVE_DESTINATION, MODULES_CONFIG, INCREMENTAL_TRANSCRIPTION
-    global INCREMENTAL_CHUNK_MODE, INCREMENTAL_VAD_MS, INCREMENTAL_CHUNK_SECONDS
-
-    from indicator._contract import (
-        POSITION_LAST,
-        normalize_indicator_position,
-        sanitize_indicator_xy,
+def retranscribe_recovery_wav(path: Path) -> str:
+    return retranscribe_recovery_wav_impl(
+        path,
+        session=get_session(),
+        shared_whisper=shared_whisper,
+        module_bus=module_bus,
+        language=LANGUAGE,
+        mode=MODE,
+        active_destination=ACTIVE_DESTINATION,
+        destinations_list=DESTINATIONS,
+        auto_paste=AUTO_PASTE,
+        paste_delay_seconds=PASTE_DELAY_SECONDS,
+        host_obj=host,
+        copy_text=_copy_to_clipboard,
+        wait_until_modifiers_clear=wait_until_modifier_keys_released,
     )
 
-    new_model = str(new_settings.get("model", MODEL_NAME))
-    model_changed = new_model != MODEL_NAME
-    new_position = normalize_indicator_position(
-        new_settings.get("indicator_position", INDICATOR_POSITION)
-    )
-    new_xy = sanitize_indicator_xy(new_settings.get("indicator_xy", INDICATOR_XY))
-    if new_position == POSITION_LAST and new_xy is None:
-        new_xy = INDICATOR_XY
-    if new_position == POSITION_LAST and new_xy is None:
-        new_position = "boven-midden"
-    position_changed = new_position != INDICATOR_POSITION or new_xy != INDICATOR_XY
 
-    MODEL_NAME = new_model
-    MICROPHONE_DEVICE = new_settings.get("microphone_device", MICROPHONE_DEVICE)
-    AUTO_PASTE = bool(new_settings.get("auto_paste", AUTO_PASTE))
-    WARM_MICROPHONE = bool(new_settings.get("warm_microphone", WARM_MICROPHONE))
-    _whisper = config.whisper_settings_from_config(
-        {
-            "whisper_beam_size": new_settings.get("whisper_beam_size", WHISPER_BEAM_SIZE),
-            "whisper_vad_filter": new_settings.get("whisper_vad_filter", WHISPER_VAD_FILTER),
-            "whisper_vad_min_silence_ms": new_settings.get(
-                "whisper_vad_min_silence_ms", WHISPER_VAD_MIN_SILENCE_MS
-            ),
-            "whisper_condition_on_previous_text": new_settings.get(
-                "whisper_condition_on_previous_text", WHISPER_CONDITION_ON_PREVIOUS_TEXT
-            ),
-            "whisper_no_speech_threshold": new_settings.get(
-                "whisper_no_speech_threshold", WHISPER_NO_SPEECH_THRESHOLD
-            ),
-            "whisper_initial_prompt": new_settings.get(
-                "whisper_initial_prompt", WHISPER_INITIAL_PROMPT
-            ),
-            "whisper_hotwords": new_settings.get("whisper_hotwords", WHISPER_HOTWORDS),
-        }
-    )
-    WHISPER_BEAM_SIZE = _whisper["whisper_beam_size"]
-    WHISPER_VAD_FILTER = _whisper["whisper_vad_filter"]
-    WHISPER_VAD_MIN_SILENCE_MS = _whisper["whisper_vad_min_silence_ms"]
-    WHISPER_CONDITION_ON_PREVIOUS_TEXT = _whisper["whisper_condition_on_previous_text"]
-    WHISPER_NO_SPEECH_THRESHOLD = _whisper["whisper_no_speech_threshold"]
-    WHISPER_INITIAL_PROMPT = _whisper["whisper_initial_prompt"]
-    WHISPER_HOTWORDS = _whisper["whisper_hotwords"]
-    DICTATION_PRESET = config.match_dictation_preset(
-        {
-            "model": MODEL_NAME,
-            "whisper_beam_size": WHISPER_BEAM_SIZE,
-            "whisper_vad_filter": WHISPER_VAD_FILTER,
-            "whisper_vad_min_silence_ms": WHISPER_VAD_MIN_SILENCE_MS,
-        }
-    )
-    INDICATOR_POSITION = new_position
-    INDICATOR_XY = new_xy
-
-    if new_settings.get("mode") in ("toggle", "ptt"):
-        MODE = str(new_settings["mode"])
-
-    new_hotkey = new_settings.get("hotkey")
-    if isinstance(new_hotkey, list) and new_hotkey:
-        HOTKEY_TOKENS = {str(token) for token in new_hotkey}
-
-    LANGUAGE = i18n.normalize_language(
-        new_settings.get("speech_language", LANGUAGE),
-        allowed=i18n.SUPPORTED_SPEECH_LANGUAGES,
-    )
-    i18n.set_ui_language(
-        i18n.normalize_language(
-            new_settings.get("ui_language"),
-            allowed=i18n.SUPPORTED_UI_LANGUAGES,
-        )
+def _recent_transcript_menu_entries() -> list[tuple]:
+    return recent_transcript_menu_entries(
+        DESTINATIONS,
+        pyperclip_mod=pyperclip,
+        ui_dispatch=_ui_dispatch,
     )
 
-    if "destinations" in new_settings:
-        DESTINATIONS = destinations.sanitize_destinations(new_settings["destinations"])
-        if "active_destination" not in new_settings and ACTIVE_DESTINATION is not None:
-            if not any(d["name"] == ACTIVE_DESTINATION for d in DESTINATIONS):
-                ACTIVE_DESTINATION = None
-    if "active_destination" in new_settings:
-        raw_active = new_settings["active_destination"]
-        if raw_active is None:
-            ACTIVE_DESTINATION = None
-        else:
-            candidate = str(raw_active).strip() or None
-            if candidate and any(d["name"] == candidate for d in DESTINATIONS):
-                ACTIVE_DESTINATION = candidate
-            else:
-                ACTIVE_DESTINATION = None
 
-    if "incremental_transcription" in new_settings:
-        INCREMENTAL_TRANSCRIPTION = bool(new_settings["incremental_transcription"])
-    if "incremental_chunk_mode" in new_settings:
-        INCREMENTAL_CHUNK_MODE = normalize_chunk_mode(new_settings["incremental_chunk_mode"])
-    if "incremental_vad_ms" in new_settings:
-        try:
-            INCREMENTAL_VAD_MS = max(0, int(new_settings["incremental_vad_ms"]))
-        except (TypeError, ValueError):
-            pass
-    if "incremental_chunk_seconds" in new_settings:
-        try:
-            value = float(new_settings["incremental_chunk_seconds"])
-            if value > 0:
-                INCREMENTAL_CHUNK_SECONDS = value
-        except (TypeError, ValueError):
-            pass
-    if "modules" in new_settings:
-        MODULES_CONFIG = sanitize_modules_config(new_settings["modules"])
-        _reload_modules()
-
-    # Houd de Opnamesessie synchroon met live-instellingen.
-    old_mic = session.microphone_device
-    old_warm = session.warm_microphone
-    session.microphone_device = MICROPHONE_DEVICE
-    session.auto_paste = AUTO_PASTE
-    session.mode = MODE
-    session.language = LANGUAGE
-    session.warm_microphone = WARM_MICROPHONE
-    session.whisper_beam_size = WHISPER_BEAM_SIZE
-    session.whisper_vad_filter = WHISPER_VAD_FILTER
-    session.whisper_vad_min_silence_ms = WHISPER_VAD_MIN_SILENCE_MS
-    session.whisper_condition_on_previous_text = WHISPER_CONDITION_ON_PREVIOUS_TEXT
-    session.whisper_no_speech_threshold = WHISPER_NO_SPEECH_THRESHOLD
-    session.whisper_initial_prompt = WHISPER_INITIAL_PROMPT
-    session.whisper_hotwords = WHISPER_HOTWORDS
-    session.incremental_transcription = INCREMENTAL_TRANSCRIPTION
-    session.incremental_chunk_mode = INCREMENTAL_CHUNK_MODE
-    session.incremental_vad_ms = INCREMENTAL_VAD_MS
-    session._incremental_chunk_seconds = INCREMENTAL_CHUNK_SECONDS
-    if old_mic != MICROPHONE_DEVICE:
-        session.refresh_input_device()
-    elif old_warm and not WARM_MICROPHONE:
-        session.stop_audio_stream()
-    elif (not old_warm) and WARM_MICROPHONE:
-        session.warmup_microphone()
-
-    _refresh_mic_attention()
-
-    config.save_config(_user_config_dict())
-
-    # Automatisch meestarten staat buiten config.json (register op Windows,
-    # LaunchAgent op macOS) — geregeld via de platform-seam.
-    if "autostart" in new_settings:
-        host.set_autostart(bool(new_settings["autostart"]))
-
-    # Live toepassen waar mogelijk.
-    if position_changed:
-        indicator.set_position(new_position, xy=INDICATOR_XY)
-
-    indicator.set_destination(ACTIVE_DESTINATION, _active_destination_path())
-
-    if _tray is not None:
-        _tray.refresh_language()
-
-    print()
-    print(i18n.t("settings.saved"))
-    if model_changed:
-        print(i18n.t("settings.model_restart_note"))
+# Compat re-exports used by tests / older call sites.
+_load_dependencies = None  # set via startup path
+load_model = None
 
 
 def main() -> None:
-    """
-    Start de indicator, het systeemvak-/menubalk-icoon en de globale
-    toetsenbordlistener.
+    from app.run import main as app_main
 
-    Eén QApplication draait alle Qt-vensters en de tray op de hoofdthread.
-    Audio, transcriptie en de globale toetsenbordlistener draaien daarnaast.
-    """
-
-    global model, _tray, _indicator
-
-    # Vóór splash/tray: Windows-app-id (taakbalk-groep / identiteit).
-    win_identity.apply_windows_app_identity()
-
-    # Bestandslog: onder pythonw / windowed exe is er geen console.
-    log_file = app_logging.setup_logging()
-    config.ensure_app_data_dirs()
-    app = ensure_app()
-    print(i18n.t("log.path", path=log_file))
-
-    # Slechts één instantie tegelijk. Een tweede start (bijv. autostart én een
-    # handmatige start, of twee keer klikken) stopt hier — vóór het laadscherm en
-    # het model — zodat er nooit twee listeners, tray-iconen of indicators komen.
-    if not host.acquire_single_instance():
-        # MacHost print al een PID-hint; elders deze regel.
-        if sys.platform != "darwin":
-            print(i18n.t("already_running"))
-        raise SystemExit(0)
-
-    # Eerst het laadscherm: het model wordt op een achtergrond-thread geladen
-    # (en zo nodig gedownload) terwijl de Qt-splash voortgang toont.
-    try:
-        model = Splash().run(_startup)
-    except Exception as exc:
-        # De fout is al in het laadscherm getoond; hier alleen netjes stoppen.
-        print(i18n.t("model.load_failed"))
-        print(i18n.t("model.error", error=exc))
-        raise SystemExit(1) from exc
-
-    session.model = model
-
-    print(i18n.t("model.loaded"))
-    # Optioneel: microfoon al openen (anders 0,5–2 s bij eerste/Bluetooth-opname).
-    # Op macOS no-op: warme stream zou de systeembrede mic-indicator permanent tonen.
-    if WARM_MICROPHONE:
-        session.warmup_microphone()
-    print(
-        i18n.t(
-            "controls",
-            mode=MODE,
-            hotkey=hotkeys.format_hotkey(HOTKEY_TOKENS),
-        )
-    )
-
-    # Harde afhankelijkheid: kan de indicator niet initialiseren, dan stopt de
-    # app (RecordingIndicator gooit SystemExit — net als een mislukte model-load).
-    def _on_indicator_moved(position: str, x: int, y: int) -> None:
-        global INDICATOR_POSITION, INDICATOR_XY
-        INDICATOR_POSITION = position
-        INDICATOR_XY = (x, y)
-        config.save_config(_user_config_dict())
-
-    def pill_control_press() -> None:
-        """Start of stop via de pill-knop (zelfde regels als de sneltoets)."""
-
-        from modules._builtin.meeting_buddy.stop_routing import stop_active_meeting
-
-        if stop_active_meeting(list(module_bus.modules)):
-            print("\n" + i18n.t("modules.meeting_buddy.overlay.stopped"))
-            return
-        if session.is_recording:
-            print("\n" + i18n.t("dictation.stopped_hotkey"))
-            session.stop_and_transcribe()
-            return
-        if session.is_processing:
-            print("\n" + i18n.t("dictation.busy"))
-            _signal_processing_busy()
-            return
-        if MODE == "ptt":
-            print("\n" + i18n.t("dictation.ptt_started"))
-        else:
-            print("\n" + i18n.t("dictation.started_hotkey"))
-        session.start()
-
-    def pill_control_release() -> None:
-        """Push-to-talk: loslaten van de pill-knop stopt de opname."""
-
-        if MODE != "ptt":
-            return
-        if session.is_recording:
-            print("\n" + i18n.t("dictation.ptt_stopped"))
-            session.stop_and_transcribe()
-
-    def pill_toggle_mode() -> None:
-        """Klik op de modus-tag: wissel toggle <-> push-to-talk.
-
-        Loopt via apply_settings zodat de sessie, de config en de pill-labels
-        in één keer meebewegen (zelfde route als Instellingen).
-        """
-
-        if MODE == "meeting":
-            return
-        settings = _user_config_dict()
-        settings["mode"] = "ptt" if MODE == "toggle" else "toggle"
-        apply_settings(settings)
-        print("\n" + i18n.t("dictation.mode_switched", mode=i18n.t(f"state.tag.{MODE}")))
-
-    def pill_retry() -> None:
-        """ "Opnieuw" bij Mislukt: probeer opnieuw op te nemen.
-
-        Zelfde route als de pill-knop, zodat mic-hotplug en meeting-routing
-        meelopen. De mic-attentie wordt eerst opnieuw bepaald, want de fout
-        kwam meestal doordat het apparaat weg was.
-        """
-
-        _refresh_mic_attention()
-        pill_control_press()
-
-    indicator = RecordingIndicator(
-        position=INDICATOR_POSITION,
-        xy=INDICATOR_XY,
-        on_moved=_on_indicator_moved,
-        on_control_press=pill_control_press,
-        on_control_release=pill_control_release,
-        on_retry=pill_retry,
-        on_mode_toggle=pill_toggle_mode,
-    )
-    _indicator = indicator
-    indicator.set_destination(ACTIVE_DESTINATION, _active_destination_path())
-    indicator.set_hotkey_label(hotkeys.format_hotkey(HOTKEY_TOKENS))
-    # Eenmalige ready-cue na splash (niet bij elke settings-save).
-    indicator.show_ready_cue()
-
-    global _ui_dispatch
-    _ui_dispatch = indicator.call_on_main
-    _reload_modules()
-
-    def run_module_action(module_id: str, action_id: str) -> None:
-        indicator.call_on_main(lambda: module_bus.run_action(module_id, action_id))
-
-    # Systeemvak-/menubalk. Dialoogvensters draaien altijd in dit Qt-proces.
-    def open_settings() -> None:
-        from settings import open_settings_dialog
-
-        indicator.call_on_main(
-            lambda: open_settings_dialog(
-                indicator,
-                current_settings(),
-                lambda new: apply_settings(new, indicator),
-                set_capture,
-                on_retranscribe=retranscribe_recovery_wav,
-            )
-        )
-
-    def open_destinations() -> None:
-        from destinations_dialog import open_destinations_dialog
-
-        indicator.call_on_main(
-            lambda: open_destinations_dialog(
-                indicator,
-                current_settings(),
-                lambda new: apply_settings(new, indicator),
-            )
-        )
-
-    def open_modules() -> None:
-        from modules_dialog import open_modules_dialog
-
-        indicator.call_on_main(
-            lambda: open_modules_dialog(
-                indicator,
-                current_settings(),
-                lambda new: apply_settings(new, indicator),
-                on_module_action=run_module_action,
-                enabled_module_ids={module.id for module in module_bus.modules},
-                get_enabled_module_ids=lambda: {module.id for module in module_bus.modules},
-            )
-        )
-
-    def open_help() -> None:
-        from help_dialog import open_help as show_help
-
-        indicator.call_on_main(lambda: show_help(indicator))
-
-    def request_shutdown() -> None:
-        indicator.request_stop()
-        app.quit()
-
-    tray = TrayIcon(
-        on_quit=request_shutdown,
-        on_settings=open_settings,
-        on_destinations=open_destinations,
-        on_modules=open_modules,
-        on_help=open_help,
-        on_module_action=run_module_action,
-        get_module_tray_actions=lambda: tray_action_entries(list(module_bus.modules)),
-        get_module_tray_root_actions=lambda: tray_root_action_entries(list(module_bus.modules)),
-        get_recent_transcript_entries=_recent_transcript_menu_entries,
-    )
-    _tray = tray
-
-    # De pill is de enige toestandseigenaar; die stuurt het tray-icoon aan.
-    indicator.state_listener = tray.set_state
-
-    def show_pill_context_menu(x: int, y: int) -> None:
-        tray.popup_menu(x, y)
-
-    indicator.on_context_menu = show_pill_context_menu
-    tray.start()
-    _refresh_mic_attention()
-
-    listener = keyboard.Listener(
-        on_press=on_press,
-        on_release=on_release,
-    )
-    listener.start()
-
-    # Ctrl+C in de console laat de mainloop netjes eindigen.
-    signal.signal(signal.SIGINT, lambda *_: request_shutdown())
-
-    try:
-        # ``run`` starts the pill's timer; QApplication owns the blocking loop.
-        indicator.run()
-        app.exec()
-
-    except KeyboardInterrupt:
-        pass
-
-    finally:
-        print()
-        print(i18n.t("shutdown"))
-
-        listener.stop()
-        tray.stop()
-
-        with state_lock:
-            active_recording = session.is_recording
-
-        if active_recording:
-            session.cancel()
-
-        session.stop_audio_stream()
-        module_bus.shutdown()
-        indicator.destroy()
+    app_main()
 
 
 if __name__ == "__main__":

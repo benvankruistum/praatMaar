@@ -11,12 +11,12 @@ praatMaar is een **lokale** dicteertool op Windows. Relevant voor security revie
 
 | Oppervlak | Gedrag |
 |-----------|--------|
-| Netwerk | Alleen Hugging Face-download van het Whisper-model (eerste start / modelwissel). Geen cloud-transcriptie. |
-| Microfoon | Opname via `sounddevice` zolang de dicteercyclus loopt. |
+| Netwerk | **Hugging Face** — Whisper-modeldownload (eerste start / modelwissel). **Optioneel Local LLM** (`local-llm` module, standaard uit): HTTP naar Ollama, default `http://127.0.0.1:11434`; custom URL is expliciete gebruikerskeuze (kan off-box). Geen cloud-STT als default. |
+| Microfoon | Opname via `sounddevice` tijdens de dicteercyclus; Meeting Buddy (experimenteel) kan continue capture ± WASAPI-loopback gebruiken. |
 | Toetsenbord | Globale hotkey-listener (`pynput`) — ziet toetsaanslagen om de sneltoets te herkennen. |
-| Klembord | Zet getranscribeerde tekst op het klembord en simuleert plakken (`Ctrl+V`). |
-| Schijf | `%APPDATA%\praatMaar\` — config, transcripts, recovery-audio, event-journal (`events.jsonl` zonder volle transcripttekst; wel metadata/`transcript_chars`), inbox-kopieën, logbestand. |
-| Autostart | Optioneel via Windows Run-registry (`host.set_autostart`). |
+| Klembord | Zet getranscribeerde tekst op het klembord en simuleert plakken via `host.paste`. |
+| Schijf | `%APPDATA%\praatMaar\` (of macOS Application Support) — config, transcripts, recovery-audio, event-journal (`events.jsonl` **zonder** volle transcripttekst; wel `transcript_chars`), inbox-kopieën, logbestand. Console/log print standaard **geen** volle transcripttekst. |
+| Autostart | Optioneel via OS (`host.set_autostart`: Windows Run-registry / macOS LaunchAgent / Linux `.desktop`). |
 | Installer | Windows Setup/portable zijn **niet** Authenticode-gesigneerd (bewuste indie/OSS-keuze); SmartScreen kan waarschuwen. |
 
 Transcripts, recovery-WAV’s, inbox-kopieën en meetingjournals zijn **niet
