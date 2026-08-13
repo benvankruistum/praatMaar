@@ -1,5 +1,5 @@
 """
-macOS globale hotkeys via AppKit NSEvent (main thread) — geen pynput.
+macOS-toetsenbord via AppKit NSEvent (main thread) — geen pynput.
 
 Op macOS 26+ crasht pynput's Listener: die raakt TSM/HIToolbox vanaf een
 achtergrondthread (`dispatch_assert_queue` / SIGTRAP). NSEvent-monitors lopen

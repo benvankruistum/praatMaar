@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 from ui.app import ensure_app
@@ -28,6 +29,7 @@ def test_capture_callback_marshals_off_the_listener_thread(monkeypatch) -> None:
 
     queued: list[Any] = []
     monkeypatch.setattr(settings_mod, "ui_dispatch", queued.append)
+    monkeypatch.setattr(settings_mod.threading, "current_thread", lambda: object())
 
     dialog = _make_dialog()
     try:
@@ -43,6 +45,92 @@ def test_capture_callback_marshals_off_the_listener_thread(monkeypatch) -> None:
         # ... en het gequeuede werk voert de tokenupdate op de GUI-thread uit.
         queued[0]()
         assert "f9" in dialog._capture_pressed
+    finally:
+        dialog.close()
+
+
+def test_capture_callback_updates_immediately_on_main_thread(monkeypatch) -> None:
+    # macOS QuartzKeyListener: callbacks komen op de Qt-mainthread binnen.
+    import ui.dialogs.settings as settings_mod
+
+    main = threading.main_thread()
+    monkeypatch.setattr(settings_mod.threading, "current_thread", lambda: main)
+    dispatched: list[Any] = []
+    monkeypatch.setattr(settings_mod, "ui_dispatch", dispatched.append)
+
+    dialog = _make_dialog()
+    try:
+        dialog._capture_active = True
+
+        class FakeKey:
+            praatmaar_token = "space"
+
+        dialog._capture_callback("press", FakeKey())
+        assert "space" in dialog._capture_pressed
+        assert dispatched == []
+    finally:
+        dialog.close()
+
+
+def test_queued_capture_binds_press_and_release_tokens(monkeypatch) -> None:
+    # Regression: lambda zonder default-args liet alle queued updates de
+    # laatste (event, token)-waarde delen → _capture_best bleef leeg.
+    import ui.dialogs.settings as settings_mod
+
+    queued: list[Any] = []
+    monkeypatch.setattr(settings_mod, "ui_dispatch", queued.append)
+    monkeypatch.setattr(settings_mod.threading, "current_thread", lambda: object())
+
+    dialog = _make_dialog()
+    try:
+        dialog._capture_active = True
+
+        class FakeKey:
+            def __init__(self, token: str) -> None:
+                self.praatmaar_token = token
+
+        dialog._capture_callback("press", FakeKey("ctrl"))
+        dialog._capture_callback("press", FakeKey("space"))
+        dialog._capture_callback("release", FakeKey("space"))
+        dialog._capture_callback("release", FakeKey("ctrl"))
+
+        for fn in queued:
+            fn()
+
+        assert dialog._capture_best == {"ctrl", "space"}
+    finally:
+        dialog.close()
+
+
+def test_stop_capture_accepts_single_modifier() -> None:
+    dialog = _make_dialog()
+    try:
+        dialog._capture_active = True
+        dialog._capture_best = {"cmd"}
+        dialog._stop_capture(confirm=True)
+        assert dialog._hotkey_tokens == ["cmd"]
+    finally:
+        dialog.close()
+
+
+def test_stop_capture_accepts_single_key() -> None:
+    dialog = _make_dialog()
+    try:
+        dialog._capture_active = True
+        dialog._capture_best = {"f5"}
+        dialog._stop_capture(confirm=True)
+        assert dialog._hotkey_tokens == ["f5"]
+    finally:
+        dialog.close()
+
+
+def test_stop_capture_uses_pressed_fallback() -> None:
+    dialog = _make_dialog()
+    try:
+        dialog._capture_active = True
+        dialog._capture_pressed = {"shift", "a"}
+        dialog._stop_capture(confirm=True)
+        assert dialog._hotkey_tokens == ["shift", "a"]
     finally:
         dialog.close()
 

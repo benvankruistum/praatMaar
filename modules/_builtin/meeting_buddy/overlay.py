@@ -503,7 +503,9 @@ class MeetingBuddyOverlay:
         self._coverage_strip = QLabel("")
         self._coverage_strip.setObjectName("overlayFooterText")
         self._coverage_strip.setWordWrap(True)
-        self._coverage_strip.setStyleSheet(f"color: {TOKENS['danger_text']}; padding: 0 12px 6px 12px;")
+        self._coverage_strip.setStyleSheet(
+            f"color: {TOKENS['danger_text']}; padding: 0 12px 6px 12px;"
+        )
         left.addWidget(self._coverage_strip)
         self._coverage_strip.hide()
         self._topics_legend = QLabel(i18n.t("modules.meeting_buddy.overlay.agenda_legend"))
@@ -766,9 +768,7 @@ class MeetingBuddyOverlay:
             color = topic_line_color(topic)
             if is_current:
                 color = TOKENS["accent"]
-            label.setStyleSheet(
-                f"color: {color}; font-size: 13px; font-weight: {weight};"
-            )
+            label.setStyleSheet(f"color: {color}; font-size: 13px; font-weight: {weight};")
             row.addWidget(label, 1)
             if self._on_mark_topic_done is not None and not is_done:
                 mark = QPushButton("✓")
@@ -777,7 +777,9 @@ class MeetingBuddyOverlay:
                 mark.setFixedSize(24, 24)
                 mark.setStyleSheet(self._icon_btn_qss(TOKENS["ok"], size=11))
                 topic_id = topic.id
-                mark.clicked.connect(lambda _checked=False, tid=topic_id: self._on_mark_topic_done(tid))
+                mark.clicked.connect(
+                    lambda _checked=False, tid=topic_id: self._on_mark_topic_done(tid)
+                )
                 row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
             self._topics_body.addLayout(row)
         self._topics.show()

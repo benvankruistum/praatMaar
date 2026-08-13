@@ -76,7 +76,9 @@ def show_recap_dialog(
             line.setWordWrap(True)
             col.addWidget(line)
 
-    path_label = QLabel(i18n.t("modules.meeting_buddy.recap.transcript_path", path=str(transcript_path)))
+    path_label = QLabel(
+        i18n.t("modules.meeting_buddy.recap.transcript_path", path=str(transcript_path))
+    )
     path_label.setWordWrap(True)
     path_label.setObjectName("overlayFooterText")
     col.addWidget(path_label)

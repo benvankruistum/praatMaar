@@ -1,9 +1,9 @@
-"""Tests voor macOS NSEvent keycode→token (geen AppKit nodig)."""
+"""Tests voor mac_input keycode→token (geen AppKit nodig)."""
 
 from __future__ import annotations
 
 import hotkeys
-from host._mac_hotkeys import MacKey, _token_for_keycode, _token_from_characters
+from mac_input import MacKey, _token_for_keycode, _token_from_characters
 
 
 def test_space_and_modifiers_keycodes() -> None:

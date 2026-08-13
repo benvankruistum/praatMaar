@@ -102,6 +102,7 @@ hiddenimports += [
     "indicator._contract",
     "indicator._qt",
     "hotkeys",
+    "mac_input",
     "opnamesessie",
     "app",
     "app.bootstrap",
@@ -133,7 +134,6 @@ hiddenimports += [
     "host._win",
     "host._mac",
     "host._mac_paste",
-    "host._mac_hotkeys",
     "host._launch",
     "host._linux",
 ]

@@ -638,11 +638,15 @@ class SettingsDialog(QDialog):
         self.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
 
     def _capture_callback(self, event: str, key: Any) -> None:
-        # Aangeroepen vanaf de pynput-listenerthread; widgetwerk
-        # (_refresh_keycaps) moet op de GUI-thread gebeuren.
+        # pynput: listenerthread → marshal naar Qt. macOS QuartzKeyListener:
+        # callbacks lopen al op de GUI-thread — direct bijwerken.
         token = hotkeys.key_to_token(key)
-        if token is not None:
-            ui_dispatch(lambda: self._capture_token(event, token))
+        if token is None:
+            return
+        if threading.current_thread() is threading.main_thread():
+            self._capture_token(event, token)
+            return
+        ui_dispatch(lambda e=event, t=token: self._capture_token(e, t))
 
     def _capture_token(self, event: str, token: str) -> None:
         if event == "press":
@@ -694,10 +698,10 @@ class SettingsDialog(QDialog):
         self._capture_active = False
         if self._set_capture is not None:
             self._set_capture(None)
-        if confirm and self._capture_best:
-            normalized = hotkeys.normalize(self._capture_best)
-            if any(token not in hotkeys.MODIFIER_TOKENS for token in normalized):
-                self._hotkey_tokens = normalized
+        if confirm:
+            captured = self._capture_best or self._capture_pressed
+            if captured:
+                self._hotkey_tokens = hotkeys.normalize(captured)
         self._refresh_keycaps(self._hotkey_tokens)
         self._listening_hint.hide()
         self.capture_button.setText(i18n.t("settings.hotkey.record"))

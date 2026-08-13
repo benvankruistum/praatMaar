@@ -148,7 +148,7 @@ def key_to_token(key: Any) -> str | None:
     ongeacht of Shift het teken verandert.
     """
 
-    # host._mac_hotkeys.MacKey (Quartz/NSEvent) — geen pynput nodig.
+    # mac_input.MacKey (Quartz/NSEvent) — geen pynput nodig.
     token = getattr(key, "praatmaar_token", None)
     if isinstance(token, str) and token:
         return token

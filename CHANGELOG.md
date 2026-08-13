@@ -28,9 +28,8 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Fixed
 
-- **macOS 26 SIGTRAP na start:** globale sneltoets via NSEvent op de
-  Qt-mainthread (`host._mac_hotkeys`), niet via pynput/TSM op een
-  achtergrondthread.
+- **macOS 26+ crash (SIGTRAP):** globale sneltoets via `mac_input.QuartzKeyListener`
+  (NSEvent op de Qt-mainthread) i.p.v. `pynput` op een achtergrondthread.
 
 ## [0.6.0] - 2026-08-10
 

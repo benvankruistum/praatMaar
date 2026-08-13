@@ -134,7 +134,7 @@ def load_dependencies(
     import pyperclip as _pyperclip
 
     if sys.platform == "darwin":
-        from host._mac_hotkeys import QuartzKeyListener
+        from mac_input import QuartzKeyListener
 
         class _DarwinKeyboard:
             """Shim: zelfde ``Listener``-API als pynput, zonder achtergrondthread."""
