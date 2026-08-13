@@ -198,3 +198,15 @@ def test_run_analyze_uses_meeting_clock_for_created_at() -> None:
     assert reviewed, "on_review is niet aangeroepen"
     question = reviewed[-1].questions[0]
     assert question.created_at == 42.0
+
+
+def test_apply_review_matches_topic_by_title_when_id_unknown() -> None:
+    from modules._builtin.meeting_buddy.agenda_review import _find_topic_id_by_title
+
+    topics = (
+        Topic(id="t1", title="Budget", status=TopicStatus.OPEN, source=TopicSource.AGENDA),
+        Topic(id="t2", title="Planning", status=TopicStatus.OPEN, source=TopicSource.AGENDA),
+    )
+    assert _find_topic_id_by_title(topics, "Budget") == "t1"
+    assert _find_topic_id_by_title(topics, "  planning ") == "t2"
+    assert _find_topic_id_by_title(topics, "Onbekend") is None

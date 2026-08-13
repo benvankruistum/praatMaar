@@ -104,7 +104,13 @@ class LiveSummaryCoordinator:
             self._busy = False
             self._first_run_pending = True
 
-    def on_final_text(self, text: str, *, now: float | None = None) -> None:
+    def on_final_text(
+        self,
+        text: str,
+        *,
+        context: dict[str, object] | None = None,
+        now: float | None = None,
+    ) -> None:
         chunk = text.strip()
         if not chunk:
             return
@@ -121,6 +127,7 @@ class LiveSummaryCoordinator:
             self._busy = True
             snapshot_delta = self._delta
             snapshot_previous = self._summary
+            snapshot_context = dict(context or {})
             language = self._settings.language
             log.info(
                 "Live summary starten (%s tekens delta, interval ok)",
@@ -128,10 +135,44 @@ class LiveSummaryCoordinator:
             )
         Thread(
             target=self._run_analyze,
-            args=(snapshot_delta, snapshot_previous, language),
+            args=(snapshot_delta, snapshot_previous, language, snapshot_context),
             name="meeting-buddy-live-summary",
             daemon=True,
         ).start()
+
+    def run_final_summary(
+        self,
+        *,
+        transcript: str,
+        previous: str,
+        context: dict[str, object],
+        language: str,
+    ) -> str:
+        """Blocking eind-samenvatting (bij stop); leeg bij geen provider/tekst."""
+
+        from modules.capabilities.semantic_analysis import KIND_FINAL_SUMMARY
+
+        chunk = transcript.strip()
+        if not chunk:
+            return previous.strip()
+        provider = self._capabilities.get(
+            CAPABILITY_ID,
+            minimum_contract_version=CONTRACT_VERSION,
+        )
+        if provider is None:
+            return previous.strip()
+        if hasattr(provider, "is_ready") and not provider.is_ready():
+            return previous.strip()
+        result = provider.analyze(
+            AnalysisRequest(
+                kind=KIND_FINAL_SUMMARY,
+                transcript=chunk,
+                previous_summary=previous or None,
+                language=language,
+                context=context,
+            )
+        )
+        return normalize_running_summary((result.text or "").strip(), limit=8)
 
     def _should_run_unlocked(self, *, now: float) -> bool:
         if self._busy:
@@ -151,7 +192,13 @@ class LiveSummaryCoordinator:
         )
         return provider is not None
 
-    def _run_analyze(self, delta: str, previous: str, language: str) -> None:
+    def _run_analyze(
+        self,
+        delta: str,
+        previous: str,
+        language: str,
+        context: dict[str, object] | None = None,
+    ) -> None:
         provider = self._capabilities.get(
             CAPABILITY_ID,
             minimum_contract_version=CONTRACT_VERSION,
@@ -171,6 +218,7 @@ class LiveSummaryCoordinator:
                     transcript=delta,
                     previous_summary=previous or None,
                     language=language,
+                    context=dict(context or {}),
                 )
             )
             text = normalize_running_summary((result.text or "").strip())

@@ -14,6 +14,7 @@ CONTRACT_VERSION = 2
 
 KIND_RUNNING_SUMMARY = "running_summary"
 KIND_AGENDA_REVIEW = "agenda_review"
+KIND_FINAL_SUMMARY = "final_summary"
 
 
 @dataclass(frozen=True)

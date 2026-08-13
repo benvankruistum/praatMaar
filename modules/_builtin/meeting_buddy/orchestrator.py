@@ -35,6 +35,7 @@ from .observability import EventObserver
 from .prep import parse_agenda
 from .session_controller import CapabilitySessionController
 from .state import MeetingState
+from .topic_ladder import open_topic_titles
 from .transcript_journal import TranscriptJournal, transcripts_dir
 from .transcript_processor import TranscriptProcessor
 from .ui_presenter import MeetingUiPresenter, UiUpdate
@@ -88,6 +89,7 @@ class MeetingOrchestrator:
             clock=self._elapsed_s,
         )
         self._capabilities = capabilities
+        self._last_recap_state: MeetingState | None = None
 
     @property
     def binding(self) -> MeetingSessionBinding | None:
@@ -128,6 +130,10 @@ class MeetingOrchestrator:
     def loopback_device(self) -> int | None:
         return self._config.loopback_device
 
+    @property
+    def last_recap_state(self) -> MeetingState | None:
+        return self._last_recap_state
+
     def reload_config(self) -> None:
         """Reload user preferences (e.g. after saving loopback device)."""
 
@@ -150,6 +156,7 @@ class MeetingOrchestrator:
         with self._lock:
             if self._sessions.binding is not None:
                 raise RuntimeError("Meeting Buddy is al gestart")
+            self._last_recap_state = None
             if agenda_text is not None:
                 self.set_agenda(agenda_text)
 
@@ -233,6 +240,8 @@ class MeetingOrchestrator:
                     self._ui.notify(self._state, force=True)
                 except Exception:
                     pass
+                self._run_final_summary_if_enabled()
+                self._last_recap_state = self._state
                 path = self._finalize_transcript_journal()
                 try:
                     self._sessions.clear()
@@ -299,7 +308,7 @@ class MeetingOrchestrator:
         if notify_state is not None:
             self._ui.notify(notify_state, force=notify_force)
         if final_text is not None:
-            self._live_summary.on_final_text(final_text)
+            self._live_summary.on_final_text(final_text, context=self._llm_context())
         if labeled is not None and review_state is not None:
             self._agenda_review.on_final(labeled, state=review_state)
 
@@ -422,6 +431,53 @@ class MeetingOrchestrator:
             min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
             language=i18n.ui_language(),
         )
+
+    def _llm_context(self) -> dict[str, object]:
+        if self._state is None:
+            return {}
+        from .state import QuestionStatus
+
+        return {
+            "agenda": [
+                {"title": topic.title, "status": topic.status.value} for topic in self._state.topics
+            ],
+            "open_titles": open_topic_titles(self._state.topics),
+            "open_questions": [
+                question.text
+                for question in self._state.questions
+                if question.status == QuestionStatus.OPEN
+            ],
+        }
+
+    def _run_final_summary_if_enabled(self) -> None:
+        if self._state is None or self._journal is None:
+            return
+        if not self._live_summary_settings().enabled:
+            return
+        transcript = self._journal.transcript_text()
+        if not transcript:
+            return
+        try:
+            final = self._live_summary.run_final_summary(
+                transcript=transcript,
+                previous=self._state.live_summary,
+                context=self._llm_context(),
+                language=i18n.ui_language(),
+            )
+        except Exception:
+            log.exception("Final meeting summary failed")
+            return
+        if not final:
+            return
+        self._state = replace(
+            self._state,
+            live_summary=final,
+            version=self._state.version + 1,
+        )
+        try:
+            self._journal.update_summary(final)
+        except Exception:
+            log.exception("Final summary journal update failed")
 
     def _agenda_intelligence_mode(self) -> str:
         prefs = load_live_summary_prefs(self._app_dir)

@@ -111,7 +111,9 @@ class MeetingBuddyModule:
         self._ui_dispatch(self._start_meeting_quick_flow)
 
     def stop_meeting(self) -> None:
-        path = self._require_orchestrator().stop()
+        orchestrator = self._require_orchestrator()
+        path = orchestrator.stop()
+        recap_state = orchestrator.last_recap_state
         self._release_recording_pill()
         if self._ui_dispatch is not None:
             self._ui_dispatch(self._close_overlay)
@@ -119,10 +121,20 @@ class MeetingBuddyModule:
             message = i18n.t("modules.meeting_buddy.transcript.saved", path=str(path))
             print(message)
             if self._ui_dispatch is not None:
-                self._ui_dispatch(lambda: self._notify_transcript_saved(message))
+                if recap_state is not None:
+                    self._ui_dispatch(
+                        lambda: self._show_recap(recap_state, path),
+                    )
+                else:
+                    self._ui_dispatch(lambda: self._notify_transcript_saved(message))
 
     def _notify_transcript_saved(self, text: str) -> None:
         message.info(i18n.t("modules.meeting_buddy.dialog.title"), text)
+
+    def _show_recap(self, state: MeetingState, path: Path) -> None:
+        from .recap_dialog import show_recap_dialog
+
+        show_recap_dialog(state, path)
 
     def prepare_agenda(self) -> None:
         if self._ui_dispatch is None:

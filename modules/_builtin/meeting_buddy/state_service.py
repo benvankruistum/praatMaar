@@ -100,7 +100,7 @@ class MeetingStateService:
             values = dict(raw_topic)
             topics.append(
                 Topic(
-                    id=str(values.get("id", f"{proposal.proposal_id}:topic:{index}")),
+                    id=str(values.get("id", f"t{len(topics) + index + 1}")),
                     title=str(values["title"]),
                     status=TopicStatus(values.get("status", TopicStatus.OPEN)),
                     source=TopicSource(

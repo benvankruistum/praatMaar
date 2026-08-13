@@ -14,6 +14,7 @@ from modules.capabilities.registry import CapabilityRegistry
 from modules.capabilities.semantic_analysis import (
     CAPABILITY_ID,
     CONTRACT_VERSION,
+    KIND_FINAL_SUMMARY,
     KIND_RUNNING_SUMMARY,
     AnalysisRequest,
     AnalysisResult,
@@ -143,3 +144,32 @@ def test_normalize_running_summary_bullets() -> None:
     assert normalize_running_summary("First. Second. Third.") == ("- First.\n- Second.\n- Third.")
     assert normalize_running_summary("- already\n- bullets") == "- already\n- bullets"
     assert normalize_running_summary("") == ""
+
+
+def test_run_final_summary_uses_final_kind_and_context() -> None:
+    caps = CapabilityRegistry()
+    provider = FakeProvider()
+    caps.register(
+        capability_id=CAPABILITY_ID,
+        provider=provider,
+        owner_module_id="local-llm",
+        contract_version=CONTRACT_VERSION,
+    )
+    coord = LiveSummaryCoordinator(
+        capabilities=caps,
+        settings=LiveSummarySettings(enabled=True, interval_s=30, min_new_chars=50),
+        on_summary=lambda _text: None,
+    )
+    context = {"agenda": [{"title": "Budget", "status": "open"}], "open_titles": ["Budget"]}
+    result = coord.run_final_summary(
+        transcript="We bespraken het budget voor Q3.",
+        previous="- Opening",
+        context=context,
+        language="nl",
+    )
+    assert result.startswith("- ")
+    assert len(provider.calls) == 1
+    assert provider.calls[0].kind == KIND_FINAL_SUMMARY
+    assert provider.calls[0].transcript == "We bespraken het budget voor Q3."
+    assert provider.calls[0].previous_summary == "- Opening"
+    assert provider.calls[0].context == context

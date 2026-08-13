@@ -171,6 +171,21 @@ class TranscriptJournal:
                 exc,
             )
 
+    def transcript_text(self) -> str:
+        try:
+            raw = self.path.read_text(encoding="utf-8")
+        except OSError:
+            return ""
+        start = raw.find(_TRANSCRIPT_MARKER)
+        if start < 0:
+            return ""
+        body = raw[start + len(_TRANSCRIPT_MARKER) :]
+        for marker in (_SUMMARY_MARKER, _AGENDA_MARKER):
+            idx = body.find(marker)
+            if idx >= 0:
+                body = body[:idx]
+        return body.strip()
+
     def finalize(
         self,
         *,

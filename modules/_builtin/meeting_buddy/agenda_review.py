@@ -262,7 +262,13 @@ class AgendaReviewCoordinator:
                 continue
             topic_id = str(item.get("topic_id", ""))
             status = str(item.get("status", "")).lower()
-            if not topic_id or status not in {"treated", "confirmed"}:
+            if status not in {"treated", "confirmed"}:
+                continue
+            if not topic_id:
+                title_hint = str(item.get("title", "")).strip()
+                if title_hint:
+                    topic_id = _find_topic_id_by_title(updated.topics, title_hint) or ""
+            if not topic_id:
                 continue
             updated = self._state_service.apply(
                 updated,
@@ -396,3 +402,11 @@ def should_accept_question_role(role: SpeakerRole) -> bool:
     """ME excluded; OTHER and UNKNOWN allowed."""
 
     return role != SpeakerRole.ME
+
+
+def _find_topic_id_by_title(topics: tuple, title: str) -> str | None:
+    needle = title.casefold().strip()
+    for topic in topics:
+        if topic.title.casefold().strip() == needle:
+            return topic.id
+    return None
