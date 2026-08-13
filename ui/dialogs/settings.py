@@ -701,15 +701,7 @@ class SettingsDialog(QDialog):
         if confirm:
             captured = self._capture_best or self._capture_pressed
             if captured:
-                normalized = hotkeys.normalize(captured)
-                if any(token not in hotkeys.MODIFIER_TOKENS for token in normalized):
-                    self._hotkey_tokens = normalized
-                else:
-                    QMessageBox.information(
-                        self,
-                        i18n.t("settings.title"),
-                        i18n.t("settings.hotkey.modifiers_only"),
-                    )
+                self._hotkey_tokens = hotkeys.normalize(captured)
         self._refresh_keycaps(self._hotkey_tokens)
         self._listening_hint.hide()
         self.capture_button.setText(i18n.t("settings.hotkey.record"))

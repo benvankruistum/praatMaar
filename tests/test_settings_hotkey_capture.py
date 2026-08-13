@@ -102,6 +102,17 @@ def test_queued_capture_binds_press_and_release_tokens(monkeypatch) -> None:
         dialog.close()
 
 
+def test_stop_capture_accepts_single_modifier() -> None:
+    dialog = _make_dialog()
+    try:
+        dialog._capture_active = True
+        dialog._capture_best = {"cmd"}
+        dialog._stop_capture(confirm=True)
+        assert dialog._hotkey_tokens == ["cmd"]
+    finally:
+        dialog.close()
+
+
 def test_stop_capture_accepts_single_key() -> None:
     dialog = _make_dialog()
     try:
