@@ -163,5 +163,3 @@ class DeliveryMixin:
                 print(i18n.t("rec.still_clipboard"))
                 if saved_path is not None:
                     print(i18n.t("rec.and_saved", path=saved_path))
-
-

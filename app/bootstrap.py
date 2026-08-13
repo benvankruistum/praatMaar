@@ -93,8 +93,7 @@ def build_session(
         preserve_audio=preserve_audio,
         on_destination_command=on_destination_command,
         get_destinations=get_destinations or (lambda: list(runtime.destinations)),
-        get_active_destination=get_active_destination
-        or (lambda: runtime.active_destination),
+        get_active_destination=get_active_destination or (lambda: runtime.active_destination),
         on_user_error=on_user_error,
         on_mic_ready=on_mic_ready,
         has_external_streams=has_external_streams,

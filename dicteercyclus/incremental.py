@@ -233,5 +233,3 @@ class IncrementalMixin:
                     os.remove(temporary_path)
                 except OSError:
                     pass
-
-

@@ -237,7 +237,12 @@ def apply_settings(
     _set(state, "WARM_MICROPHONE", "warm_microphone", warm_microphone)
     _set(state, "WHISPER_BEAM_SIZE", "whisper_beam_size", whisper_beam_size)
     _set(state, "WHISPER_VAD_FILTER", "whisper_vad_filter", whisper_vad_filter)
-    _set(state, "WHISPER_VAD_MIN_SILENCE_MS", "whisper_vad_min_silence_ms", whisper_vad_min_silence_ms)
+    _set(
+        state,
+        "WHISPER_VAD_MIN_SILENCE_MS",
+        "whisper_vad_min_silence_ms",
+        whisper_vad_min_silence_ms,
+    )
     _set(
         state,
         "WHISPER_CONDITION_ON_PREVIOUS_TEXT",

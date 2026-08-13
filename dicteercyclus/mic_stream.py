@@ -272,5 +272,3 @@ class MicStreamMixin:
             stream.close()
         except Exception as exc:
             print(i18n.t("rec.mic_close_warn", error=exc))
-
-
