@@ -622,3 +622,71 @@ def test_finish_reconnect_keeps_speech_language(tmp_path: Path) -> None:
 
     assert len(stt.start_configs) == 2
     assert stt.start_configs[1].get("language") == "nl"
+
+
+def test_stop_runs_final_summary_and_keeps_recap_state(tmp_path: Path) -> None:
+    from modules._builtin.meeting_buddy.config import save_meeting_buddy_preferences
+    from modules.capabilities.semantic_analysis import (
+        CAPABILITY_ID,
+        CONTRACT_VERSION,
+        KIND_FINAL_SUMMARY,
+        AnalysisRequest,
+        AnalysisResult,
+    )
+    from modules.capabilities.speech_to_text import TranscriptDelta, TranscriptDeltaReceived
+
+    save_meeting_buddy_preferences(
+        tmp_path,
+        enable_loopback=False,
+        loopback_device=None,
+        transcripts_directory=None,
+        live_summary_enabled=True,
+    )
+
+    class FinalProvider:
+        def __init__(self) -> None:
+            self.calls: list[AnalysisRequest] = []
+
+        def is_ready(self) -> bool:
+            return True
+
+        def analyze(self, request: AnalysisRequest) -> AnalysisResult:
+            self.calls.append(request)
+            if request.kind == KIND_FINAL_SUMMARY:
+                return AnalysisResult(
+                    kind=KIND_FINAL_SUMMARY,
+                    text="- Budget afgerond\n- Planning volgende week",
+                )
+            return AnalysisResult(kind=request.kind, text="")
+
+    provider = FinalProvider()
+    capabilities, _capture, _stt = _capabilities()
+    capabilities.register(CAPABILITY_ID, provider, "local-llm", CONTRACT_VERSION)
+    orchestrator = MeetingOrchestrator(capabilities=capabilities, app_dir=tmp_path)
+    orchestrator.set_agenda("Budget")
+    orchestrator.start()
+    binding = orchestrator.binding
+    assert binding is not None
+    orchestrator.on_stt_event(
+        TranscriptDeltaReceived(
+            TranscriptDelta(
+                session_id=binding.transcription_session_id,
+                sequence=1,
+                start_ms=0,
+                end_ms=1000,
+                text="We ronden het budget af.",
+                is_final=True,
+                confidence=1.0,
+            )
+        )
+    )
+
+    path = orchestrator.stop()
+    recap = orchestrator.last_recap_state
+
+    assert path is not None
+    assert recap is not None
+    assert "Budget afgerond" in (recap.live_summary or "")
+    final_calls = [call for call in provider.calls if call.kind == KIND_FINAL_SUMMARY]
+    assert len(final_calls) == 1
+    assert "We ronden het budget af." in final_calls[0].transcript

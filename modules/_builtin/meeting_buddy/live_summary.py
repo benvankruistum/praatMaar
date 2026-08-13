@@ -83,6 +83,7 @@ class LiveSummaryCoordinator:
         self._chars_since = 0
         self._last_run_at = time.monotonic()
         self._busy = False
+        self._first_run_pending = True
 
     @property
     def summary(self) -> str:
@@ -101,8 +102,15 @@ class LiveSummaryCoordinator:
             # Startinterval: eerste LLM-run wacht ook op interval_s.
             self._last_run_at = time.monotonic()
             self._busy = False
+            self._first_run_pending = True
 
-    def on_final_text(self, text: str, *, now: float | None = None) -> None:
+    def on_final_text(
+        self,
+        text: str,
+        *,
+        context: dict[str, object] | None = None,
+        now: float | None = None,
+    ) -> None:
         chunk = text.strip()
         if not chunk:
             return
@@ -119,6 +127,7 @@ class LiveSummaryCoordinator:
             self._busy = True
             snapshot_delta = self._delta
             snapshot_previous = self._summary
+            snapshot_context = dict(context or {})
             language = self._settings.language
             log.info(
                 "Live summary starten (%s tekens delta, interval ok)",
@@ -126,17 +135,56 @@ class LiveSummaryCoordinator:
             )
         Thread(
             target=self._run_analyze,
-            args=(snapshot_delta, snapshot_previous, language),
+            args=(snapshot_delta, snapshot_previous, language, snapshot_context),
             name="meeting-buddy-live-summary",
             daemon=True,
         ).start()
 
+    def run_final_summary(
+        self,
+        *,
+        transcript: str,
+        previous: str,
+        context: dict[str, object],
+        language: str,
+    ) -> str:
+        """Blocking eind-samenvatting (bij stop); leeg bij geen provider/tekst."""
+
+        from modules.capabilities.semantic_analysis import KIND_FINAL_SUMMARY
+
+        chunk = transcript.strip()
+        if not chunk:
+            return previous.strip()
+        provider = self._capabilities.get(
+            CAPABILITY_ID,
+            minimum_contract_version=CONTRACT_VERSION,
+        )
+        if provider is None:
+            return previous.strip()
+        if hasattr(provider, "is_ready") and not provider.is_ready():
+            return previous.strip()
+        result = provider.analyze(
+            AnalysisRequest(
+                kind=KIND_FINAL_SUMMARY,
+                transcript=chunk,
+                previous_summary=previous or None,
+                language=language,
+                context=context,
+            )
+        )
+        return normalize_running_summary((result.text or "").strip(), limit=8)
+
     def _should_run_unlocked(self, *, now: float) -> bool:
         if self._busy:
             return False
-        if self._chars_since < self._settings.min_new_chars:
+        min_chars = self._settings.min_new_chars
+        interval = self._settings.interval_s
+        if self._first_run_pending:
+            min_chars = min(min_chars, 80)
+            interval = min(interval, 30.0)
+        if self._chars_since < min_chars:
             return False
-        if (now - self._last_run_at) < self._settings.interval_s:
+        if (now - self._last_run_at) < interval:
             return False
         provider = self._capabilities.get(
             CAPABILITY_ID,
@@ -144,7 +192,13 @@ class LiveSummaryCoordinator:
         )
         return provider is not None
 
-    def _run_analyze(self, delta: str, previous: str, language: str) -> None:
+    def _run_analyze(
+        self,
+        delta: str,
+        previous: str,
+        language: str,
+        context: dict[str, object] | None = None,
+    ) -> None:
         provider = self._capabilities.get(
             CAPABILITY_ID,
             minimum_contract_version=CONTRACT_VERSION,
@@ -164,6 +218,7 @@ class LiveSummaryCoordinator:
                     transcript=delta,
                     previous_summary=previous or None,
                     language=language,
+                    context=dict(context or {}),
                 )
             )
             text = normalize_running_summary((result.text or "").strip())
@@ -179,6 +234,7 @@ class LiveSummaryCoordinator:
                     self._delta = ""
                 self._chars_since = len(self._delta)
                 self._last_run_at = time.monotonic()
+                self._first_run_pending = False
             log.info("Live summary bijgewerkt (%s tekens)", len(text))
             if self._on_summary is not None:
                 self._on_summary(text)

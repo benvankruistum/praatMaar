@@ -111,7 +111,9 @@ class MeetingBuddyModule:
         self._ui_dispatch(self._start_meeting_quick_flow)
 
     def stop_meeting(self) -> None:
-        path = self._require_orchestrator().stop()
+        orchestrator = self._require_orchestrator()
+        path = orchestrator.stop()
+        recap_state = orchestrator.last_recap_state
         self._release_recording_pill()
         if self._ui_dispatch is not None:
             self._ui_dispatch(self._close_overlay)
@@ -119,10 +121,20 @@ class MeetingBuddyModule:
             message = i18n.t("modules.meeting_buddy.transcript.saved", path=str(path))
             print(message)
             if self._ui_dispatch is not None:
-                self._ui_dispatch(lambda: self._notify_transcript_saved(message))
+                if recap_state is not None:
+                    self._ui_dispatch(
+                        lambda: self._show_recap(recap_state, path),
+                    )
+                else:
+                    self._ui_dispatch(lambda: self._notify_transcript_saved(message))
 
     def _notify_transcript_saved(self, text: str) -> None:
         message.info(i18n.t("modules.meeting_buddy.dialog.title"), text)
+
+    def _show_recap(self, state: MeetingState, path: Path) -> None:
+        from .recap_dialog import show_recap_dialog
+
+        show_recap_dialog(state, path)
 
     def prepare_agenda(self) -> None:
         if self._ui_dispatch is None:
@@ -178,6 +190,8 @@ class MeetingBuddyModule:
             path=self._agenda_path,
             app_dir=app_dir,
             mode=mode,  # type: ignore[arg-type]
+            enable_loopback=orchestrator.loopback_requested,
+            loopback_device=orchestrator.loopback_device,
         )
         if result is None:
             return
@@ -195,6 +209,18 @@ class MeetingBuddyModule:
                 i18n.t("modules.meeting_buddy.dialog.empty_agenda"),
             )
             return
+        prefs = load_live_summary_prefs(app_dir)
+        save_meeting_buddy_preferences(
+            app_dir,
+            enable_loopback=result.enable_loopback,
+            loopback_device=result.loopback_device,
+            transcripts_directory=load_transcripts_directory(app_dir),
+            live_summary_enabled=bool(prefs["live_summary_enabled"]),
+            agenda_review_enabled=bool(prefs["agenda_review_enabled"]),
+            llm_chunk_interval_s=float(prefs["llm_chunk_interval_s"]),
+            llm_chunk_min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
+        )
+        orchestrator.reload_config()
         self._begin_meeting()
 
     def _show_properties_dialog(self) -> None:
@@ -206,6 +232,7 @@ class MeetingBuddyModule:
             loopback_device=orchestrator.loopback_device,
             transcripts_directory=load_transcripts_directory(app_dir),
             live_summary_enabled=bool(prefs["live_summary_enabled"]),
+            agenda_review_enabled=bool(prefs["agenda_review_enabled"]),
             llm_chunk_interval_s=float(prefs["llm_chunk_interval_s"]),
             llm_chunk_min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
             app_dir=app_dir,
@@ -218,6 +245,7 @@ class MeetingBuddyModule:
             loopback_device=result.loopback_device,
             transcripts_directory=result.transcripts_directory,
             live_summary_enabled=result.live_summary_enabled,
+            agenda_review_enabled=result.agenda_review_enabled,
             llm_chunk_interval_s=result.llm_chunk_interval_s,
             llm_chunk_min_new_chars=result.llm_chunk_min_new_chars,
         )
@@ -306,6 +334,7 @@ class MeetingBuddyModule:
                 on_dismiss=orchestrator.dismiss_hint,
                 on_confirm=orchestrator.confirm_hint,
                 on_reconnect=orchestrator.reconnect_capture,
+                on_mark_topic_done=orchestrator.mark_topic_done,
                 on_stop=self.stop_meeting,
             )
         self._overlay.update(

@@ -35,6 +35,7 @@ from .observability import EventObserver
 from .prep import parse_agenda
 from .session_controller import CapabilitySessionController
 from .state import MeetingState
+from .topic_ladder import open_topic_titles
 from .transcript_journal import TranscriptJournal, transcripts_dir
 from .transcript_processor import TranscriptProcessor
 from .ui_presenter import MeetingUiPresenter, UiUpdate
@@ -88,6 +89,7 @@ class MeetingOrchestrator:
             clock=self._elapsed_s,
         )
         self._capabilities = capabilities
+        self._last_recap_state: MeetingState | None = None
 
     @property
     def binding(self) -> MeetingSessionBinding | None:
@@ -128,6 +130,10 @@ class MeetingOrchestrator:
     def loopback_device(self) -> int | None:
         return self._config.loopback_device
 
+    @property
+    def last_recap_state(self) -> MeetingState | None:
+        return self._last_recap_state
+
     def reload_config(self) -> None:
         """Reload user preferences (e.g. after saving loopback device)."""
 
@@ -150,6 +156,7 @@ class MeetingOrchestrator:
         with self._lock:
             if self._sessions.binding is not None:
                 raise RuntimeError("Meeting Buddy is al gestart")
+            self._last_recap_state = None
             if agenda_text is not None:
                 self.set_agenda(agenda_text)
 
@@ -167,11 +174,14 @@ class MeetingOrchestrator:
                 self._live_summary.reset()
                 self._agenda_review.reset()
                 summary_settings = self._live_summary_settings()
+                review_settings = self._agenda_review_settings()
                 self._live_summary.update_settings(summary_settings)
-                self._agenda_review.update_settings(self._agenda_review_settings())
+                self._agenda_review.update_settings(review_settings)
                 self._state = replace(
                     self._state,
                     live_summary_enabled=bool(summary_settings.enabled),
+                    agenda_review_enabled=bool(review_settings.enabled),
+                    agenda_intelligence_mode=self._agenda_intelligence_mode(),
                 )
                 self._sessions.log_started()
                 self._ui.notify(self._state, force=True)
@@ -230,6 +240,11 @@ class MeetingOrchestrator:
                     self._ui.notify(self._state, force=True)
                 except Exception:
                     pass
+                self._run_final_summary_if_enabled()
+                if self._live_summary_settings().enabled:
+                    self._last_recap_state = self._state
+                else:
+                    self._last_recap_state = None
                 path = self._finalize_transcript_journal()
                 try:
                     self._sessions.clear()
@@ -266,7 +281,6 @@ class MeetingOrchestrator:
                 version_before = self._state.version
                 hints_before = self._state.emitted_hints
                 now_s = self._elapsed_s()
-                use_topic_heuristics = not self._agenda_review.uses_llm_review()
                 self._state = self._transcripts.process_delta(
                     event,
                     binding=binding,
@@ -274,7 +288,7 @@ class MeetingOrchestrator:
                     config=self._config,
                     elapsed_s=now_s,
                     observer=self._observer,
-                    use_topic_heuristics=use_topic_heuristics,
+                    use_topic_heuristics=True,
                 )
                 self._state = self._hints.update_hints(
                     self._state,
@@ -287,13 +301,17 @@ class MeetingOrchestrator:
                 state_changed = self._state.version != version_before
                 hints_changed = self._state.emitted_hints != hints_before
                 if state_changed or hints_changed:
-                    notify_state = self._state
+                    notify_state = replace(
+                        self._state,
+                        agenda_intelligence_mode=self._agenda_intelligence_mode(),
+                    )
+                    self._state = notify_state
                     notify_force = True
 
         if notify_state is not None:
             self._ui.notify(notify_state, force=notify_force)
         if final_text is not None:
-            self._live_summary.on_final_text(final_text)
+            self._live_summary.on_final_text(final_text, context=self._llm_context())
         if labeled is not None and review_state is not None:
             self._agenda_review.on_final(labeled, state=review_state)
 
@@ -323,6 +341,34 @@ class MeetingOrchestrator:
                 observer=self._observer,
             )
             self._ui.notify(self._state, force=True)
+
+    def mark_topic_done(self, topic_id: str) -> None:
+        from uuid import uuid4
+
+        from .state_service import MeetingStateService, StateProposal, StateProposalType
+
+        with self._lock:
+            if self._state is None:
+                return
+            now_s = self._elapsed_s()
+            self._state = MeetingStateService().apply(
+                self._state,
+                StateProposal(
+                    proposal_id=f"manual-{uuid4()}",
+                    meeting_session_id=self._state.meeting_session_id,
+                    type=StateProposalType.MANUAL_MARK_TOPIC_DONE,
+                    payload={"topic_id": topic_id, "matched_at": now_s},
+                    source_delta_ids=(),
+                    confidence=1.0,
+                    created_at=now_s,
+                ),
+            )
+            state = replace(
+                self._state,
+                agenda_intelligence_mode=self._agenda_intelligence_mode(),
+            )
+            self._state = state
+        self._ui.notify(state, force=True)
 
     def _open_transcript_journal(self) -> None:
         titles = parse_agenda(self._agenda_text)
@@ -383,11 +429,70 @@ class MeetingOrchestrator:
     def _agenda_review_settings(self) -> AgendaReviewSettings:
         prefs = load_live_summary_prefs(self._app_dir)
         return AgendaReviewSettings(
-            enabled=bool(prefs["live_summary_enabled"]),
+            enabled=bool(prefs["agenda_review_enabled"]),
             interval_s=float(prefs["llm_chunk_interval_s"]),
             min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
             language=i18n.ui_language(),
         )
+
+    def _llm_context(self) -> dict[str, object]:
+        if self._state is None:
+            return {}
+        from .state import QuestionStatus
+
+        return {
+            "agenda": [
+                {"title": topic.title, "status": topic.status.value} for topic in self._state.topics
+            ],
+            "open_titles": open_topic_titles(self._state.topics),
+            "open_questions": [
+                question.text
+                for question in self._state.questions
+                if question.status == QuestionStatus.OPEN
+            ],
+        }
+
+    def _run_final_summary_if_enabled(self) -> None:
+        if self._state is None or self._journal is None:
+            return
+        if not self._live_summary_settings().enabled:
+            return
+        transcript = self._journal.transcript_text()
+        if not transcript:
+            return
+        try:
+            final = self._live_summary.run_final_summary(
+                transcript=transcript,
+                previous=self._state.live_summary,
+                context=self._llm_context(),
+                language=i18n.ui_language(),
+            )
+        except Exception:
+            log.exception("Final meeting summary failed")
+            return
+        if not final:
+            return
+        self._state = replace(
+            self._state,
+            live_summary=final,
+            version=self._state.version + 1,
+        )
+        try:
+            self._journal.update_summary(final)
+        except Exception:
+            log.exception("Final summary journal update failed")
+
+    def _agenda_intelligence_mode(self) -> str:
+        prefs = load_live_summary_prefs(self._app_dir)
+        if not prefs["agenda_review_enabled"]:
+            return "basic"
+        if not self._agenda_review.provider_is_ready():
+            return "llm_waiting"
+        if self._agenda_review.last_run_failed:
+            return "llm_degraded"
+        if self._agenda_review.llm_ready:
+            return "llm_ready"
+        return "llm_waiting"
 
     def _label_final(self, delta: TranscriptDelta, meeting_session_id: str) -> LabeledFinal:
         text = delta.text
@@ -445,6 +550,8 @@ class MeetingOrchestrator:
                 reviewed,
                 live_summary=self._state.live_summary,
                 live_summary_enabled=self._state.live_summary_enabled,
+                agenda_review_enabled=self._state.agenda_review_enabled,
+                agenda_intelligence_mode=self._agenda_intelligence_mode(),
                 version=max(self._state.version, reviewed.version) + 1,
             )
             state = self._state

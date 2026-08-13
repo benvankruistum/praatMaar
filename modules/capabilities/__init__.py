@@ -26,6 +26,7 @@ from modules.capabilities.semantic_analysis import (
 )
 from modules.capabilities.semantic_analysis import (
     KIND_AGENDA_REVIEW,
+    KIND_FINAL_SUMMARY,
     KIND_RUNNING_SUMMARY,
     AnalysisRequest,
     AnalysisResult,
@@ -72,6 +73,7 @@ __all__ = [
     "SEMANTIC_ANALYSIS_CAPABILITY_ID",
     "SEMANTIC_ANALYSIS_CONTRACT_VERSION",
     "KIND_AGENDA_REVIEW",
+    "KIND_FINAL_SUMMARY",
     "KIND_RUNNING_SUMMARY",
     "AnalysisRequest",
     "AnalysisResult",

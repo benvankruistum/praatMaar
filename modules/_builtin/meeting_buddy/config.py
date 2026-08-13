@@ -111,6 +111,7 @@ def save_meeting_buddy_preferences(
     loopback_device: int | None,
     transcripts_directory: str | None = None,
     live_summary_enabled: bool | None = None,
+    agenda_review_enabled: bool | None = None,
     llm_chunk_interval_s: float | None = None,
     llm_chunk_min_new_chars: int | None = None,
 ) -> None:
@@ -125,6 +126,8 @@ def save_meeting_buddy_preferences(
         current["transcripts_directory"] = str(transcripts_directory).strip()
     if live_summary_enabled is not None:
         current["live_summary_enabled"] = bool(live_summary_enabled)
+    if agenda_review_enabled is not None:
+        current["agenda_review_enabled"] = bool(agenda_review_enabled)
     if llm_chunk_interval_s is not None:
         current["llm_chunk_interval_s"] = float(llm_chunk_interval_s)
     if llm_chunk_min_new_chars is not None:
@@ -155,8 +158,15 @@ def load_live_summary_prefs(app_dir: Path) -> dict[str, Any]:
         min_chars_i = int(min_chars)
     except (TypeError, ValueError):
         min_chars_i = 120
+    live_summary = bool(data.get("live_summary_enabled", False))
+    agenda_raw = data.get("agenda_review_enabled")
+    if agenda_raw is None:
+        agenda_review = live_summary
+    else:
+        agenda_review = bool(agenda_raw)
     return {
-        "live_summary_enabled": bool(data.get("live_summary_enabled", False)),
+        "live_summary_enabled": live_summary,
+        "agenda_review_enabled": agenda_review,
         "llm_chunk_interval_s": max(15.0, interval_f),
         "llm_chunk_min_new_chars": max(50, min_chars_i),
     }

@@ -58,3 +58,16 @@ def may_mark_treated(
     if not topics:
         return False
     return topics[0].id == topic_id
+
+
+def current_topic_id(topics: tuple[Topic, ...]) -> str | None:
+    """First open or treated topic in agenda order — the active discussion point."""
+
+    for topic in topics:
+        if topic.status in (TopicStatus.OPEN, TopicStatus.TREATED):
+            return topic.id
+    return None
+
+
+def open_topic_titles(topics: tuple[Topic, ...]) -> list[str]:
+    return [topic.title for topic in topics if topic.status == TopicStatus.OPEN]

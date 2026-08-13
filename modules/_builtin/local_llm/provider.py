@@ -10,6 +10,7 @@ from typing import Any
 
 from modules.capabilities.semantic_analysis import (
     KIND_AGENDA_REVIEW,
+    KIND_FINAL_SUMMARY,
     KIND_RUNNING_SUMMARY,
     AnalysisRequest,
     AnalysisResult,
@@ -53,6 +54,9 @@ class OllamaSemanticAnalysis:
         if request.kind == KIND_RUNNING_SUMMARY:
             text = self._running_summary(request)
             return AnalysisResult(kind=KIND_RUNNING_SUMMARY, text=text)
+        if request.kind == KIND_FINAL_SUMMARY:
+            text = self._final_summary(request)
+            return AnalysisResult(kind=KIND_FINAL_SUMMARY, text=text)
         if request.kind == KIND_AGENDA_REVIEW:
             data = self._agenda_review(request)
             return AnalysisResult(
@@ -76,9 +80,16 @@ class OllamaSemanticAnalysis:
             f"Je bent een beknopte notulist. Schrijf in het {lang}. "
             "Geef alleen een bijgewerkte lopende samenvatting als 3 tot 5 bullets. "
             "Elke regel begint met '- '. Geen markdown-koppen, geen nummers, "
-            "geen inleiding of slotzin, geen labels. Vervang de vorige set volledig."
+            "geen inleiding of slotzin, geen labels. Vervang de vorige set volledig. "
+            "Noem besluiten, acties en open agendapunten waar relevant."
         )
         user_parts = []
+        agenda = (request.context or {}).get("agenda") or []
+        open_titles = (request.context or {}).get("open_titles") or []
+        if agenda:
+            user_parts.append(f"Agenda (titel, status):\n{json.dumps(agenda, ensure_ascii=False)}")
+        if open_titles:
+            user_parts.append(f"Nog niet besproken: {', '.join(open_titles)}")
         if previous:
             user_parts.append(f"Vorige samenvatting:\n{previous}")
         user_parts.append(f"Nieuw transcript (sinds vorige samenvatting):\n{transcript}")
@@ -86,6 +97,43 @@ class OllamaSemanticAnalysis:
             "Werk de lopende samenvatting bij op basis van het nieuwe transcript. "
             "Antwoord met precies 3 tot 5 regels die met '- ' beginnen."
         )
+        content = self._client.chat(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": "\n\n".join(user_parts)},
+            ],
+            temperature=0.2,
+        )
+        return content.strip()
+
+    def _final_summary(self, request: AnalysisRequest) -> str:
+        lang = _LANG_LABEL.get(request.language, request.language or "Nederlands")
+        transcript = request.transcript.strip()
+        if not transcript:
+            return (request.previous_summary or "").strip()
+        context = request.context or {}
+        agenda = context.get("agenda") or []
+        open_titles = context.get("open_titles") or []
+        questions = context.get("open_questions") or []
+        system = (
+            f"Je bent een meeting-notulist. Schrijf in het {lang}. "
+            "Maak een eind-samenvatting van de meeting in 5 tot 8 bullets (regels met '- '). "
+            "Behandel: besproken agendapunten, besluiten, acties, open punten en open vragen. "
+            "Geen markdown-koppen, geen inleiding."
+        )
+        user_parts = [
+            f"Volledig transcript:\n{transcript}",
+        ]
+        if agenda:
+            user_parts.append(f"Agenda (titel, status):\n{json.dumps(agenda, ensure_ascii=False)}")
+        if open_titles:
+            user_parts.append(f"Agenda nog open: {', '.join(open_titles)}")
+        if questions:
+            user_parts.append(f"Open vragen van anderen: {', '.join(questions)}")
+        previous = (request.previous_summary or "").strip()
+        if previous:
+            user_parts.append(f"Lopende samenvatting tijdens de meeting:\n{previous}")
         content = self._client.chat(
             model=self._model,
             messages=[
@@ -126,6 +174,7 @@ class OllamaSemanticAnalysis:
                 {"role": "user", "content": user},
             ],
             temperature=0.1,
+            format_json=True,
         )
         return _parse_agenda_json(content)
 

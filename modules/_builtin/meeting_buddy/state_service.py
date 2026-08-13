@@ -20,7 +20,12 @@ from .state import (
     TopicSource,
     TopicStatus,
 )
-from .topic_ladder import apply_sequential_catch_up, may_mark_treated, status_rank
+from .topic_ladder import (
+    apply_sequential_catch_up,
+    is_at_least_sequential,
+    may_mark_treated,
+    status_rank,
+)
 
 
 class StateProposalType(str, Enum):
@@ -28,6 +33,7 @@ class StateProposalType(str, Enum):
     MARK_TOPIC_TREATED = "mark_topic_treated"
     SET_TOPIC_STATUS = "set_topic_status"
     APPLY_TOPIC_CATCH_UP = "apply_topic_catch_up"
+    MANUAL_MARK_TOPIC_DONE = "manual_mark_topic_done"
     SET_MEETING_PHASE = "set_meeting_phase"
     ADD_QUESTION = "add_question"
     UPDATE_QUESTION = "update_question"
@@ -66,6 +72,7 @@ class MeetingStateService:
             StateProposalType.MARK_TOPIC_DISCUSSED: self._mark_topic_treated,
             StateProposalType.SET_TOPIC_STATUS: self._set_topic_status,
             StateProposalType.APPLY_TOPIC_CATCH_UP: self._apply_topic_catch_up,
+            StateProposalType.MANUAL_MARK_TOPIC_DONE: self._manual_mark_topic_done,
             StateProposalType.SET_MEETING_PHASE: self._set_meeting_phase,
             StateProposalType.ADD_QUESTION: self._add_question,
             StateProposalType.UPDATE_QUESTION: self._update_question,
@@ -93,7 +100,7 @@ class MeetingStateService:
             values = dict(raw_topic)
             topics.append(
                 Topic(
-                    id=str(values.get("id", f"{proposal.proposal_id}:topic:{index}")),
+                    id=str(values.get("id", f"t{len(topics) + index + 1}")),
                     title=str(values["title"]),
                     status=TopicStatus(values.get("status", TopicStatus.OPEN)),
                     source=TopicSource(
@@ -161,6 +168,23 @@ class MeetingStateService:
     def _apply_topic_catch_up(state: MeetingState, proposal: StateProposal) -> MeetingState:
         del proposal  # unused; catch-up is deterministic from topics
         return replace(state, topics=apply_sequential_catch_up(state.topics))
+
+    @staticmethod
+    def _manual_mark_topic_done(state: MeetingState, proposal: StateProposal) -> MeetingState:
+        """User override: mark any non-completed topic as sequential (afgerond)."""
+
+        topic_id = str(proposal.payload["topic_id"])
+        topic = _find_by_id(state.topics, topic_id, "Topic")
+        if is_at_least_sequential(topic.status):
+            return state
+        updated = replace(
+            topic,
+            status=TopicStatus.SEQUENTIAL,
+            last_matched_at=proposal.payload.get("matched_at", proposal.created_at),
+            confidence=1.0,
+        )
+        topics = apply_sequential_catch_up(_replace_by_id(state.topics, updated))
+        return replace(state, topics=topics)
 
     @staticmethod
     def _set_meeting_phase(state: MeetingState, proposal: StateProposal) -> MeetingState:

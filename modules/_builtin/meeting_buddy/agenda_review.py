@@ -65,12 +65,19 @@ class AgendaReviewCoordinator:
         self._last_run_at = time.monotonic()
         self._busy = False
         self._llm_ready = False
+        self._last_run_failed = False
+        self._first_run_pending = True
         self._state_service = MeetingStateService()
 
     @property
     def llm_ready(self) -> bool:
         with self._lock:
             return self._llm_ready
+
+    @property
+    def last_run_failed(self) -> bool:
+        with self._lock:
+            return self._last_run_failed
 
     def update_settings(self, settings: AgendaReviewSettings) -> None:
         with self._lock:
@@ -83,6 +90,8 @@ class AgendaReviewCoordinator:
             self._last_run_at = time.monotonic()
             self._busy = False
             self._llm_ready = False
+            self._last_run_failed = False
+            self._first_run_pending = True
 
     def provider_is_ready(self) -> bool:
         provider = self._capabilities.get(
@@ -134,9 +143,14 @@ class AgendaReviewCoordinator:
     def _should_run_unlocked(self, *, now: float) -> bool:
         if self._busy:
             return False
-        if self._chars_since < self._settings.min_new_chars:
+        min_chars = self._settings.min_new_chars
+        interval = self._settings.interval_s
+        if self._first_run_pending:
+            min_chars = min(min_chars, 80)
+            interval = min(interval, 30.0)
+        if self._chars_since < min_chars:
             return False
-        if (now - self._last_run_at) < self._settings.interval_s:
+        if (now - self._last_run_at) < interval:
             return False
         provider = self._capabilities.get(
             CAPABILITY_ID,
@@ -166,6 +180,7 @@ class AgendaReviewCoordinator:
                 return
             with self._lock:
                 self._llm_ready = True
+                self._last_run_failed = False
             transcript = _format_labeled_transcript(labeled_parts)
             topics_ctx = [
                 {
@@ -199,6 +214,7 @@ class AgendaReviewCoordinator:
             with self._lock:
                 self._chars_since = 0
                 self._last_run_at = time.monotonic()
+                self._first_run_pending = False
             if self._on_review is not None:
                 self._on_review(updated)
         except Exception:
@@ -207,6 +223,7 @@ class AgendaReviewCoordinator:
                 # Backoff: zonder reset start elke final-chunk (±8s) opnieuw
                 # een worker die tegen dezelfde fout aanloopt (Ollama down).
                 self._last_run_at = time.monotonic()
+                self._last_run_failed = True
         finally:
             with self._lock:
                 self._busy = False
@@ -245,7 +262,13 @@ class AgendaReviewCoordinator:
                 continue
             topic_id = str(item.get("topic_id", ""))
             status = str(item.get("status", "")).lower()
-            if not topic_id or status not in {"treated", "confirmed"}:
+            if status not in {"treated", "confirmed"}:
+                continue
+            if not topic_id:
+                title_hint = str(item.get("title", "")).strip()
+                if title_hint:
+                    topic_id = _find_topic_id_by_title(updated.topics, title_hint) or ""
+            if not topic_id:
                 continue
             updated = self._state_service.apply(
                 updated,
@@ -379,3 +402,11 @@ def should_accept_question_role(role: SpeakerRole) -> bool:
     """ME excluded; OTHER and UNKNOWN allowed."""
 
     return role != SpeakerRole.ME
+
+
+def _find_topic_id_by_title(topics: tuple, title: str) -> str | None:
+    needle = title.casefold().strip()
+    for topic in topics:
+        if topic.title.casefold().strip() == needle:
+            return topic.id
+    return None

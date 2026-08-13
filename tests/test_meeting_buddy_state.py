@@ -48,6 +48,7 @@ def test_apply_increments_version_immutably() -> None:
     assert s1.topics[0].title == "Budget"
     assert s1.topics[0].status == TopicStatus.OPEN
     assert s1.topics[0].source == TopicSource.AGENDA
+    assert s1.topics[0].id == "t1"
     with pytest.raises(FrozenInstanceError):
         s1.version = 2  # type: ignore[misc]
 

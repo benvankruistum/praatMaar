@@ -80,10 +80,15 @@ def test_hover_pauses_the_auto_hide_timer() -> None:
 
     pill.enterEvent(None)
     assert not pill._hide_timer.isActive(), "hover moet de auto-hide pauzeren"
+    paused_remaining = pill._hide_remaining_ms
+    assert paused_remaining is not None
+    assert 0 < paused_remaining <= ERROR_DURATION_MS
 
     pill.leaveEvent(None)
     assert pill._hide_timer.isActive(), "verlaten moet de auto-hide hervatten"
-    assert pill._hide_timer.interval() == ERROR_DURATION_MS
+    # Hervat de resterende tijd (niet opnieuw ERROR_DURATION_MS); 1 ms tick
+    # tussen start en hover is normaal op CI.
+    assert pill._hide_timer.interval() == paused_remaining
 
 
 def test_hover_outside_transient_states_does_nothing() -> None:
