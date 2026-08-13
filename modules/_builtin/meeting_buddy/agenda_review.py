@@ -66,6 +66,7 @@ class AgendaReviewCoordinator:
         self._busy = False
         self._llm_ready = False
         self._last_run_failed = False
+        self._first_run_pending = True
         self._state_service = MeetingStateService()
 
     @property
@@ -90,6 +91,7 @@ class AgendaReviewCoordinator:
             self._busy = False
             self._llm_ready = False
             self._last_run_failed = False
+            self._first_run_pending = True
 
     def provider_is_ready(self) -> bool:
         provider = self._capabilities.get(
@@ -141,9 +143,14 @@ class AgendaReviewCoordinator:
     def _should_run_unlocked(self, *, now: float) -> bool:
         if self._busy:
             return False
-        if self._chars_since < self._settings.min_new_chars:
+        min_chars = self._settings.min_new_chars
+        interval = self._settings.interval_s
+        if self._first_run_pending:
+            min_chars = min(min_chars, 80)
+            interval = min(interval, 30.0)
+        if self._chars_since < min_chars:
             return False
-        if (now - self._last_run_at) < self._settings.interval_s:
+        if (now - self._last_run_at) < interval:
             return False
         provider = self._capabilities.get(
             CAPABILITY_ID,
@@ -207,6 +214,7 @@ class AgendaReviewCoordinator:
             with self._lock:
                 self._chars_since = 0
                 self._last_run_at = time.monotonic()
+                self._first_run_pending = False
             if self._on_review is not None:
                 self._on_review(updated)
         except Exception:

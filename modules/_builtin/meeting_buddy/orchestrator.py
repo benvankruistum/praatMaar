@@ -330,6 +330,34 @@ class MeetingOrchestrator:
             )
             self._ui.notify(self._state, force=True)
 
+    def mark_topic_done(self, topic_id: str) -> None:
+        from uuid import uuid4
+
+        from .state_service import MeetingStateService, StateProposal, StateProposalType
+
+        with self._lock:
+            if self._state is None:
+                return
+            now_s = self._elapsed_s()
+            self._state = MeetingStateService().apply(
+                self._state,
+                StateProposal(
+                    proposal_id=f"manual-{uuid4()}",
+                    meeting_session_id=self._state.meeting_session_id,
+                    type=StateProposalType.MANUAL_MARK_TOPIC_DONE,
+                    payload={"topic_id": topic_id, "matched_at": now_s},
+                    source_delta_ids=(),
+                    confidence=1.0,
+                    created_at=now_s,
+                ),
+            )
+            state = replace(
+                self._state,
+                agenda_intelligence_mode=self._agenda_intelligence_mode(),
+            )
+            self._state = state
+        self._ui.notify(state, force=True)
+
     def _open_transcript_journal(self) -> None:
         titles = parse_agenda(self._agenda_text)
         title = self._journal_title or (titles[0] if titles else "Meeting")

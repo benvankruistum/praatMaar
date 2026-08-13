@@ -308,6 +308,7 @@ class MeetingBuddyModule:
                 on_dismiss=orchestrator.dismiss_hint,
                 on_confirm=orchestrator.confirm_hint,
                 on_reconnect=orchestrator.reconnect_capture,
+                on_mark_topic_done=orchestrator.mark_topic_done,
                 on_stop=self.stop_meeting,
             )
         self._overlay.update(

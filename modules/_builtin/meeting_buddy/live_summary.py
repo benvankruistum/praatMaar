@@ -83,6 +83,7 @@ class LiveSummaryCoordinator:
         self._chars_since = 0
         self._last_run_at = time.monotonic()
         self._busy = False
+        self._first_run_pending = True
 
     @property
     def summary(self) -> str:
@@ -101,6 +102,7 @@ class LiveSummaryCoordinator:
             # Startinterval: eerste LLM-run wacht ook op interval_s.
             self._last_run_at = time.monotonic()
             self._busy = False
+            self._first_run_pending = True
 
     def on_final_text(self, text: str, *, now: float | None = None) -> None:
         chunk = text.strip()
@@ -134,9 +136,14 @@ class LiveSummaryCoordinator:
     def _should_run_unlocked(self, *, now: float) -> bool:
         if self._busy:
             return False
-        if self._chars_since < self._settings.min_new_chars:
+        min_chars = self._settings.min_new_chars
+        interval = self._settings.interval_s
+        if self._first_run_pending:
+            min_chars = min(min_chars, 80)
+            interval = min(interval, 30.0)
+        if self._chars_since < min_chars:
             return False
-        if (now - self._last_run_at) < self._settings.interval_s:
+        if (now - self._last_run_at) < interval:
             return False
         provider = self._capabilities.get(
             CAPABILITY_ID,
@@ -179,6 +186,7 @@ class LiveSummaryCoordinator:
                     self._delta = ""
                 self._chars_since = len(self._delta)
                 self._last_run_at = time.monotonic()
+                self._first_run_pending = False
             log.info("Live summary bijgewerkt (%s tekens)", len(text))
             if self._on_summary is not None:
                 self._on_summary(text)

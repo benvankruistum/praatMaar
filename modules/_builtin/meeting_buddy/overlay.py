@@ -34,7 +34,7 @@ from ui.theme import TOKENS
 from .hints import HintType
 from .live_summary import summary_points
 from .state import Hint, HintStatus, MeetingState, Question, QuestionStatus, Topic, TopicStatus
-from .topic_ladder import is_at_least_sequential
+from .topic_ladder import current_topic_id, is_at_least_sequential, open_topic_titles
 
 
 def format_elapsed(seconds: float) -> str:
@@ -403,6 +403,7 @@ class MeetingBuddyOverlay:
         on_dismiss: Callable[[str], None],
         on_confirm: Callable[[str], None],
         on_reconnect: Callable[[], None],
+        on_mark_topic_done: Callable[[str], None] | None = None,
         on_stop: Callable[[], None] | None = None,
         parent: Any = None,
     ) -> None:
@@ -411,6 +412,7 @@ class MeetingBuddyOverlay:
         self._on_dismiss = on_dismiss
         self._on_confirm = on_confirm
         self._on_reconnect = on_reconnect
+        self._on_mark_topic_done = on_mark_topic_done
         self._shown_once = False
         self._capture_status: object = None
         self._pulse_on = False
@@ -498,6 +500,12 @@ class MeetingBuddyOverlay:
         self._topics, self._topics_body, self._topics_count = self._section(
             "modules.meeting_buddy.overlay.agenda", left
         )
+        self._coverage_strip = QLabel("")
+        self._coverage_strip.setObjectName("overlayFooterText")
+        self._coverage_strip.setWordWrap(True)
+        self._coverage_strip.setStyleSheet(f"color: {TOKENS['danger_text']}; padding: 0 12px 6px 12px;")
+        left.addWidget(self._coverage_strip)
+        self._coverage_strip.hide()
         self._topics_legend = QLabel(i18n.t("modules.meeting_buddy.overlay.agenda_legend"))
         self._topics_legend.setObjectName("overlayFooterText")
         self._topics_legend.setWordWrap(True)
@@ -731,19 +739,46 @@ class MeetingBuddyOverlay:
         if not topics:
             self._topics.hide()
             self._topics_legend.hide()
+            self._coverage_strip.hide()
             return
         self._topics_count.setText(format_topic_progress(topics))
+        open_titles = open_topic_titles(tuple(topics))
+        if open_titles:
+            self._coverage_strip.setText(
+                i18n.t(
+                    "modules.meeting_buddy.overlay.coverage_open",
+                    items=", ".join(open_titles),
+                )
+            )
+            self._coverage_strip.show()
+        else:
+            self._coverage_strip.hide()
+        active_id = current_topic_id(tuple(topics))
         for topic in topics:
             row = QHBoxLayout()
             row.setSpacing(8)
             row.addWidget(_StatusDot(topic.status), 0, Qt.AlignmentFlag.AlignVCenter)
             label = QLabel(topic.title)
             label.setWordWrap(True)
-            weight = "600" if is_at_least_sequential(topic.status) else "400"
+            is_current = topic.id == active_id
+            is_done = is_at_least_sequential(topic.status)
+            weight = "700" if is_current else ("600" if is_done else "400")
+            color = topic_line_color(topic)
+            if is_current:
+                color = TOKENS["accent"]
             label.setStyleSheet(
-                f"color: {topic_line_color(topic)}; font-size: 13px; font-weight: {weight};"
+                f"color: {color}; font-size: 13px; font-weight: {weight};"
             )
             row.addWidget(label, 1)
+            if self._on_mark_topic_done is not None and not is_done:
+                mark = QPushButton("✓")
+                mark.setToolTip(i18n.t("modules.meeting_buddy.overlay.mark_done"))
+                mark.setCursor(Qt.CursorShape.PointingHandCursor)
+                mark.setFixedSize(24, 24)
+                mark.setStyleSheet(self._icon_btn_qss(TOKENS["ok"], size=11))
+                topic_id = topic.id
+                mark.clicked.connect(lambda _checked=False, tid=topic_id: self._on_mark_topic_done(tid))
+                row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
             self._topics_body.addLayout(row)
         self._topics.show()
         self._topics_legend.show()
