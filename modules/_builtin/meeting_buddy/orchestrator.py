@@ -167,11 +167,14 @@ class MeetingOrchestrator:
                 self._live_summary.reset()
                 self._agenda_review.reset()
                 summary_settings = self._live_summary_settings()
+                review_settings = self._agenda_review_settings()
                 self._live_summary.update_settings(summary_settings)
-                self._agenda_review.update_settings(self._agenda_review_settings())
+                self._agenda_review.update_settings(review_settings)
                 self._state = replace(
                     self._state,
                     live_summary_enabled=bool(summary_settings.enabled),
+                    agenda_review_enabled=bool(review_settings.enabled),
+                    agenda_intelligence_mode=self._agenda_intelligence_mode(),
                 )
                 self._sessions.log_started()
                 self._ui.notify(self._state, force=True)
@@ -266,7 +269,6 @@ class MeetingOrchestrator:
                 version_before = self._state.version
                 hints_before = self._state.emitted_hints
                 now_s = self._elapsed_s()
-                use_topic_heuristics = not self._agenda_review.uses_llm_review()
                 self._state = self._transcripts.process_delta(
                     event,
                     binding=binding,
@@ -274,7 +276,7 @@ class MeetingOrchestrator:
                     config=self._config,
                     elapsed_s=now_s,
                     observer=self._observer,
-                    use_topic_heuristics=use_topic_heuristics,
+                    use_topic_heuristics=True,
                 )
                 self._state = self._hints.update_hints(
                     self._state,
@@ -287,7 +289,11 @@ class MeetingOrchestrator:
                 state_changed = self._state.version != version_before
                 hints_changed = self._state.emitted_hints != hints_before
                 if state_changed or hints_changed:
-                    notify_state = self._state
+                    notify_state = replace(
+                        self._state,
+                        agenda_intelligence_mode=self._agenda_intelligence_mode(),
+                    )
+                    self._state = notify_state
                     notify_force = True
 
         if notify_state is not None:
@@ -383,11 +389,23 @@ class MeetingOrchestrator:
     def _agenda_review_settings(self) -> AgendaReviewSettings:
         prefs = load_live_summary_prefs(self._app_dir)
         return AgendaReviewSettings(
-            enabled=bool(prefs["live_summary_enabled"]),
+            enabled=bool(prefs["agenda_review_enabled"]),
             interval_s=float(prefs["llm_chunk_interval_s"]),
             min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
             language=i18n.ui_language(),
         )
+
+    def _agenda_intelligence_mode(self) -> str:
+        prefs = load_live_summary_prefs(self._app_dir)
+        if not prefs["agenda_review_enabled"]:
+            return "basic"
+        if not self._agenda_review.provider_is_ready():
+            return "llm_waiting"
+        if self._agenda_review.last_run_failed:
+            return "llm_degraded"
+        if self._agenda_review.llm_ready:
+            return "llm_ready"
+        return "llm_waiting"
 
     def _label_final(self, delta: TranscriptDelta, meeting_session_id: str) -> LabeledFinal:
         text = delta.text
@@ -445,6 +463,8 @@ class MeetingOrchestrator:
                 reviewed,
                 live_summary=self._state.live_summary,
                 live_summary_enabled=self._state.live_summary_enabled,
+                agenda_review_enabled=self._state.agenda_review_enabled,
+                agenda_intelligence_mode=self._agenda_intelligence_mode(),
                 version=max(self._state.version, reviewed.version) + 1,
             )
             state = self._state

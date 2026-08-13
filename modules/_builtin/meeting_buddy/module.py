@@ -206,6 +206,7 @@ class MeetingBuddyModule:
             loopback_device=orchestrator.loopback_device,
             transcripts_directory=load_transcripts_directory(app_dir),
             live_summary_enabled=bool(prefs["live_summary_enabled"]),
+            agenda_review_enabled=bool(prefs["agenda_review_enabled"]),
             llm_chunk_interval_s=float(prefs["llm_chunk_interval_s"]),
             llm_chunk_min_new_chars=int(prefs["llm_chunk_min_new_chars"]),
             app_dir=app_dir,
@@ -218,6 +219,7 @@ class MeetingBuddyModule:
             loopback_device=result.loopback_device,
             transcripts_directory=result.transcripts_directory,
             live_summary_enabled=result.live_summary_enabled,
+            agenda_review_enabled=result.agenda_review_enabled,
             llm_chunk_interval_s=result.llm_chunk_interval_s,
             llm_chunk_min_new_chars=result.llm_chunk_min_new_chars,
         )

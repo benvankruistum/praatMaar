@@ -100,6 +100,8 @@ class MeetingState:
     emitted_hints: tuple[Hint, ...]
     live_summary: str = ""
     live_summary_enabled: bool = False
+    agenda_review_enabled: bool = False
+    agenda_intelligence_mode: str = "basic"
     meeting_phase: MeetingPhase = MeetingPhase.BODY
 
     @classmethod
@@ -116,5 +118,7 @@ class MeetingState:
             emitted_hints=(),
             live_summary="",
             live_summary_enabled=False,
+            agenda_review_enabled=False,
+            agenda_intelligence_mode="basic",
             meeting_phase=MeetingPhase.BODY,
         )

@@ -72,8 +72,21 @@ def test_save_meeting_buddy_preferences_persists_loopback_fields(tmp_path: Path)
 def test_live_summary_prefs_default_disabled(tmp_path: Path) -> None:
     prefs = load_live_summary_prefs(tmp_path)
     assert prefs["live_summary_enabled"] is False
+    assert prefs["agenda_review_enabled"] is False
     assert prefs["llm_chunk_interval_s"] == 45.0
     assert prefs["llm_chunk_min_new_chars"] == 120
+
+
+def test_agenda_review_prefs_migrate_from_live_summary(tmp_path: Path) -> None:
+    save_meeting_buddy_preferences(
+        tmp_path,
+        enable_loopback=False,
+        loopback_device=None,
+        live_summary_enabled=True,
+    )
+    prefs = load_live_summary_prefs(tmp_path)
+    assert prefs["live_summary_enabled"] is True
+    assert prefs["agenda_review_enabled"] is True
 
 
 def test_invalid_user_yaml_falls_back_to_defaults(tmp_path: Path) -> None:

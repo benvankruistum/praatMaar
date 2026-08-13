@@ -82,6 +82,28 @@ def _topics_done(topics: Sequence[Topic]) -> int:
     return sum(1 for t in topics if t.status in (TopicStatus.SEQUENTIAL, TopicStatus.CONFIRMED))
 
 
+def _topics_discussed(topics: Sequence[Topic]) -> int:
+    return sum(1 for t in topics if t.status != TopicStatus.OPEN)
+
+
+def _topics_open(topics: Sequence[Topic]) -> int:
+    return sum(1 for t in topics if t.status == TopicStatus.OPEN)
+
+
+def format_topic_progress(topics: Sequence[Topic]) -> str:
+    if not topics:
+        return ""
+    discussed = _topics_discussed(topics)
+    done = _topics_done(topics)
+    open_count = _topics_open(topics)
+    return i18n.t(
+        "modules.meeting_buddy.overlay.agenda_progress",
+        discussed=discussed,
+        done=done,
+        open=open_count,
+    )
+
+
 class _StatusDot(QWidget):
     """Agenda-ladder mark: shape carries meaning (ring/half/full/check)."""
 
@@ -476,6 +498,16 @@ class MeetingBuddyOverlay:
         self._topics, self._topics_body, self._topics_count = self._section(
             "modules.meeting_buddy.overlay.agenda", left
         )
+        self._topics_legend = QLabel(i18n.t("modules.meeting_buddy.overlay.agenda_legend"))
+        self._topics_legend.setObjectName("overlayFooterText")
+        self._topics_legend.setWordWrap(True)
+        left.addWidget(self._topics_legend)
+        self._topics_legend.hide()
+        self._intelligence_label = QLabel("")
+        self._intelligence_label.setObjectName("overlayFooterText")
+        self._intelligence_label.setWordWrap(True)
+        left.addWidget(self._intelligence_label)
+        self._intelligence_label.hide()
         self._questions, self._questions_body, self._questions_count = self._section(
             "modules.meeting_buddy.overlay.questions", left
         )
@@ -603,6 +635,7 @@ class MeetingBuddyOverlay:
         active.sort(key=lambda hint: (-hint.priority, -hint.confidence, hint.id))
         visible = active[:3]
         self._render_topics(state.topics)
+        self._render_agenda_intelligence(getattr(state, "agenda_intelligence_mode", "basic"))
         two_column = bool(getattr(state, "live_summary_enabled", False))
         self._render_summary(state.live_summary, enabled=two_column)
         self._render_questions(state.questions)
@@ -697,8 +730,9 @@ class MeetingBuddyOverlay:
         self._topic_done = _topics_done(topics)
         if not topics:
             self._topics.hide()
+            self._topics_legend.hide()
             return
-        self._topics_count.setText(f"{self._topic_done}/{self._topic_total}")
+        self._topics_count.setText(format_topic_progress(topics))
         for topic in topics:
             row = QHBoxLayout()
             row.setSpacing(8)
@@ -712,6 +746,20 @@ class MeetingBuddyOverlay:
             row.addWidget(label, 1)
             self._topics_body.addLayout(row)
         self._topics.show()
+        self._topics_legend.show()
+
+    def _render_agenda_intelligence(self, mode: str) -> None:
+        key = {
+            "basic": "modules.meeting_buddy.overlay.intelligence.basic",
+            "llm_waiting": "modules.meeting_buddy.overlay.intelligence.llm_waiting",
+            "llm_ready": "modules.meeting_buddy.overlay.intelligence.llm_ready",
+            "llm_degraded": "modules.meeting_buddy.overlay.intelligence.llm_degraded",
+        }.get(mode)
+        if key is None:
+            self._intelligence_label.hide()
+            return
+        self._intelligence_label.setText(i18n.t(key))
+        self._intelligence_label.show()
 
     def _render_questions(self, questions: Sequence[Question]) -> None:
         self._clear_layout(self._questions_body)

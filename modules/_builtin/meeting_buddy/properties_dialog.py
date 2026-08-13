@@ -35,6 +35,7 @@ class PropertiesResult:
     loopback_device: int | None
     transcripts_directory: str | None
     live_summary_enabled: bool = False
+    agenda_review_enabled: bool = False
     llm_chunk_interval_s: float = 45.0
     llm_chunk_min_new_chars: int = 120
 
@@ -61,6 +62,7 @@ def build_properties_result(
     fallback_device: int | None,
     transcripts_directory: str | None,
     live_summary_enabled: bool = False,
+    agenda_review_enabled: bool = False,
     llm_chunk_interval_s: float = 45.0,
     llm_chunk_min_new_chars: int = 120,
 ) -> PropertiesResult:
@@ -73,6 +75,7 @@ def build_properties_result(
         if transcripts_directory and transcripts_directory.strip()
         else None,
         live_summary_enabled=bool(live_summary_enabled),
+        agenda_review_enabled=bool(agenda_review_enabled),
         llm_chunk_interval_s=max(15.0, float(llm_chunk_interval_s)),
         llm_chunk_min_new_chars=max(50, int(llm_chunk_min_new_chars)),
     )
@@ -86,6 +89,7 @@ class _PropertiesDialog(QDialog):
         loopback_device: int | None,
         transcripts_directory: str | None,
         live_summary_enabled: bool,
+        agenda_review_enabled: bool,
         llm_chunk_interval_s: float,
         llm_chunk_min_new_chars: int,
         app_dir: Path | None,
@@ -142,6 +146,20 @@ class _PropertiesDialog(QDialog):
                 i18n.t("modules.meeting_buddy.settings.transcript_label"),
                 self._folder,
                 trailing=browse,
+            )
+        )
+
+        # --- Agenda-intelligentie ---
+        col.addWidget(
+            self._section(i18n.t("modules.meeting_buddy.settings.section.agenda"), top=True)
+        )
+        self._agenda_review = ToggleSwitch()
+        self._agenda_review.setChecked(agenda_review_enabled)
+        col.addLayout(
+            self._toggle_row(
+                i18n.t("modules.meeting_buddy.settings.agenda_review_enabled"),
+                i18n.t("modules.meeting_buddy.settings.agenda_review_hint"),
+                self._agenda_review,
             )
         )
 
@@ -304,6 +322,7 @@ class _PropertiesDialog(QDialog):
             fallback_device=self._loopback_device,
             transcripts_directory=self._folder.text(),
             live_summary_enabled=self._summary.isChecked(),
+            agenda_review_enabled=self._agenda_review.isChecked(),
             llm_chunk_interval_s=interval,
             llm_chunk_min_new_chars=chars,
         )
@@ -316,6 +335,7 @@ def show_properties_dialog(
     loopback_device: int | None,
     transcripts_directory: str | None = None,
     live_summary_enabled: bool = False,
+    agenda_review_enabled: bool = False,
     llm_chunk_interval_s: float = 45.0,
     llm_chunk_min_new_chars: int = 120,
     app_dir: Path | None = None,
@@ -328,6 +348,7 @@ def show_properties_dialog(
         loopback_device=loopback_device,
         transcripts_directory=transcripts_directory,
         live_summary_enabled=live_summary_enabled,
+        agenda_review_enabled=agenda_review_enabled,
         llm_chunk_interval_s=llm_chunk_interval_s,
         llm_chunk_min_new_chars=llm_chunk_min_new_chars,
         app_dir=app_dir,

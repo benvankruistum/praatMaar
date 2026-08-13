@@ -65,12 +65,18 @@ class AgendaReviewCoordinator:
         self._last_run_at = time.monotonic()
         self._busy = False
         self._llm_ready = False
+        self._last_run_failed = False
         self._state_service = MeetingStateService()
 
     @property
     def llm_ready(self) -> bool:
         with self._lock:
             return self._llm_ready
+
+    @property
+    def last_run_failed(self) -> bool:
+        with self._lock:
+            return self._last_run_failed
 
     def update_settings(self, settings: AgendaReviewSettings) -> None:
         with self._lock:
@@ -83,6 +89,7 @@ class AgendaReviewCoordinator:
             self._last_run_at = time.monotonic()
             self._busy = False
             self._llm_ready = False
+            self._last_run_failed = False
 
     def provider_is_ready(self) -> bool:
         provider = self._capabilities.get(
@@ -166,6 +173,7 @@ class AgendaReviewCoordinator:
                 return
             with self._lock:
                 self._llm_ready = True
+                self._last_run_failed = False
             transcript = _format_labeled_transcript(labeled_parts)
             topics_ctx = [
                 {
@@ -207,6 +215,7 @@ class AgendaReviewCoordinator:
                 # Backoff: zonder reset start elke final-chunk (±8s) opnieuw
                 # een worker die tegen dezelfde fout aanloopt (Ollama down).
                 self._last_run_at = time.monotonic()
+                self._last_run_failed = True
         finally:
             with self._lock:
                 self._busy = False

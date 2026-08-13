@@ -54,6 +54,7 @@ class TranscriptProcessor:
             return state
 
         updated = state
+        topic_marked = False
         for proposal in self._heuristics.proposals_for(
             event.delta,
             updated,
@@ -67,6 +68,11 @@ class TranscriptProcessor:
                 continue
             previous_version = updated.version
             updated = self._state_service.apply(updated, proposal)
+            if proposal.type in (
+                StateProposalType.MARK_TOPIC_TREATED,
+                StateProposalType.MARK_TOPIC_DISCUSSED,
+            ):
+                topic_marked = True
             log_event(
                 observer,
                 "state_version",
@@ -74,5 +80,27 @@ class TranscriptProcessor:
                 previous_version=previous_version,
                 state_version=updated.version,
                 proposal_type=proposal.type.value,
+            )
+        if topic_marked:
+            previous_version = updated.version
+            updated = self._state_service.apply(
+                updated,
+                StateProposal(
+                    proposal_id=f"catchup-{uuid4()}",
+                    meeting_session_id=updated.meeting_session_id,
+                    type=StateProposalType.APPLY_TOPIC_CATCH_UP,
+                    payload={},
+                    source_delta_ids=(),
+                    confidence=1.0,
+                    created_at=elapsed_s,
+                ),
+            )
+            log_event(
+                observer,
+                "state_version",
+                meeting_session_id=binding.meeting_session_id,
+                previous_version=previous_version,
+                state_version=updated.version,
+                proposal_type=StateProposalType.APPLY_TOPIC_CATCH_UP.value,
             )
         return updated
