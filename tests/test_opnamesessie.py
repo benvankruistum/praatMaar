@@ -234,7 +234,7 @@ def test_start_while_recording_is_noop(session: Opnamesessie, sd: FakeSoundDevic
 def test_stop_keeps_stream_warm(
     session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    monkeypatch.setattr("dicteercyclus.mic_stream.sys.platform", "win32")
     session.warm_microphone = True
     session.start()
     assert sd.input_stream_calls == 1
@@ -287,7 +287,7 @@ def test_start_reopens_inactive_warm_stream(
 ) -> None:
     """Bluetooth uit/aan: PortAudio-stream blijft bestaan maar is niet meer active."""
 
-    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    monkeypatch.setattr("dicteercyclus.mic_stream.sys.platform", "win32")
     session.warm_microphone = True
     sd._fresh_stream_each_open = True
     session.warmup_microphone()
@@ -307,7 +307,7 @@ def test_start_reopens_stale_warm_stream_without_callbacks(
 ) -> None:
     """Stream 'active' maar geen callbacks meer (klassieke BT-zombie)."""
 
-    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    monkeypatch.setattr("dicteercyclus.mic_stream.sys.platform", "win32")
     session.warm_microphone = True
     sd._fresh_stream_each_open = True
     session.warmup_microphone()
@@ -318,7 +318,7 @@ def test_start_reopens_stale_warm_stream_without_callbacks(
     session._stream_opened_at = 0.0
     session._last_audio_callback_at = 0.0
     monkeypatch.setattr(
-        "opnamesessie.time.monotonic",
+        "dicteercyclus.session.time.monotonic",
         lambda: 100.0,
     )
 
@@ -696,7 +696,7 @@ def test_ensure_stream_skips_portaudio_refresh_when_modules_capture(
     # met een actieve Meeting Buddy-capture op dezelfde sounddevice-module
     # trok dat die stream eronder weg (dode stream of native crash).
     calls: list[int] = []
-    monkeypatch.setattr("opnamesessie.refresh_portaudio", lambda _sd: calls.append(1))
+    monkeypatch.setattr("dicteercyclus.mic_stream.refresh_portaudio", lambda _sd: calls.append(1))
 
     session._has_external_streams = lambda: True
     session.start()
@@ -711,7 +711,7 @@ def test_ensure_stream_skips_portaudio_refresh_when_modules_capture(
 def test_warm_stream_reused_when_device_identity_unchanged(
     session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    monkeypatch.setattr("dicteercyclus.mic_stream.sys.platform", "win32")
     session.warm_microphone = True
     sd._fresh_stream_each_open = True
     session.warmup_microphone()
@@ -729,7 +729,7 @@ def test_warm_stream_keeps_alive_when_identity_unavailable(
 ) -> None:
     """Geen query_devices-info → geen force-reopen van een levende stream."""
 
-    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    monkeypatch.setattr("dicteercyclus.mic_stream.sys.platform", "win32")
     session.warm_microphone = True
     sd._fresh_stream_each_open = True
     session.warmup_microphone()
@@ -748,7 +748,7 @@ def test_warm_stream_keeps_alive_when_identity_unavailable(
 def test_warm_stream_reopens_when_device_identity_changes(
     session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    monkeypatch.setattr("dicteercyclus.mic_stream.sys.platform", "win32")
     session.warm_microphone = True
     sd._fresh_stream_each_open = True
     session.warmup_microphone()
@@ -789,7 +789,7 @@ def test_ensure_stream_opens_default_after_pinned_gone(
 def test_stop_audio_stream_clears_bound_device_identity(
     session: Opnamesessie, sd: FakeSoundDevice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("opnamesessie.sys.platform", "win32")
+    monkeypatch.setattr("dicteercyclus.mic_stream.sys.platform", "win32")
     session.warm_microphone = True
     session.warmup_microphone()
     assert session._bound_device_identity is not None

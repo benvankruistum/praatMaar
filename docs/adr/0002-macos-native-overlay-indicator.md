@@ -68,3 +68,13 @@ Op macOS bouwen we de indicator als **native overlay**:
 
 Code landde in de repo; **runtime-verificatie op een fysieke Mac** is de
 volgende stap (focus-diefstal, paste, LaunchAgent, TCC-prompts).
+
+## Aanvulling (2026-08-11) — shipping UI
+
+De **shipping** indicator is de gedeelde PySide6-HUD (`indicator._qt`) onder
+[ADR-0005](0005-ui-toolkit-pyside6.md), niet aparte `indicator._win` /
+`indicator._mac` / NSPanel-packages. Het no-activate-invariant (geen focus-
+diefstal) blijft gelden; op Windows via `WS_EX_NOACTIVATE` / overlay-flags,
+op macOS/Linux binnen Qt-platformbeperkingen. Deze ADR blijft historisch
+relevant voor het **productbesluit** (pill behouden, native no-activate),
+maar de implementatiepaden hierboven zijn vervangen door ADR-0005.

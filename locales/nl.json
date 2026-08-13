@@ -161,6 +161,7 @@
   "rec.transcribing_progress": "  Transcriberen: {percent}%",
   "rec.no_speech": "Er is geen gesproken tekst herkend.",
   "rec.transcript_header": "TRANSCRIPTIE",
+  "rec.transcript_chars": "Transcriptlengte: {count} tekens (tekst niet gelogd).",
   "rec.saved": "Transcript opgeslagen: {path}",
   "rec.saved_only": "Alleen opgeslagen (geen klembord/plakken voor deze bestemming).",
   "rec.save_warn": "Waarschuwing: transcript kon niet worden opgeslagen: {error}",

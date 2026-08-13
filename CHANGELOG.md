@@ -9,7 +9,19 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Added
 
+- **Composition-root strangler (ADR-0007):** package `app/` (`AppRuntime`,
+  settings, hotkey router, run/startup) en `dicteercyclus/` (Opnamesessie-
+  façade + mic/incremental/delivery); dunne `dictation.py`-entry; geen
+  import-time sessie.
+
 ### Changed
+
+- **Privacy:** console/log print geen volle transcripttekst meer (alleen
+  lengte); `SECURITY.md` documenteert optionele Local LLM / Ollama.
+- **Meeting Buddy stop:** dictation-pill/hotkey stopt alleen de dicteercyclus;
+  MB heeft eigen overlay/tray-stop.
+- **macOS paste:** Quartz ⌘V weer achter `host` (`host/_mac_paste.py`) na
+  verwijdering van root-`mac_input`.
 
 ### Fixed
 

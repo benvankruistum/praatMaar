@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 from . import APP_NAME
+from ._launch import dictation_script_path
 
 # Per-gebruiker 'Run'-sleutel — geen adminrechten nodig.
 _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -147,7 +148,7 @@ class WinHost:
 
         # Vanuit broncode: pythonw.exe (zonder console) + het hoofdscript, dat
         # één map boven deze adapter staat.
-        script = Path(__file__).resolve().parent.parent / "dictation.py"
+        script = dictation_script_path()
         pythonw = Path(sys.executable).with_name("pythonw.exe")
         executable = pythonw if pythonw.exists() else Path(sys.executable)
         return f'"{executable}" "{script}"'
