@@ -28,6 +28,9 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Fixed
 
+- **macOS 26+ crash (SIGTRAP):** globale sneltoets via `mac_input.QuartzKeyListener`
+  (NSEvent op de Qt-mainthread) i.p.v. `pynput` op een achtergrondthread.
+
 ## [0.6.0] - 2026-08-10
 
 ### Added

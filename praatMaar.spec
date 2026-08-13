@@ -102,6 +102,7 @@ hiddenimports += [
     "indicator._contract",
     "indicator._qt",
     "hotkeys",
+    "mac_input",
     "opnamesessie",
     "app",
     "app.bootstrap",

@@ -30,16 +30,13 @@ Zonder die toggle start de app wel, maar hoort ze geen hotkeys.
 
 Apple dwingt af dat TSM/HIToolbox alleen op de main thread mag. `pynput` doet
 dat vanaf een achtergrondthread en **crasht** (SIGTRAP). praatMaar gebruikt
-daarom op Mac `mac_input.QuartzKeyListener` (AppKit) i.p.v. pynput.
+daarom op Mac `mac_input.QuartzKeyListener` (AppKit/NSEvent) i.p.v. pynput.
 
-Instellingen draait in een **apart Tk-proces** (`settings_process.py`). Een
-tkinter-dialoog in dezelfde Cocoa-runloop als pystray/NSApp crasht bij sluiten
-(`PyEval_RestoreThread` → SIGABRT).
+Instellingen draait **in-process** via PySide6 (`ui/dialogs/settings.py`).
 
-Sneltoets-opname in Instellingen gebruikt Tk KeyPress (niet alleen NSEvent-
-keycodes), zodat **Windows-/PC-toetsenborden** (Win-toets = Command, Alt,
-pijltjes, ISO-`<>`) wél geregistreerd worden. De dicteer-hotkey zelf luistert
-via `QuartzKeyListener` met dezelfde tokens (modifiers uit `modifierFlags`).
+Sneltoets-opname in Instellingen gebruikt dezelfde globale listener als dicteren
+(NSEvent-tokens). Zonder actieve listener valt opname terug op Qt KeyPress
+(handig als je alleen in het instellingenvenster test).
 
 ## `.app`-bundle
 
