@@ -28,6 +28,10 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Fixed
 
+- **macOS 26 SIGTRAP na start:** globale sneltoets via NSEvent op de
+  Qt-mainthread (`host._mac_hotkeys`), niet via pynput/TSM op een
+  achtergrondthread.
+
 ## [0.6.0] - 2026-08-10
 
 ### Added

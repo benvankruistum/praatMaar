@@ -129,10 +129,23 @@ def load_dependencies(
     import sounddevice as _sd
 
     step(4, i18n.t("splash.dep.keyboard"))
-    import pyperclip as _pyperclip
-    from pynput import keyboard as _keyboard
+    import sys
 
-    hotkeys.init(_keyboard)
+    import pyperclip as _pyperclip
+
+    if sys.platform == "darwin":
+        from host._mac_hotkeys import QuartzKeyListener
+
+        class _DarwinKeyboard:
+            """Shim: zelfde ``Listener``-API als pynput, zonder achtergrondthread."""
+
+            Listener = QuartzKeyListener
+
+        _keyboard = _DarwinKeyboard()
+    else:
+        from pynput import keyboard as _keyboard
+
+        hotkeys.init(_keyboard)
 
     step(5, i18n.t("splash.dep.tray"))
     from tray import TrayIcon as _TrayIcon
