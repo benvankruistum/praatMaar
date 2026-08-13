@@ -972,7 +972,7 @@ class RecordingIndicator(QWidget):
         return int(left)
 
     def _paint_chunk_leds(self, painter: QPainter, right_x: int) -> int:
-        """Twee LCD-iconen (◇ stilte, ⏱ tijd); retourneert linker rand voor waveform."""
+        """Twee LCD-iconen (V stilte, T tijd); retourneert linker rand voor waveform."""
 
         enabled, vad_on, fixed_on = chunk_led_snapshot()
         if not enabled:
@@ -980,11 +980,12 @@ class RecordingIndicator(QWidget):
 
         painter.setFont(self._font(13, bold=True))
         metrics = painter.fontMetrics()
-        vad_glyph = "◇"
-        time_glyph = "⏱"
-        gap = 5
-        vad_w = metrics.horizontalAdvance(vad_glyph)
-        time_w = metrics.horizontalAdvance(time_glyph)
+        # ASCII i.p.v. emoji: betrouwbaarder leesbaar op Windows HUD-fonts.
+        vad_glyph = "V"
+        time_glyph = "T"
+        gap = 8
+        vad_w = max(metrics.horizontalAdvance(vad_glyph), 12)
+        time_w = max(metrics.horizontalAdvance(time_glyph), 12)
         width = vad_w + gap + time_w
         left = right_x - width
         y = 0

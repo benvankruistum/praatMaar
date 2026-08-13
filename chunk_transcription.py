@@ -92,16 +92,11 @@ def decide_chunk_cut(
     if mode_n == "fixed":
         return "fixed" if at_cap else None
 
-    if mode_n == "vad":
-        if silence_hit:
-            return "vad"
-        if at_cap:
-            return "fixed"
-        return None
-
-    # hybrid
-    if silence_hit:
-        return "vad"
+    # Hard cap before stilte: anders blijft VAD "vad" teruggeven terwijl de open
+    # chunk (bijna) alleen stilte is, `_try_commit_chunk` early-returnt, en de
+    # cursor nooit opschuift — live-plak/LED's lijken dan "gestopt".
     if at_cap:
         return "fixed"
+    if silence_hit:
+        return "vad"
     return None

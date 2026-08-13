@@ -27,6 +27,7 @@ class DeliveryMixin:
         return bool(self.incremental_transcription and self.incremental_live_paste)
 
     def _reset_live_paste_state(self) -> None:
+        self._live_paste_generation += 1
         self._live_pasted_text = ""
 
     def _unpasted_suffix(self, transcript: str) -> str:
@@ -45,14 +46,23 @@ class DeliveryMixin:
             return full[len(prefix) :].strip()
         return ""
 
-    def _paste_delta(self, text: str) -> None:
-        """Plakt één chunk-/staart-delta via klembord + host.paste() (geserialiseerd)."""
+    def _paste_delta(self, text: str, *, generation: int | None = None) -> None:
+        """Plakt één chunk-/staart-delta via klembord + host.paste() (geserialiseerd).
+
+        `generation` moet de `_live_paste_generation` van vóór de paste-poging zijn.
+        Na cancel/too-short/start-reset wijkt die af → geen clipboard/paste/boekhouding.
+        """
 
         delta = (text or "").strip()
         if not delta:
             return
 
+        expected = self._live_paste_generation if generation is None else int(generation)
+
         with self._live_paste_lock:
+            if expected != self._live_paste_generation:
+                return
+
             if self._copy_text is not None:
                 try:
                     self._copy_text(delta)
@@ -61,11 +71,20 @@ class DeliveryMixin:
 
             self.wait_until_modifiers_clear()
             time.sleep(self.paste_delay_seconds)
+
+            # Cancel/too-short mogen generation bumpen zonder deze lock te nemen,
+            # zodat we na delay nog kunnen afbreken vóór host.paste().
+            if expected != self._live_paste_generation:
+                return
+
             try:
                 self.host.paste()
             except Exception as exc:
                 print(i18n.t("rec.paste_failed"))
                 print(i18n.t("rec.error", error=exc))
+                return
+
+            if expected != self._live_paste_generation:
                 return
 
             if self._live_pasted_text:
