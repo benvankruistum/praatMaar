@@ -598,6 +598,13 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
     join_entered = threading.Event()
     release_join = threading.Event()
 
+    class StubModel:
+        def transcribe(self, path: str, **_kwargs: Any) -> tuple[list[Any], Any]:
+            segment = MagicMock()
+            segment.text = "x"
+            segment.end = 0.1
+            return [segment], MagicMock()
+
     sess = Opnamesessie(
         host=host,
         sample_rate=16000,
@@ -623,9 +630,7 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         save_transcript=recovery.save_transcript,
     )
     sess.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=_write_wav)
-    sess.model = MagicMock(
-        transcribe=MagicMock(return_value=([MagicMock(text="x", end=0.1)], MagicMock()))
-    )
+    sess.model = StubModel()
 
     real_stop_worker = sess._stop_incremental_worker
 
