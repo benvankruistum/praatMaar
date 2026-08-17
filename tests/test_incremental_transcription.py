@@ -349,6 +349,34 @@ def test_chunk_whisper_loop_stays_alive_until_sentinel(
     session.cancel()
 
 
+def test_orphaned_chunk_whisper_exits_when_worker_replaced(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    """wait=False restart mag geen zombie-worker achterlaten die sentinels steelt."""
+
+    model = SequenceModel(["x"])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+    )
+    session.start()
+    _wait_until(
+        lambda: (
+            session._chunk_whisper_thread is not None and session._chunk_whisper_thread.is_alive()
+        ),
+        timeout=2.0,
+    )
+    orphan = session._chunk_whisper_thread
+    session._stop_incremental_worker(wait=False)
+    _wait_until(lambda: not orphan.is_alive(), timeout=2.0)
+    session.cancel()
+
+
 def test_each_chunk_whispers_bounded_window_not_full_buffer(
     tmp_path: Path,
     events: list[CycleEvent],

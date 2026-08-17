@@ -638,7 +638,7 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         if wait:
             join_entered.set()
             assert release_join.wait(timeout=5.0)
-        real_stop_worker(wait=False)
+        real_stop_worker(wait=wait)
 
     sess._stop_incremental_worker = _blocking_stop_worker  # type: ignore[method-assign]
 

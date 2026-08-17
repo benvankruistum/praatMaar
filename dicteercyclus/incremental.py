@@ -233,17 +233,28 @@ class IncrementalMixin:
     def _chunk_whisper_loop(self) -> None:
         """Verwerkt knip-jobs in volgorde: Whisper → partial → live-plak.
 
-        Stop alleen op de ``None``-sentinel — niet op een lege queue terwijl
-        ``stop`` al gezet is. Anders kan decide ná ``stop.set()`` (vóór de
-        sentinel) nog een job enqueue’en die vervolgens bij drain verloren
-        gaat; finalize ziet dan lege ``_chunk_transcripts`` en Whisper’t de
-        hele buffer opnieuw.
+        Stop normaal alleen op de ``None``-sentinel — niet op een lege queue
+        terwijl ``stop`` al gezet is. Anders kan decide ná ``stop.set()``
+        (vóór de sentinel) nog een job enqueue’en die bij drain verloren gaat;
+        finalize ziet dan lege ``_chunk_transcripts`` en Whisper’t de hele
+        buffer opnieuw.
+
+        Uitzondering: een *vervangen* worker (``wait=False`` restart) moet wél
+        op Empty+stop stoppen, anders blijft die daemon de volgende sentinel
+        stelen en hangt de nieuwe join.
         """
 
+        stop = self._incremental_stop
         while True:
             try:
                 job = self._chunk_jobs.get(timeout=0.25)
             except queue.Empty:
+                if (
+                    stop is not None
+                    and stop.is_set()
+                    and self._chunk_whisper_thread is not threading.current_thread()
+                ):
+                    return
                 continue
             if job is None:
                 return
