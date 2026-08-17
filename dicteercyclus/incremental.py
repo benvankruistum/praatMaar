@@ -25,7 +25,7 @@ _CHUNK_POLL_SECONDS = 0.25
 
 @dataclass(frozen=True)
 class _ChunkWhisperJob:
-    """Audio-knip klaar voor Whisper; knip/LED gebeuren vóór deze job."""
+    """Audio-knip klaar voor Whisper; knip/LED gebeuren v????r deze job."""
 
     session_id: str
     audio_1d: Any
@@ -78,7 +78,7 @@ class IncrementalMixin:
             set_chunk_leds_enabled(False)
             return
 
-        # Oude worker alleen seinen, niet joinen — anders blokkeert start de UI.
+        # Oude worker alleen seinen, niet joinen ??? anders blokkeert start de UI.
         self._stop_incremental_worker(wait=False)
         while True:
             try:
@@ -204,7 +204,7 @@ class IncrementalMixin:
         if cut_end <= through:
             return
 
-        # LED meteen bij knipbesluit — niet pas ná trage Whisper.
+        # LED meteen bij knipbesluit ??? niet pas n?? trage Whisper.
         signal_chunk_trigger(reason)
 
         overlap = int(self.sample_rate * OVERLAP_SECONDS)
@@ -216,7 +216,7 @@ class IncrementalMixin:
         with self._lock:
             if self._session_id != session_id or not self._recording:
                 return
-            # Cursor opschuiven vóór Whisper, zodat de decide-loop doorgaat terwijl
+            # Cursor opschuiven v????r Whisper, zodat de decide-loop doorgaat terwijl
             # medium-model inferentie seconden/tientallen seconden kost.
             self._transcribed_through_samples = cut_end
 
