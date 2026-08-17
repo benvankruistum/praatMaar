@@ -588,15 +588,13 @@ def test_successful_cycle_emits_module_events(session: Opnamesessie, sd: FakeSou
 def test_stop_notifies_ui_before_incremental_worker_joins(
     host: FakeHost, sd: FakeSoundDevice, tmp_path: Path, monkeypatch
 ) -> None:
-    """Stop mag de pill niet laten wachten op de incremental-worker-join."""
+    """Stop zet TRANSCRIBING vóór de incremental-worker-join (synchroon, geen race)."""
 
     import recovery
 
     monkeypatch.setattr(recovery, "config_dir", lambda: tmp_path)
 
-    states: list[RecordingState] = []
-    join_entered = threading.Event()
-    release_join = threading.Event()
+    order: list[str] = []
 
     sess = Opnamesessie(
         host=host,
@@ -609,41 +607,27 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         delete_temp_audio=True,
         mode="toggle",
         warm_microphone=False,
-        # Geen echte chunk-workers: deze test meet alleen notify-vóór-join.
         incremental_transcription=False,
         wait_until_modifiers_clear=lambda: None,
         on_ready=lambda: None,
-        notify=lambda state, mode="toggle", **_kwargs: states.append(state),
+        notify=lambda state, mode="toggle", **_kwargs: order.append(f"notify:{state.name}"),
         push_level=lambda _level: None,
         reset_levels=lambda: None,
         copy_text=lambda _text: None,
         save_transcript=recovery.save_transcript,
     )
     sess.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=_write_wav)
+    sess.model = FakeModel("x")
 
-    class _Seg:
-        text = "x"
-        end = 0.1
-
-    class StubModel:
-        def transcribe(self, path: str, **_kwargs: Any) -> tuple[list[Any], Any]:
-            return [_Seg()], object()
-
-    sess.model = StubModel()
-
-    def _blocking_stop_worker(*, wait: bool = True) -> None:
-        if wait:
-            join_entered.set()
-            assert release_join.wait(timeout=5.0)
-
-    sess._stop_incremental_worker = _blocking_stop_worker  # type: ignore[method-assign]
+    def _track_stop_worker(*, wait: bool = True) -> None:
+        order.append(f"stop_worker:wait={wait}")
 
     def _finish_cycle(*_args: Any, **_kwargs: Any) -> None:
         with sess._lock:
             sess._processing = False
-        sess._notify(RecordingState.IDLE)
         sess.on_ready()
 
+    sess._stop_incremental_worker = _track_stop_worker  # type: ignore[method-assign]
     sess._transcribe_audio = _finish_cycle  # type: ignore[method-assign]
     sess._finalize_chunk_transcript = _finish_cycle  # type: ignore[method-assign]
 
@@ -651,33 +635,13 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
     assert sd.last_callback is not None
     sd.last_callback(np.zeros((3200, 1), dtype=np.float32), 3200, None, None)
     time.sleep(0.08)
-
-    stop_done = threading.Event()
     cycle_done = _install_cycle_done(sess)
+    sess.stop_and_transcribe()
+    assert cycle_done.wait(timeout=5.0)
 
-    def _stop() -> None:
-        sess.stop_and_transcribe()
-        stop_done.set()
-
-    stop_thread = threading.Thread(target=_stop, daemon=True)
-    stop_thread.start()
-    assert join_entered.wait(timeout=2.0), "stop zou de worker-join moeten bereiken"
-
-    deadline = time.monotonic() + 1.0
-    while time.monotonic() < deadline:
-        if RecordingState.TRANSCRIBING in states:
-            break
-        time.sleep(0.01)
-
-    assert RecordingState.TRANSCRIBING in states, (
-        "UI moet meteen Transcriberen tonen, niet pas na einde van de worker-join"
-    )
-    assert not stop_done.is_set(), "stop mag nog in de join zitten, maar UI is al bijgewerkt"
-
-    release_join.set()
-    assert stop_done.wait(timeout=5.0)
-    assert cycle_done.wait(timeout=5.0), "finale cyclus niet afgerond"
-    stop_thread.join(timeout=2.0)
+    assert "notify:TRANSCRIBING" in order
+    assert "stop_worker:wait=True" in order
+    assert order.index("notify:TRANSCRIBING") < order.index("stop_worker:wait=True")
     sess.stop_audio_stream()
 
 
