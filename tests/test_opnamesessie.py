@@ -588,24 +588,15 @@ def test_successful_cycle_emits_module_events(session: Opnamesessie, sd: FakeSou
 def test_stop_notifies_ui_before_incremental_worker_joins(
     host: FakeHost, sd: FakeSoundDevice, tmp_path: Path, monkeypatch
 ) -> None:
-    """Stop mag de pill niet laten wachten op een in-flight partial-Whisper."""
+    """Stop mag de pill niet laten wachten op de incremental-worker-join."""
 
     import recovery
 
     monkeypatch.setattr(recovery, "config_dir", lambda: tmp_path)
 
     states: list[RecordingState] = []
-    entered = threading.Event()
-    release = threading.Event()
-
-    class BlockingModel:
-        def transcribe(self, path: str, **_kwargs: Any) -> tuple[list[Any], Any]:
-            entered.set()
-            assert release.wait(timeout=5.0)
-            segment = MagicMock()
-            segment.text = "partial"
-            segment.end = 0.2
-            return [segment], MagicMock()
+    join_entered = threading.Event()
+    release_join = threading.Event()
 
     sess = Opnamesessie(
         host=host,
@@ -632,25 +623,23 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         save_transcript=recovery.save_transcript,
     )
     sess.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=_write_wav)
-    sess.model = BlockingModel()
+    sess.model = MagicMock(
+        transcribe=MagicMock(return_value=([MagicMock(text="x", end=0.1)], MagicMock()))
+    )
+
+    real_stop_worker = sess._stop_incremental_worker
+
+    def _blocking_stop_worker(*, wait: bool = True) -> None:
+        if wait:
+            join_entered.set()
+            assert release_join.wait(timeout=5.0)
+        real_stop_worker(wait=False)
+
+    sess._stop_incremental_worker = _blocking_stop_worker  # type: ignore[method-assign]
 
     sess.start()
     assert sd.last_callback is not None
     sd.last_callback(np.zeros((3200, 1), dtype=np.float32), 3200, None, None)
-    assert entered.wait(timeout=2.0)
-    # Geen extra knippen / queued jobs achter de in-flight Whisper: deze test
-    # meet alleen UI-vóór-join. Voorheen vielen queued jobs weg door een
-    # Empty+stop early-return; met de fix zouden die de join onnodig rekken.
-    import queue as queue_mod
-
-    sess._incremental_chunk_seconds = 3600.0
-    time.sleep(0.05)
-    while True:
-        try:
-            sess._chunk_jobs.get_nowait()
-        except queue_mod.Empty:
-            break
-    # Voorbij minimum_recording_seconds zodat stop niet als "te kort" eindigt.
     time.sleep(0.08)
 
     stop_done = threading.Event()
@@ -661,6 +650,7 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         stop_done.set()
 
     threading.Thread(target=_stop, daemon=True).start()
+    assert join_entered.wait(timeout=2.0), "stop zou de worker-join moeten bereiken"
 
     deadline = time.monotonic() + 1.0
     while time.monotonic() < deadline:
@@ -669,15 +659,12 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         time.sleep(0.01)
 
     assert RecordingState.TRANSCRIBING in states, (
-        "UI moet meteen Transcriberen tonen, niet pas na einde van de partial-Whisper"
+        "UI moet meteen Transcriberen tonen, niet pas na einde van de worker-join"
     )
-    assert not stop_done.is_set(), "stop mag nog joinen op de worker, maar UI is al bijgewerkt"
+    assert not stop_done.is_set(), "stop mag nog in de join zitten, maar UI is al bijgewerkt"
 
-    release.set()
+    release_join.set()
     assert stop_done.wait(timeout=5.0)
-    # Wacht op het échte cycluseinde: anders overleeft de finale transcribe-
-    # daemon de test en schrijft die ná teardown (buiten de monkeypatch om)
-    # transcripts weg — voorheen letterlijk in %APPDATA% van de gebruiker.
     assert cycle_done.wait(timeout=10), "finale transcribe-worker niet afgerond"
 
 
