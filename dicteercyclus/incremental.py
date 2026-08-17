@@ -47,8 +47,8 @@ class IncrementalMixin:
             and decision.is_alive()
             and decision is not threading.current_thread()
         ):
-            # recording=False (vóór deze join) laat decide binnen één poll
-            # stoppen; 5s was te ruim en liet CI-tests op stop_join wachten.
+            # recording=False (before this join) ends decide within one poll;
+            # 5s was too long and inflated stop_join under CI load.
             decision.join(timeout=1.0)
         # Sentinel zodat de Whisper-worker leegloopt i.p.v. forever te blocken.
         try:
