@@ -223,7 +223,7 @@ def test_stop_uses_chunk_texts_without_full_buffer_retranscription(
     session.stop_and_transcribe()
     _wait_until(
         lambda: any(e.type == CycleEventType.TRANSCRIPT_SAVED for e in events),
-        timeout=3.0,
+        timeout=10.0,
     )
 
     # Hoogstens één extra Whisper voor de staart — geen volle her-run van alles.

@@ -47,7 +47,9 @@ class IncrementalMixin:
             and decision.is_alive()
             and decision is not threading.current_thread()
         ):
-            decision.join(timeout=5.0)
+            # recording=False (vóór deze join) laat decide binnen één poll
+            # stoppen; 5s was te ruim en liet CI-tests op stop_join wachten.
+            decision.join(timeout=1.0)
         # Sentinel zodat de Whisper-worker leegloopt i.p.v. forever te blocken.
         try:
             self._chunk_jobs.put_nowait(None)
