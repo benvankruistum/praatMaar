@@ -25,7 +25,7 @@ _CHUNK_POLL_SECONDS = 0.25
 
 @dataclass(frozen=True)
 class _ChunkWhisperJob:
-    """Audio-knip klaar voor Whisper; knip/LED gebeuren v????r deze job."""
+    """Audio-knip klaar voor Whisper; knip/LED gebeuren vóór deze job."""
 
     session_id: str
     audio_1d: Any
@@ -78,7 +78,7 @@ class IncrementalMixin:
             set_chunk_leds_enabled(False)
             return
 
-        # Oude worker alleen seinen, niet joinen ??? anders blokkeert start de UI.
+        # Oude worker alleen seinen, niet joinen — anders blokkeert start de UI.
         self._stop_incremental_worker(wait=False)
         while True:
             try:
@@ -204,7 +204,7 @@ class IncrementalMixin:
         if cut_end <= through:
             return
 
-        # LED meteen bij knipbesluit ??? niet pas n?? trage Whisper.
+        # LED meteen bij knipbesluit — niet pas ná trage Whisper.
         signal_chunk_trigger(reason)
 
         overlap = int(self.sample_rate * OVERLAP_SECONDS)
@@ -216,7 +216,7 @@ class IncrementalMixin:
         with self._lock:
             if self._session_id != session_id or not self._recording:
                 return
-            # Cursor opschuiven v????r Whisper, zodat de decide-loop doorgaat terwijl
+            # Cursor opschuiven vóór Whisper, zodat de decide-loop doorgaat terwijl
             # medium-model inferentie seconden/tientallen seconden kost.
             self._transcribed_through_samples = cut_end
 
@@ -233,28 +233,17 @@ class IncrementalMixin:
     def _chunk_whisper_loop(self) -> None:
         """Verwerkt knip-jobs in volgorde: Whisper → partial → live-plak.
 
-        Stop normaal alleen op de ``None``-sentinel — niet op een lege queue
-        terwijl ``stop`` al gezet is. Anders kan decide ná ``stop.set()``
-        (vóór de sentinel) nog een job enqueue’en die bij drain verloren gaat;
-        finalize ziet dan lege ``_chunk_transcripts`` en Whisper’t de hele
-        buffer opnieuw.
-
-        Uitzondering: een *vervangen* worker (``wait=False`` restart) moet wél
-        op Empty+stop stoppen, anders blijft die daemon de volgende sentinel
-        stelen en hangt de nieuwe join.
+        Stop alleen op de ``None``-sentinel — niet op een lege queue terwijl
+        ``stop`` al gezet is. Anders kan decide ná ``stop.set()`` (vóór de
+        sentinel) nog een job enqueue’en die vervolgens bij drain verloren
+        gaat; finalize ziet dan lege ``_chunk_transcripts`` en Whisper’t de
+        hele buffer opnieuw.
         """
 
-        stop = self._incremental_stop
         while True:
             try:
                 job = self._chunk_jobs.get(timeout=0.25)
             except queue.Empty:
-                if (
-                    stop is not None
-                    and stop.is_set()
-                    and self._chunk_whisper_thread is not threading.current_thread()
-                ):
-                    return
                 continue
             if job is None:
                 return
