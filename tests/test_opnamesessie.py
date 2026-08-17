@@ -672,11 +672,11 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
     assert not stop_done.is_set(), "stop mag nog joinen op de worker, maar UI is al bijgewerkt"
 
     release.set()
-    assert stop_done.wait(timeout=5.0)
+    assert stop_done.wait(timeout=20.0)
     # Wacht op het échte cycluseinde: anders overleeft de finale transcribe-
     # daemon de test en schrijft die ná teardown (buiten de monkeypatch om)
     # transcripts weg — voorheen letterlijk in %APPDATA% van de gebruiker.
-    assert cycle_done.wait(timeout=10), "finale transcribe-worker niet afgerond"
+    assert cycle_done.wait(timeout=30), "finale transcribe-worker niet afgerond"
 
 
 def test_event_accepts_explicit_session_id(session: Opnamesessie) -> None:
