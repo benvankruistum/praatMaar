@@ -311,7 +311,9 @@ def test_stop_notifies_transcribing_before_worker_join_seam(
         min_seconds=0.01,
     )
     session.minimum_recording_seconds = 0.01
-    session.notify = lambda state, mode="toggle", **_k: order.append(f"notify:{state.name}")
+
+    def _track_notify(state: Any, mode: str = "toggle", **_k: Any) -> None:
+        order.append(f"notify:{getattr(state, 'name', state)}")
 
     def _track_stop(*, wait: bool = True) -> None:
         order.append(f"stop:wait={wait}")
@@ -321,6 +323,7 @@ def test_stop_notifies_transcribing_before_worker_join_seam(
             session._processing = False
         session.on_ready()
 
+    session._notify = _track_notify  # type: ignore[method-assign]
     session._stop_incremental_worker = _track_stop  # type: ignore[method-assign]
     session._transcribe_audio = _finish  # type: ignore[method-assign]
 
