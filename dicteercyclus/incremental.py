@@ -54,14 +54,14 @@ class IncrementalMixin:
         except Exception:
             pass
         if (
-            wait
-            and whisper_thread is not None
+            whisper_thread is not None
             and whisper_thread.is_alive()
             and whisper_thread is not threading.current_thread()
         ):
-            # Medium-model chunks kunnen tientallen seconden duren; 5s was te kort
-            # waardoor finalize een enorme staart opnieuw ging Whisperen.
-            whisper_thread.join(timeout=180.0)
+            # wait=True: medium-model chunks kunnen lang duren.
+            # wait=False (restart): korte join zodat we geen zombie achterlaten
+            # die later de volgende sentinel steelt.
+            whisper_thread.join(timeout=180.0 if wait else 0.5)
         self._incremental_thread = None
         self._chunk_whisper_thread = None
         self._incremental_stop = None

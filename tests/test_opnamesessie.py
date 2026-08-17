@@ -621,12 +621,13 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
     )
     sess.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=_write_wav)
 
+    class _Seg:
+        text = "x"
+        end = 0.1
+
     class StubModel:
         def transcribe(self, path: str, **_kwargs: Any) -> tuple[list[Any], Any]:
-            segment = MagicMock()
-            segment.text = "x"
-            segment.end = 0.1
-            return [segment], MagicMock()
+            return [_Seg()], object()
 
     sess.model = StubModel()
 
@@ -658,7 +659,8 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         sess.stop_and_transcribe()
         stop_done.set()
 
-    threading.Thread(target=_stop, daemon=True).start()
+    stop_thread = threading.Thread(target=_stop, daemon=True)
+    stop_thread.start()
     assert join_entered.wait(timeout=2.0), "stop zou de worker-join moeten bereiken"
 
     deadline = time.monotonic() + 1.0
@@ -675,6 +677,8 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
     release_join.set()
     assert stop_done.wait(timeout=5.0)
     assert cycle_done.wait(timeout=5.0), "finale cyclus niet afgerond"
+    stop_thread.join(timeout=2.0)
+    sess.stop_audio_stream()
 
 
 def test_event_accepts_explicit_session_id(session: Opnamesessie) -> None:
