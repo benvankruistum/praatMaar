@@ -638,6 +638,18 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
     assert sd.last_callback is not None
     sd.last_callback(np.zeros((3200, 1), dtype=np.float32), 3200, None, None)
     assert entered.wait(timeout=2.0)
+    # Geen extra knippen / queued jobs achter de in-flight Whisper: deze test
+    # meet alleen UI-vóór-join. Voorheen vielen queued jobs weg door een
+    # Empty+stop early-return; met de fix zouden die de join onnodig rekken.
+    import queue as queue_mod
+
+    sess._incremental_chunk_seconds = 3600.0
+    time.sleep(0.05)
+    while True:
+        try:
+            sess._chunk_jobs.get_nowait()
+        except queue_mod.Empty:
+            break
     # Voorbij minimum_recording_seconds zodat stop niet als "te kort" eindigt.
     time.sleep(0.08)
 
@@ -662,7 +674,7 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
     assert not stop_done.is_set(), "stop mag nog joinen op de worker, maar UI is al bijgewerkt"
 
     release.set()
-    assert stop_done.wait(timeout=2.0)
+    assert stop_done.wait(timeout=5.0)
     # Wacht op het échte cycluseinde: anders overleeft de finale transcribe-
     # daemon de test en schrijft die ná teardown (buiten de monkeypatch om)
     # transcripts weg — voorheen letterlijk in %APPDATA% van de gebruiker.
