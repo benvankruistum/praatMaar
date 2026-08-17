@@ -598,13 +598,6 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
     join_entered = threading.Event()
     release_join = threading.Event()
 
-    class StubModel:
-        def transcribe(self, path: str, **_kwargs: Any) -> tuple[list[Any], Any]:
-            segment = MagicMock()
-            segment.text = "x"
-            segment.end = 0.1
-            return [segment], MagicMock()
-
     sess = Opnamesessie(
         host=host,
         sample_rate=16000,
@@ -616,11 +609,8 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         delete_temp_audio=True,
         mode="toggle",
         warm_microphone=False,
-        incremental_transcription=True,
-        incremental_interval_seconds=0.05,
-        incremental_min_seconds=0.01,
-        incremental_chunk_mode="fixed",
-        incremental_chunk_seconds=0.05,
+        # Geen echte chunk-workers: deze test meet alleen notify-vóór-join.
+        incremental_transcription=False,
         wait_until_modifiers_clear=lambda: None,
         on_ready=lambda: None,
         notify=lambda state, mode="toggle", **_kwargs: states.append(state),
@@ -630,17 +620,31 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
         save_transcript=recovery.save_transcript,
     )
     sess.bind_audio(numpy_mod=np, sounddevice_mod=sd, write_wav=_write_wav)
-    sess.model = StubModel()
 
-    real_stop_worker = sess._stop_incremental_worker
+    class StubModel:
+        def transcribe(self, path: str, **_kwargs: Any) -> tuple[list[Any], Any]:
+            segment = MagicMock()
+            segment.text = "x"
+            segment.end = 0.1
+            return [segment], MagicMock()
+
+    sess.model = StubModel()
 
     def _blocking_stop_worker(*, wait: bool = True) -> None:
         if wait:
             join_entered.set()
             assert release_join.wait(timeout=5.0)
-        real_stop_worker(wait=wait)
 
     sess._stop_incremental_worker = _blocking_stop_worker  # type: ignore[method-assign]
+
+    def _finish_cycle(*_args: Any, **_kwargs: Any) -> None:
+        with sess._lock:
+            sess._processing = False
+        sess._notify(RecordingState.IDLE)
+        sess.on_ready()
+
+    sess._transcribe_audio = _finish_cycle  # type: ignore[method-assign]
+    sess._finalize_chunk_transcript = _finish_cycle  # type: ignore[method-assign]
 
     sess.start()
     assert sd.last_callback is not None
@@ -670,7 +674,7 @@ def test_stop_notifies_ui_before_incremental_worker_joins(
 
     release_join.set()
     assert stop_done.wait(timeout=5.0)
-    assert cycle_done.wait(timeout=10), "finale transcribe-worker niet afgerond"
+    assert cycle_done.wait(timeout=5.0), "finale cyclus niet afgerond"
 
 
 def test_event_accepts_explicit_session_id(session: Opnamesessie) -> None:
