@@ -293,6 +293,62 @@ def test_incremental_off_always_runs_whisper_on_stop(
     assert saves[0].read_text(encoding="utf-8") == "uit"
 
 
+def test_chunk_whisper_loop_stays_alive_until_sentinel(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    """Stop-signaal + lege queue mag de Whisper-worker niet laten stoppen.
+
+    Jobs die de decide-loop ná ``stop.set()`` (vóór de sentinel) enqueue’t,
+    moeten nog verwerkt worden — anders is ``_chunk_transcripts`` leeg bij
+    finalize en volgt een volle-buffer hertranscriptie.
+    """
+    from dicteercyclus.incremental import _ChunkWhisperJob
+
+    model = SequenceModel(["behouden"])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+    )
+    session.start()
+    _wait_until(
+        lambda: (
+            session._chunk_whisper_thread is not None and session._chunk_whisper_thread.is_alive()
+        ),
+        timeout=2.0,
+    )
+    whisper = session._chunk_whisper_thread
+    assert session._incremental_stop is not None
+    session._incremental_stop.set()
+    # Ruim meer dan de 50ms Empty-timeout in de stopping-tak (probe: ~200ms tot exit).
+    time.sleep(0.5)
+    assert whisper.is_alive(), "worker mag niet op Empty+stopping stoppen"
+
+    piece = np.zeros(int(session.sample_rate * 0.1), dtype=np.float32)
+    with session._lock:
+        sid = session._session_id or "test"
+        gen = session._live_paste_generation
+    session._chunk_jobs.put(
+        _ChunkWhisperJob(
+            session_id=sid,
+            audio_1d=piece,
+            previous_text="",
+            reason="fixed",
+            live_generation=gen,
+        )
+    )
+    session._chunk_jobs.put(None)
+    whisper.join(timeout=5.0)
+    assert not whisper.is_alive()
+    assert session._chunk_transcripts == ["behouden"]
+
+    session.cancel()
+
+
 def test_each_chunk_whispers_bounded_window_not_full_buffer(
     tmp_path: Path,
     events: list[CycleEvent],
