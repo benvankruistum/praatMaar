@@ -293,6 +293,49 @@ def test_incremental_off_always_runs_whisper_on_stop(
     assert saves[0].read_text(encoding="utf-8") == "uit"
 
 
+def test_stop_notifies_transcribing_before_worker_join_seam(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    """TRANSCRIBING-notify komt vóór ``_stop_incremental_worker(wait=True)``."""
+
+    order: list[str] = []
+    model = SequenceModel(["x"])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=False,
+        min_seconds=0.01,
+    )
+    session.minimum_recording_seconds = 0.01
+
+    def _track_notify(state: Any, mode: str = "toggle", **_k: Any) -> None:
+        order.append(f"notify:{getattr(state, 'name', state)}")
+
+    def _track_stop(*, wait: bool = True) -> None:
+        order.append(f"stop:wait={wait}")
+
+    def _finish(*_a: Any, **_k: Any) -> None:
+        with session._lock:
+            session._processing = False
+        session.on_ready()
+
+    session._notify = _track_notify  # type: ignore[method-assign]
+    session._stop_incremental_worker = _track_stop  # type: ignore[method-assign]
+    session._transcribe_audio = _finish  # type: ignore[method-assign]
+
+    session.start()
+    _feed_audio(session, seconds=0.1)
+    time.sleep(0.05)
+    session.stop_and_transcribe()
+    assert "notify:TRANSCRIBING" in order
+    assert "stop:wait=True" in order
+    assert order.index("notify:TRANSCRIBING") < order.index("stop:wait=True")
+
+
 def test_chunk_whisper_loop_stays_alive_until_sentinel(
     tmp_path: Path,
     events: list[CycleEvent],
