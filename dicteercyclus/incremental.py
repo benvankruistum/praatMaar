@@ -50,6 +50,11 @@ class IncrementalMixin:
             # recording=False (before this join) ends decide within one poll;
             # 5s was too long and inflated stop_join under CI load.
             decision.join(timeout=1.0)
+        if not wait:
+            # Mark this worker replaced before the sentinel so an idle orphan
+            # can Empty+stop-exit even if start() drains the sentinel next.
+            self._incremental_thread = None
+            self._chunk_whisper_thread = None
         # Sentinel zodat de Whisper-worker leegloopt i.p.v. forever te blocken.
         try:
             self._chunk_jobs.put_nowait(None)
@@ -233,19 +238,30 @@ class IncrementalMixin:
         )
 
     def _chunk_whisper_loop(self) -> None:
-        """Verwerkt knip-jobs in volgorde: Whisper → partial → live-plak.
+        """Verwerkt knip-jobs in volgorde: Whisper -> partial -> live-plak.
 
-        Stop alleen op de ``None``-sentinel — niet op een lege queue terwijl
-        ``stop`` al gezet is. Anders kan decide ná ``stop.set()`` (vóór de
-        sentinel) nog een job enqueue’en die vervolgens bij drain verloren
-        gaat; finalize ziet dan lege ``_chunk_transcripts`` en Whisper’t de
-        hele buffer opnieuw.
+        Stop normally only on the ``None`` sentinel — not on an empty queue
+        while ``stop`` is already set. Otherwise decide may enqueue a job
+        after ``stop.set()`` (before the sentinel) that is then drained and
+        lost; finalize sees empty ``_chunk_transcripts`` and re-Whispers the
+        full buffer.
+
+        Exception: a *replaced* worker (``wait=False`` restart) must still
+        exit on Empty+stop, or that daemon steals the next stop sentinel and
+        the new join hangs.
         """
 
+        stop = self._incremental_stop
         while True:
             try:
                 job = self._chunk_jobs.get(timeout=0.25)
             except queue.Empty:
+                if (
+                    stop is not None
+                    and stop.is_set()
+                    and self._chunk_whisper_thread is not threading.current_thread()
+                ):
+                    return
                 continue
             if job is None:
                 return
