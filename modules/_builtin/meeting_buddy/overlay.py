@@ -711,12 +711,24 @@ class MeetingBuddyOverlay:
         self.window.show()
 
     def close(self) -> None:
+        # Stop + disconnect before deleteLater so a 50ms levels tick cannot
+        # fire into a half-destroyed C++ tree (Windows CI access violation
+        # during GC when tests construct the next overlay).
         self._timer.stop()
         self._levels_timer.stop()
+        try:
+            self._timer.timeout.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        try:
+            self._levels_timer.timeout.disconnect()
+        except (RuntimeError, TypeError):
+            pass
         if self._mini is not None:
             self._mini.close()
             self._mini.deleteLater()
-        self.window.close()
+            self._mini = None
+        self.window.hide()
         self.window.deleteLater()
 
     @staticmethod
