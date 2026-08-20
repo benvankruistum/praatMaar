@@ -3,6 +3,20 @@ from modules._builtin.meeting_buddy.overlay import format_elapsed, pick_emphasis
 from modules._builtin.meeting_buddy.state import Hint, HintStatus
 
 
+def _dispose_overlay(app: object, overlay: object) -> None:
+    """Close the HUD and flush Qt DeferredDelete before the next test.
+
+    Windows CI has seen access violations during GC when a previous overlay
+    (live QTimers / deleteLater'd widgets) overlapped the next __init__.
+    """
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    overlay.close()  # type: ignore[attr-defined]
+    app.processEvents()  # type: ignore[attr-defined]
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    app.processEvents()  # type: ignore[attr-defined]
+
+
 def test_summary_points_splits_lines_and_strips_bullets() -> None:
     assert summary_points("- one\n* two\n3. three") == ["one", "two", "three"]
 
@@ -54,15 +68,18 @@ def test_overlay_rerender_does_not_accumulate_rows() -> None:
         on_confirm=lambda _i: None,
         on_reconnect=lambda: None,
     )
-    for _ in range(3):
-        overlay.update(state, capture_status="active", transcription_status="active")
-    # The running event loop frees deleteLater()'d widgets continuously; flush
-    # the DeferredDelete queue here so the test observes the same result.
-    from PySide6.QtCore import QCoreApplication, QEvent
+    try:
+        for _ in range(3):
+            overlay.update(state, capture_status="active", transcription_status="active")
+        # The running event loop frees deleteLater()'d widgets continuously; flush
+        # the DeferredDelete queue here so the test observes the same result.
+        from PySide6.QtCore import QCoreApplication, QEvent
 
-    app.processEvents()
-    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    assert len(overlay._topics.findChildren(_StatusDot)) == len(topics)
+        app.processEvents()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert len(overlay._topics.findChildren(_StatusDot)) == len(topics)
+    finally:
+        _dispose_overlay(app, overlay)
 
 
 def _hint(hint_id: str, priority: int, *, status: HintStatus = HintStatus.ACTIVE) -> Hint:
@@ -108,7 +125,7 @@ def test_overlay_is_a_non_activating_qt_hud() -> None:
     from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
     from ui.app import ensure_app
 
-    ensure_app([])
+    app = ensure_app([])
     overlay = MeetingBuddyOverlay(
         elapsed_seconds=lambda: 0,
         on_dismiss=lambda _hint_id: None,
@@ -121,7 +138,7 @@ def test_overlay_is_a_non_activating_qt_hud() -> None:
         assert flags & Qt.WindowType.WindowStaysOnTopHint
         assert flags & Qt.WindowType.WindowDoesNotAcceptFocus
     finally:
-        overlay.close()
+        _dispose_overlay(app, overlay)
 
 
 def _drag_mouse(widget: object, local: object, delta: object) -> None:
@@ -175,7 +192,7 @@ def test_overlay_shows_source_levels_when_capture_active() -> None:
         assert host.isVisible()
         assert not host._warn.isVisible()
     finally:
-        overlay.close()
+        _dispose_overlay(app, overlay)
 
 
 def test_overlay_meeting_levels_warn_when_loopback_unavailable() -> None:
@@ -207,7 +224,7 @@ def test_overlay_meeting_levels_warn_when_loopback_unavailable() -> None:
         assert host._warn.isVisible()
         assert "niet beschikbaar" in host._warn.text().lower()
     finally:
-        overlay.close()
+        _dispose_overlay(app, overlay)
 
 
 def test_overlay_header_drag_moves_window() -> None:
@@ -240,7 +257,7 @@ def test_overlay_header_drag_moves_window() -> None:
         app.processEvents()
         assert overlay.window.pos() == start + delta
     finally:
-        overlay.close()
+        _dispose_overlay(app, overlay)
 
 
 def test_overlay_minimize_button_does_not_start_drag() -> None:
@@ -292,7 +309,7 @@ def test_overlay_minimize_button_does_not_start_drag() -> None:
         app.processEvents()
         assert overlay.window.pos() == start
     finally:
-        overlay.close()
+        _dispose_overlay(app, overlay)
 
 
 def test_mini_pill_drag_moves_window() -> None:
@@ -326,7 +343,7 @@ def test_mini_pill_drag_moves_window() -> None:
         app.processEvents()
         assert mini.pos() == start + delta
     finally:
-        overlay.close()
+        _dispose_overlay(app, overlay)
 
 
 def test_listening_text_when_capture_active() -> None:
