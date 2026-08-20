@@ -83,6 +83,29 @@ transcripttekst” is **verouderd**; behandel nog wel `transcripts/`, `inbox/`,
 `recovery/` en meetingjournals als gevoelige data. Zie CHANGELOG 0.3.0 en
 [v1.0-scope](../superpowers/specs/2026-08-01-v1-support-scope-product.md).
 
+## Aanvulling (2026-08-18) — `source: "file"` en journal zonder bronpad
+
+Bestandstranscriptie (module `file-transcription`) is een **derde emitter** van
+het bestaande `CycleEvent`-contract, geen tweede bus en geen nieuwe ADR.
+
+- **`source`:** `"live"` \| `"recovery"` \| `"file"`. `schema_version` blijft `1`.
+- **Emitters:** `Opnamesessie` (live), herstel-pad (`source: "recovery"`),
+  file-job worker via geïnjecteerde `emit` (`source: "file"`). `Opnamesessie`
+  komt **niet** op `ModuleContext`.
+- **`session_id`:** één UUID per file-job (niet per batch).
+- **Velden:** `path` blijft het opgeslagen `.txt` (op `transcript.saved`).
+  `recovery_path` blijft herstel-audio. File-jobs gebruiken optioneel
+  in-memory `audio_path` (bron-WAV) voor UI/modules; ze zetten **geen**
+  `recovery_path`. Geen nieuw `CycleEventType`.
+- **Journal:** naast het strippen van `transcript` → `transcript_chars` stript
+  `EventJournal` ook `audio_path`. Bronpad en bronnaam van user-files horen
+  **niet** in `events.jsonl` (append-only, geen retentie). `error` in het
+  journal is generiek/i18n, geen exception-tekst met paden.
+- **Lock:** file-jobs gebruiken `try_locked_model`, nooit `dictation_priority`.
+
+Feature-spec:
+[2026-08-18-file-transcription-product.md](../superpowers/specs/2026-08-18-file-transcription-product.md).
+
 ## Implementatiestatus (2026-07-19)
 
 Geïmplementeerd op branch `feat/modules`; merge via PR naar `main` volgt.

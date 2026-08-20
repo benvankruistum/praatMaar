@@ -106,13 +106,26 @@ Beslissing: [ADR-0003](docs/adr/0003-hybrid-module-system.md).
 Voorbeeld: **inbox-spiegel** (`inbox-mirror`) kopieert opgeslagen transcripts
 naar `%APPDATA%\praatMaar\inbox\`.
 
+### bestandstranscriptie (module)
+
+Experimentele builtin module (`file-transcription`, default uit) die door de
+gebruiker gekozen **WAV**-bestanden sequentieel lokaal transcribeert via
+`SharedWhisper`. Eigen dialoog (geen herstel-audio, geen pill). Discrete
+`file_YYYY-MM-DD_HHMMSS.txt` in de map van de actieve bestemming; geen
+auto-plakken. `CycleEvent` met `source: "file"`. Decode buiten de model-lock;
+transcribeer in ~30 s-plakjes met `try_locked_model` zodat de dicteercyclus
+ertussen voorrang krijgt. Bron-audio blijft op de oorspronkelijke plek (niet
+naar `recovery_dir()`). Spec:
+[2026-08-18-file-transcription-product.md](docs/superpowers/specs/2026-08-18-file-transcription-product.md).
+ADR-aanvulling: [ADR-0003](docs/adr/0003-hybrid-module-system.md) (2026-08-18).
+
 ### dicteercyclus-event (`CycleEvent`)
 
 Één lifecycle-moment in of rond de dicteercyclus, met stabiele `session_id`.
 Types o.a. `cycle.started`, `transcript.partial`, `cycle.completed`,
 `transcript.saved`, `destination.command`, `cycle.idle`. Contract:
-`modules/_contract.py`. Emissie vanuit `Opnamesessie` (`emit_event`) en
-herstel-pad in `dictation.py`.
+`modules/_contract.py`. Emissie vanuit `Opnamesessie` (`emit_event`),
+herstel-pad (`source: "recovery"`) en bestandstranscriptie (`source: "file"`).
 
 ### event-journal
 
@@ -120,7 +133,8 @@ Append-only JSONL (`events/events.jsonl` onder de app-datamap) — **hybride bru
 voor externe tools. `ModuleBus` schrijft elk event altijd; in-process modules
 krijgen dezelfde payload. Schema: `schema_version` + `type` + payload-velden.
 Volledige transcripttekst wordt **niet** in het journal bewaard; wel o.a.
-`transcript_chars` (lengte). Zie ADR-0003 aanvulling 2026-08-01.
+`transcript_chars` (lengte). Bronpaden van bestandstranscriptie (`audio_path`)
+evenmin. Zie ADR-0003 aanvullingen 2026-08-01 en 2026-08-18.
 
 ### local-first inference
 
