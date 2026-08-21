@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -65,22 +67,41 @@ class FakeSoundDevice:
 class SequenceModel:
     """Whisper-stub met vaste teksten per call."""
 
-    def __init__(self, texts: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        texts: list[str] | None = None,
+        word_timings: list[list[tuple[str, float, float]]] | None = None,
+    ) -> None:
         self.texts = list(texts or ["chunk tekst"])
+        self.word_timings = word_timings
         self.calls: list[str] = []
+        self.kwargs: list[dict[str, Any]] = []
         self.lock = threading.Lock()
         self._call_index = 0
 
-    def transcribe(self, path: str, **_kwargs: Any) -> tuple[list[Any], Any]:
+    def transcribe(self, path: str, **kwargs: Any) -> tuple[list[Any], Any]:
         with self.lock:
             idx = self._call_index
             self._call_index += 1
             self.calls.append(path)
+            self.kwargs.append(dict(kwargs))
             text = self.texts[idx] if idx < len(self.texts) else self.texts[-1]
+            timings = None
+            if self.word_timings is not None:
+                timings = (
+                    self.word_timings[idx]
+                    if idx < len(self.word_timings)
+                    else self.word_timings[-1]
+                )
 
         segment = MagicMock()
         segment.text = text
         segment.end = 0.5
+        segment.words = (
+            [SimpleNamespace(word=word, start=start, end=end) for word, start, end in timings]
+            if timings
+            else None
+        )
         return [segment], MagicMock()
 
 
@@ -164,6 +185,27 @@ def _wait_until(predicate, timeout: float = 3.0) -> None:
             return
         time.sleep(0.01)
     raise AssertionError("timeout waiting for condition")
+
+
+def _chunk_job(
+    session: Opnamesessie,
+    *,
+    seconds: float = 0.1,
+    session_id: str = "test-sid",
+    commit_end_sample: int | None = None,
+) -> Any:
+    from dicteercyclus.incremental import _ChunkWhisperJob
+
+    piece = np.zeros(int(session.sample_rate * seconds), dtype=np.float32)
+    end = int(piece.shape[0]) if commit_end_sample is None else commit_end_sample
+    return _ChunkWhisperJob(
+        session_id=session_id,
+        audio_1d=piece,
+        overlap_seconds=0.0,
+        reason="fixed",
+        live_generation=0,
+        commit_end_sample=end,
+    )
 
 
 def test_incremental_emits_partial_events_without_saving(
@@ -293,6 +335,54 @@ def test_incremental_off_always_runs_whisper_on_stop(
     assert saves[0].read_text(encoding="utf-8") == "uit"
 
 
+def test_chunk_job_dedupes_against_committed_text_not_enqueue_snapshot(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    """Jobs dragen geen transcript-snapshot; merge leest committed state bij commit."""
+
+    from dicteercyclus.incremental import _ChunkWhisperJob
+
+    model = SequenceModel(
+        [
+            "teugels los.",
+            "teugels los. hield het paard",
+        ]
+    )
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+    )
+    session._session_id = "test-sid"
+    session._recording = True
+    piece = np.zeros(int(session.sample_rate * 0.1), dtype=np.float32)
+    session._process_chunk_job(
+        _ChunkWhisperJob(
+            session_id="test-sid",
+            audio_1d=piece,
+            overlap_seconds=1.5,
+            reason="fixed",
+            live_generation=0,
+            commit_end_sample=int(piece.shape[0]),
+        )
+    )
+    session._process_chunk_job(
+        _ChunkWhisperJob(
+            session_id="test-sid",
+            audio_1d=piece,
+            overlap_seconds=1.5,
+            reason="fixed",
+            live_generation=0,
+            commit_end_sample=int(piece.shape[0]),
+        )
+    )
+    assert " ".join(session._chunk_transcripts) == "teugels los. hield het paard"
+
+
 def test_chunk_whisper_loop_stays_alive_until_sentinel(
     tmp_path: Path,
     events: list[CycleEvent],
@@ -336,9 +426,10 @@ def test_chunk_whisper_loop_stays_alive_until_sentinel(
         _ChunkWhisperJob(
             session_id=sid,
             audio_1d=piece,
-            previous_text="",
+            overlap_seconds=0.0,
             reason="fixed",
             live_generation=gen,
+            commit_end_sample=int(piece.shape[0]),
         )
     )
     session._chunk_jobs.put(None)
@@ -413,4 +504,268 @@ def test_each_chunk_whispers_bounded_window_not_full_buffer(
     assert seen_sizes[1] <= max_expected
     assert seen_sizes[1] < seen_sizes[0] + int(session.sample_rate * 0.12)
 
+    session.cancel()
+
+
+def test_first_twenty_second_cut_whispers_fourteen_seconds(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    model = SequenceModel(["prefix"])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+        chunk_seconds=20.0,
+    )
+    seen_sizes: list[int] = []
+    original = session.create_temporary_wav
+
+    def spy(chunks: list[Any]) -> Path:
+        seen_sizes.append(sum(int(c.shape[0]) for c in chunks))
+        return original(chunks)
+
+    session.create_temporary_wav = spy  # type: ignore[method-assign]
+    session.start()
+    _feed_audio(session, seconds=20.0)
+    _wait_until(lambda: len(seen_sizes) >= 1, timeout=5.0)
+    assert seen_sizes[0] == int(session.sample_rate * 14)
+    assert session._committed_through_samples == int(session.sample_rate * 14)
+    session.cancel()
+
+
+def test_failed_chunk_whisper_does_not_advance_committed(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    class _FailingModel:
+        def transcribe(self, path: str, **kwargs: Any) -> tuple[list[Any], Any]:
+            raise RuntimeError("whisper fail")
+
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=_FailingModel(),  # type: ignore[arg-type]
+        incremental=True,
+        chunk_seconds=20.0,
+    )
+    session.start()
+    _feed_audio(session, seconds=20.0)
+    _wait_until(
+        lambda: session._transcribed_through_samples >= int(session.sample_rate * 20),
+        timeout=5.0,
+    )
+    time.sleep(0.2)
+    assert session._committed_through_samples == 0
+    session.cancel()
+
+
+def test_stop_whispers_from_committed_including_held_tail(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    model = SequenceModel(["prefix", "held tail"])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+        chunk_seconds=20.0,
+    )
+    seen_sizes: list[int] = []
+    original = session.create_temporary_wav
+
+    def spy(chunks: list[Any]) -> Path:
+        seen_sizes.append(sum(int(c.shape[0]) for c in chunks))
+        return original(chunks)
+
+    session.create_temporary_wav = spy  # type: ignore[method-assign]
+    session.start()
+    _feed_audio(session, seconds=20.0)
+    _wait_until(
+        lambda: any(e.type == CycleEventType.TRANSCRIPT_PARTIAL for e in events),
+        timeout=5.0,
+    )
+    session.stop_and_transcribe()
+    _wait_until(
+        lambda: any(e.type == CycleEventType.TRANSCRIPT_SAVED for e in events),
+        timeout=10.0,
+    )
+    assert saves[0].read_text(encoding="utf-8") == "prefix held tail"
+    assert seen_sizes[-1] == int(session.sample_rate * 7.5)
+
+
+def test_cancelled_chunk_job_does_not_commit(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    """Na cancel/te-kort: session_id mag nog staan, committed niet terugzetten."""
+
+    model = SequenceModel(["late commit"])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+    )
+    session._session_id = "test-sid"
+    session._recording = False
+    session._processing = False
+    session._committed_through_samples = 0
+
+    session._process_chunk_job(_chunk_job(session, commit_end_sample=16000))
+
+    assert session._committed_through_samples == 0
+    assert session._chunk_transcripts == []
+    assert not any(e.type == CycleEventType.TRANSCRIPT_PARTIAL for e in events)
+
+
+def test_chunk_job_commits_while_stop_is_processing(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    """Stop zet _processing en joint; in-flight job moet nog landen."""
+
+    model = SequenceModel(["in flight"])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+    )
+    session._session_id = "test-sid"
+    session._recording = False
+    session._processing = True
+
+    session._process_chunk_job(_chunk_job(session, commit_end_sample=16000))
+
+    assert session._committed_through_samples == 16000
+    assert session._chunk_transcripts == ["in flight"]
+
+
+def test_failed_chunk_whisper_is_logged_without_transcript(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class _FailingModel:
+        def transcribe(self, path: str, **kwargs: Any) -> tuple[list[Any], Any]:
+            raise RuntimeError("whisper fail")
+
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=_FailingModel(),  # type: ignore[arg-type]
+        incremental=True,
+    )
+    session._session_id = "test-sid"
+    session._recording = True
+
+    with caplog.at_level(logging.WARNING, logger="dicteercyclus.incremental"):
+        session._process_chunk_job(_chunk_job(session, seconds=1.0, commit_end_sample=16000))
+
+    assert session._committed_through_samples == 0
+    assert "chunk.whisper failed" in caplog.text
+    assert "window=" in caplog.text
+    assert "late commit" not in caplog.text
+    assert "secret" not in caplog.text.lower()
+
+
+def test_empty_whisper_raw_does_not_advance_committed(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    model = SequenceModel([""])
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,
+        incremental=True,
+    )
+    session._session_id = "test-sid"
+    session._recording = True
+
+    with caplog.at_level(logging.INFO, logger="dicteercyclus.incremental"):
+        session._process_chunk_job(_chunk_job(session, commit_end_sample=16000))
+
+    assert session._committed_through_samples == 0
+    assert session._chunk_transcripts == []
+    assert "chunk.whisper empty" in caplog.text
+
+
+def test_failed_chunk_next_window_covers_uncommitted_gap(
+    tmp_path: Path,
+    events: list[CycleEvent],
+    saves: list[Path],
+) -> None:
+    """Na fail blijft committed; volgende cut fluistert vanaf oude committed − overlap."""
+
+    class _FlakyModel:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.lock = threading.Lock()
+
+        def transcribe(self, path: str, **kwargs: Any) -> tuple[list[Any], Any]:
+            with self.lock:
+                self.calls += 1
+                n = self.calls
+            if n == 2:
+                raise RuntimeError("whisper fail")
+            segment = MagicMock()
+            segment.text = f"chunk{n}"
+            segment.end = 0.5
+            segment.words = None
+            return [segment], MagicMock()
+
+    model = _FlakyModel()
+    session = _make_session(
+        tmp_path=tmp_path,
+        events=events,
+        saves=saves,
+        model=model,  # type: ignore[arg-type]
+        incremental=True,
+        chunk_seconds=20.0,
+    )
+    seen_sizes: list[int] = []
+    original = session.create_temporary_wav
+
+    def spy(chunks: list[Any]) -> Path:
+        seen_sizes.append(sum(int(c.shape[0]) for c in chunks))
+        return original(chunks)
+
+    session.create_temporary_wav = spy  # type: ignore[method-assign]
+    session.start()
+    _feed_audio(session, seconds=20.0)
+    _wait_until(lambda: model.calls >= 1 and session._committed_through_samples > 0, timeout=5.0)
+    assert seen_sizes[0] == int(session.sample_rate * 14)
+
+    _feed_audio(session, seconds=20.0)
+    _wait_until(lambda: model.calls >= 2, timeout=5.0)
+    _wait_until(
+        lambda: session._transcribed_through_samples >= int(session.sample_rate * 40),
+        timeout=5.0,
+    )
+    assert session._committed_through_samples == int(session.sample_rate * 14)
+
+    _feed_audio(session, seconds=20.0)
+    _wait_until(lambda: model.calls >= 3, timeout=5.0)
+    _wait_until(lambda: len(seen_sizes) >= 3, timeout=5.0)
+
+    assert seen_sizes[2] == int(session.sample_rate * 41.5)
     session.cancel()

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import queue
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any
 
 from chunk_transcription import (
     OVERLAP_SECONDS,
+    commit_window,
     decide_chunk_cut,
     dedupe_overlap_text,
     trailing_silence_seconds,
@@ -22,16 +25,23 @@ _CHUNK_SILENCE_RMS = 0.01
 _CHUNK_FRAME_SECONDS = 0.05
 _CHUNK_POLL_SECONDS = 0.25
 
+_log = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class _ChunkWhisperJob:
-    """Audio-knip klaar voor Whisper; knip/LED gebeuren vóór deze job."""
+    """Audio-knip klaar voor Whisper; knip/LED gebeuren vóór deze job.
+
+    Transcript-state zit niet op de job: merge leest ``_chunk_transcripts``
+    pas bij commit. Audio-overlap zit al in ``audio_1d``.
+    """
 
     session_id: str
     audio_1d: Any
-    previous_text: str
+    overlap_seconds: float
     reason: str
     live_generation: int
+    commit_end_sample: int
 
 
 class IncrementalMixin:
@@ -173,7 +183,7 @@ class IncrementalMixin:
             session_id = self._session_id
             chunks_copy = [chunk.copy() for chunk in self._audio_chunks]
             through = self._transcribed_through_samples
-            previous = " ".join(self._chunk_transcripts).strip()
+            committed = self._committed_through_samples
             total = self._sample_count_locked()
             live_generation = self._live_paste_generation
 
@@ -214,26 +224,34 @@ class IncrementalMixin:
         # LED meteen bij knipbesluit — niet pas ná trage Whisper.
         signal_chunk_trigger(reason)
 
-        overlap = int(self.sample_rate * OVERLAP_SECONDS)
-        slice_start = max(0, through - overlap) if previous else through
-        piece = audio[slice_start:cut_end]
+        window = commit_window(
+            committed=committed,
+            cut_end=cut_end,
+            sample_rate=self.sample_rate,
+        )
+        if window.commit_end <= window.slice_start:
+            return
+        piece = audio[window.slice_start : window.commit_end]
         if piece.size == 0:
             return
+        overlap_seconds = (
+            (committed - window.slice_start) / float(self.sample_rate) if committed > 0 else 0.0
+        )
 
         with self._lock:
             if self._session_id != session_id or not self._recording:
                 return
-            # Cursor opschuiven vóór Whisper, zodat de decide-loop doorgaat terwijl
-            # medium-model inferentie seconden/tientallen seconden kost.
+            # Cut-cursor opschuiven vóór Whisper; committed pas na succes.
             self._transcribed_through_samples = cut_end
 
         self._chunk_jobs.put(
             _ChunkWhisperJob(
                 session_id=session_id,
                 audio_1d=piece.copy(),
-                previous_text=previous,
+                overlap_seconds=overlap_seconds,
                 reason=reason,
                 live_generation=live_generation,
+                commit_end_sample=window.commit_end,
             )
         )
 
@@ -271,25 +289,40 @@ class IncrementalMixin:
                 continue
 
     def _process_chunk_job(self, job: _ChunkWhisperJob) -> None:
+        window_s = float(getattr(job.audio_1d, "shape", [0])[0]) / float(max(1, self.sample_rate))
+        whisper_started = time.perf_counter()
         try:
             raw = self._transcribe_chunks_to_text([job.audio_1d.reshape(-1, 1)])
         except Exception:
+            _log.warning("chunk.whisper failed window=%.3fs", window_s)
             return
+        whisper_s = time.perf_counter() - whisper_started
+        ratio = (whisper_s / window_s) if window_s > 0 else 0.0
+        _log.info(
+            "chunk.whisper window=%.3fs whisper=%.3fs ratio=%.3f",
+            window_s,
+            whisper_s,
+            ratio,
+        )
         if not raw:
-            return
-        piece_text = dedupe_overlap_text(job.previous_text, raw) or None
-        if not piece_text:
+            _log.info("chunk.whisper empty window=%.3fs", window_s)
             return
 
         with self._lock:
             if self._session_id != job.session_id:
                 return
-            self._chunk_transcripts.append(piece_text)
+            if not (self._recording or self._processing):
+                return
+            current = " ".join(self._chunk_transcripts).strip()
+            piece_text = dedupe_overlap_text(current, raw) or ""
+            if piece_text:
+                self._chunk_transcripts.append(piece_text)
+            self._committed_through_samples = int(job.commit_end_sample)
             combined = " ".join(self._chunk_transcripts).strip()
 
         if combined:
             self._emit_partial(combined, job.session_id)
-        if self._live_paste_enabled():
+        if piece_text and self._live_paste_enabled():
             self._paste_delta(piece_text, generation=job.live_generation)
 
     def _incremental_loop(self) -> None:
