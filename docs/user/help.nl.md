@@ -30,9 +30,9 @@ opslaat (handig na Bluetooth-headset). Er is geen automatische wissel terwijl
 de app idle is — start dicteren of sla Instellingen op.
 
 **Whisper:** onder Instellingen → **Whisper** kun je kwaliteit (beam),
-stiltefilter (VAD), prompt/hotwords en gerelateerde drempels bijstellen. Het
-Whisper-**model** (base/small/medium) blijft onder Geavanceerd en vereist een
-herstart.
+stiltefilter (VAD), prompt/hotwords en gerelateerde drempels bijstellen.
+Onder **Geavanceerd** staan presets Snel / Gebalanceerd / Nauwkeurig (model +
+basis-Whisper). Het Whisper-**model** (base/small/medium) vereist een herstart.
 
 ## Wat zijn bestemmingen?
 
@@ -96,13 +96,15 @@ Rechtsklik op het praatMaar-icoon in het systeemvak:
 
 Via **Modules** in het systeemvak kun je uitbreidingen aan- of uitzetten en
 **incrementele transcriptie** inschakelen. Whisper draait dan tijdens de opname
-alleen over **nieuwe audiostukken** (vaste tijd, stilte/VAD, of hybride). Bij stop
-worden die teksten samengevoegd plus het laatste onaffe stuk — zonder de hele
-opname opnieuw te transcriberen.
+over **nieuwe audiostukken** (vaste tijd, stilte/VAD, of hybride) en houdt de
+laatste ~6 s achter tot de volgende knip of stop — zonder de hele opname
+opnieuw te transcriberen. De live-tekst kan daardoor 4–8 s achterlopen.
 
-Op de **naad** tussen chunks kunnen soms woorden dubbel of afgekapt zijn; een
-korte overlap mitigeert dit, maar niet altijd volledig. Op de status-pill tonen
-twee LED’s of een knip door stilte of door het tijdvenster kwam.
+Op de **naad** kunnen nog zelden woorden dubbel vallen; afgekapte woorden
+(`brandende… torts`) worden tegengehouden door die onverwerkte audiostaart.
+Werkpunt: knipmodus **vast**, chunk **20 s**, “voortbouwen op vorige tekst”
+uit. Op de status-pill tonen twee LED’s of een knip door stilte of door het
+tijdvenster kwam.
 
 **Event-journal:** elke dicteercyclus wordt als JSON-regels weggeschreven in
 `%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). Externe

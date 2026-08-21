@@ -30,8 +30,9 @@ Bluetooth headset connects). It does not auto-switch while idle — start dictat
 or save Settings.
 
 **Whisper:** under Settings → **Whisper** you can tune quality (beam), the
-silence filter (VAD), prompt/hotwords, and related thresholds. The Whisper
-**model** (base/small/medium) stays under Advanced and still needs a restart.
+silence filter (VAD), prompt/hotwords, and related thresholds. Under
+**Advanced**, Fast / Balanced / Accurate presets set model plus basic Whisper
+options. The Whisper **model** (base/small/medium) still needs a restart.
 
 ## What are destinations?
 
@@ -93,13 +94,16 @@ Right-click the praatMaar icon in the system tray:
 ## Modules and external tools
 
 From **Modules** in the system tray you can turn extensions on or off and enable
-**incremental transcription**. Whisper then runs during recording only on **new
-audio chunks** (fixed time, silence/VAD, or hybrid). On stop those texts are
-joined plus the unfinished tail — without re-transcribing the whole recording.
+**incremental transcription**. Whisper then runs during recording on **new
+audio chunks** (fixed time, silence/VAD, or hybrid) and holds the last ~6 s
+until the next cut or stop — without re-transcribing the whole recording. Live
+text may lag 4–8 s.
 
-At **chunk boundaries** words can sometimes duplicate or be cut off; a short
-overlap mitigates this, but not always completely. On the status pill, two LEDs
-show whether a cut came from silence or from the time window.
+At **chunk boundaries** words can still occasionally duplicate; truncated
+words (`brandende… torts`) are held back by that unprocessed audio tail.
+Working point: cut mode **fixed**, chunk **20 s**, “condition on previous text”
+off. On the status pill, two LEDs show whether a cut came from silence or from
+the time window.
 
 **Event journal:** every dictation cycle is appended as JSON lines to
 `%APPDATA%\praatMaar\events\events.jsonl` (macOS: Application Support). External

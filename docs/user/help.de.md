@@ -30,8 +30,10 @@ speichern (hilfreich nach Bluetooth-Headset). Kein automatischer Wechsel im
 Leerlauf — Diktat starten oder Einstellungen speichern.
 
 **Whisper:** unter Einstellungen → **Whisper** können Sie Qualität (Beam),
-Stillefilter (VAD), Prompt/Hotwords und Schwellen anpassen. Das Whisper-
-**Modell** (base/small/medium) bleibt unter Erweitert und braucht einen Neustart.
+Stillefilter (VAD), Prompt/Hotwords und Schwellen anpassen. Unter **Erweitert**
+setzen die Vorgaben Schnell / Ausgewogen / Genau Modell plus grundlegende
+Whisper-Optionen. Das Whisper-**Modell** (base/small/medium) braucht einen
+Neustart.
 
 ## Was sind Ziele?
 
@@ -96,13 +98,15 @@ Rechtsklick auf das praatMaar-Symbol im Infobereich:
 
 Unter **Module** im Infobereich schalten Sie Erweiterungen ein oder aus und
 aktivieren optional **inkrementelle Transkription**. Whisper läuft während der
-Aufnahme nur über **neue Audioabschnitte** (feste Zeit, Stille/VAD oder hybrid).
-Beim Stoppen werden die Texte zusammengefügt plus das letzte offene Stück —
-ohne die gesamte Aufnahme erneut zu transkribieren.
+Aufnahme über **neue Audioabschnitte** (feste Zeit, Stille/VAD oder hybrid) und
+hält die letzten ~6 s bis zum nächsten Schnitt oder Stopp zurück — ohne die
+gesamte Aufnahme erneut zu transkribieren. Der Live-Text kann 4–8 s hinterherhinken.
 
-An **Chunk-Nähten** können Wörter manchmal doppelt oder abgeschnitten sein;
-kurze Überlappung mildert das, aber nicht immer vollständig. Auf der Status-Pill
-zeigen zwei LEDs, ob ein Schnitt durch Stille oder durch das Zeitfenster kam.
+An **Chunk-Nähten** können Wörter noch selten doppelt erscheinen; abgeschnittene
+Wörter (`brandende… torts`) werden durch diese unverarbeitete Audio-Schwanz
+zurückgehalten. Arbeitspunkt: Schnittmodus **feste Zeit**, Chunk **20 s**,
+„Condition on previous text“ aus. Auf der Status-Pill zeigen zwei LEDs, ob ein
+Schnitt durch Stille oder durch das Zeitfenster kam.
 
 **Event-Journal:** jeder Diktierzyklus wird als JSON-Zeilen nach
 `%APPDATA%\praatMaar\events\events.jsonl` geschrieben (macOS: Application Support).
