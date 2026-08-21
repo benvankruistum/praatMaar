@@ -70,14 +70,23 @@ Geen apart VAD-model. Knip wanneer aaneengesloten stilte ≥ `incremental_vad_ms
 
 ### Ontdubbelen (conservatief)
 
-Heuristiek, **niet** 100% betrouwbaar:
+**Primair:** audio-overlap (~1,5 s) + conservatieve **tekst-dedupe**
+(`dedupe_overlap_text`). Alleen schrappen bij identieke token-overlap
+(minstens één token na NFC/casefold; interpunctie aan tokenranden telt
+niet mee). Geen prefix-match (`pa` ≠ `paard`). Geen fuzzy/Levenshtein
+(`inspelen` ≠ `inspreken`). Geen match → `" ".join` (liever dubbel dan kwijt).
 
-- Alleen schrappen bij **duidelijke** overlap (bijv. ≥2 opeenvolgende woorden
-  matched tussen einde A en begin B).
-- Geen match → `" ".join` zonder te schrappen (liever dubbel dan unieke tekst kwijt).
-- Bekende zwakke plekken: punctuatie, woordgrenzen, hallucinaties in de overlap.
+Dedupe leest de gecommitte transcripten **bij commit**, niet bij enqueue.
+De Whisper-job draagt alleen audio (inclusief overlap); `previous_text`
+zit niet op de job. Incomplete woordstaarten (`pa...` / `paard`) blijven
+staan — dat is een hypothese-revisie, geen identieke overlap.
 
-Help vermeldt dit als mogelijk issue. Bridge-hertranscriptie = latere optie, niet v1.
+Timestamp/mutable-tail-merge is bewust **niet** in de runtime: word-timestamps
+waren te traag; segment-tijden gaven gaten of gestapelde hypothesen bij
+vloeiend voorlezen. Helpers blijven in `chunk_transcription.py` voor later.
+
+Help vermeldt naden als mogelijk restissue. Bridge-hertranscriptie van alleen
+de naad = latere optie.
 
 ## Runtime — bij stop
 

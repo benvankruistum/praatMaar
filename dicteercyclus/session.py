@@ -173,9 +173,11 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         self._session_id: str | None = None
         self._last_partial_transcript: str | None = None
         self._chunk_transcripts: list[str] = []
+        self._mutable_tail = ""
         self._live_pasted_text = ""
         self._live_paste_generation = 0
         self._transcribed_through_samples: int = 0
+        self._committed_through_samples: int = 0
         self._incremental_thread: threading.Thread | None = None
         self._chunk_whisper_thread: threading.Thread | None = None
         self._incremental_stop: threading.Event | None = None
@@ -321,7 +323,9 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             session_id = self._session_id
             self._last_partial_transcript = None
             self._chunk_transcripts = []
+            self._mutable_tail = ""
             self._transcribed_through_samples = 0
+            self._committed_through_samples = 0
             self._reset_live_paste_state()
 
         self._event(CycleEventType.CYCLE_STARTED, session_id=session_id)
@@ -390,7 +394,9 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             with self._lock:
                 self._audio_chunks.clear()
                 self._chunk_transcripts = []
+                self._mutable_tail = ""
                 self._transcribed_through_samples = 0
+                self._committed_through_samples = 0
                 self._reset_live_paste_state()
             # Seinen zonder join: UI blijft snappy.
             self._stop_incremental_worker(wait=False)
@@ -433,10 +439,12 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
 
         with self._lock:
             chunk_texts = list(self._chunk_transcripts)
-            through = self._transcribed_through_samples
+            committed = self._committed_through_samples
             self._last_partial_transcript = None
             self._chunk_transcripts = []
+            self._mutable_tail = ""
             self._transcribed_through_samples = 0
+            self._committed_through_samples = 0
 
         timing = CycleTiming(
             session_id=session_id or "",
@@ -449,7 +457,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         if chunk_texts:
             thread = threading.Thread(
                 target=self._finalize_chunk_transcript,
-                args=(chunks_to_process, chunk_texts, through, timing),
+                args=(chunks_to_process, chunk_texts, committed, timing),
                 daemon=True,
             )
         else:
@@ -464,7 +472,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         self,
         chunks: list[Any],
         chunk_texts: list[str],
-        through_samples: int,
+        committed_samples: int,
         timing: CycleTiming,
     ) -> None:
         """Plakt chunk-teksten; Whisper alleen over de onaffe staart."""
@@ -481,16 +489,17 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             previous = " ".join(texts).strip()
             audio = self._concat_audio(chunks)
             total = int(audio.shape[0])
-            tail_start = max(0, min(through_samples, total))
-            tail = audio[tail_start:]
-            tail_seconds = tail.shape[0] / float(self.sample_rate)
-
-            if tail_seconds >= self._incremental_min_seconds and tail.shape[0] > 0:
-                whisper_started = time.perf_counter()
+            if committed_samples <= 0:
+                slice_start = 0
+            else:
                 overlap = int(self.sample_rate * OVERLAP_SECONDS)
-                slice_start = max(0, tail_start - overlap) if previous else tail_start
-                piece_audio = audio[slice_start:total]
-                piece_seconds = piece_audio.shape[0] / float(self.sample_rate)
+                slice_start = max(0, min(committed_samples, total) - overlap)
+            piece_audio = audio[slice_start:total]
+            tail_seconds = piece_audio.shape[0] / float(self.sample_rate)
+
+            if tail_seconds >= self._incremental_min_seconds and piece_audio.shape[0] > 0:
+                whisper_started = time.perf_counter()
+                piece_seconds = tail_seconds
                 ticker = TranscriptionProgressTicker(piece_seconds)
                 ticker.start()
                 try:
@@ -598,7 +607,9 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             self._audio_chunks.clear()
             self._last_partial_transcript = None
             self._chunk_transcripts = []
+            self._mutable_tail = ""
             self._transcribed_through_samples = 0
+            self._committed_through_samples = 0
             self._reset_live_paste_state()
             session_id = self._session_id
 
