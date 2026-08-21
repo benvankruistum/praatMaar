@@ -142,7 +142,7 @@ Zie ook [SECURITY.md](SECURITY.md).
 
 - Windows: [docs/release-windows.md](docs/release-windows.md) (versie-checklist + tag)
 - macOS: [docs/release-macos.md](docs/release-macos.md)
-- Changelog: [CHANGELOG.md](CHANGELOG.md) — gepubliceerd `v0.6.0`; richting
+- Changelog: [CHANGELOG.md](CHANGELOG.md) — gepubliceerd `v0.7.0`; richting
   `v1.0.0` onder Unreleased / scope-spec
 
 ```text

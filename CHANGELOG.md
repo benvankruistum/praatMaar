@@ -7,6 +7,8 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-21
+
 ### Added
 
 - **Dicteerpresets** in Instellingen → Geavanceerd: Snel / Gebalanceerd /
@@ -16,9 +18,17 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
   settings, hotkey router, run/startup) en `dicteercyclus/` (Opnamesessie-
   façade + mic/incremental/delivery); dunne `dictation.py`-entry; geen
   import-time sessie.
+- **Meeting Buddy:** agenda-voortgang, inzichten, eind-samenvatting en
+  loopback-setup in Eigenschappen (experimenteel).
 
 ### Changed
 
+- **Incrementele transcriptie:** laatste ~6 s audio per knip blijft onverwerkt
+  tot de volgende cut of stop, zodat afgehakte woorden (`brandende… torts`)
+  niet worden gecommit. Live-preview mag 4–8 s achterlopen. Identieke
+  één-token-overlap (`Prometheus. Prometheus.`) wordt weggehaald; geen
+  prefix-match `pa`/`paard`. Aanbevolen werkpunt: knipmodus vast, 20 s,
+  “voortbouwen op vorige tekst” uit.
 - **Privacy:** console/log print geen volle transcripttekst meer (alleen
   lengte); `SECURITY.md` documenteert optionele Local LLM / Ollama.
 - **Meeting Buddy stop:** dictation-pill/hotkey stopt alleen de dicteercyclus;
@@ -28,8 +38,13 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Fixed
 
-- **macOS 26+ crash (SIGTRAP):** globale sneltoets via `mac_input.QuartzKeyListener`
-  (NSEvent op de Qt-mainthread) i.p.v. `pynput` op een achtergrondthread.
+- **macOS 26+ crash (SIGTRAP):** globale sneltoets via native Quartz/NSEvent
+  op de Qt-mainthread i.p.v. `pynput` op een achtergrondthread.
+- Chunk-Whisper-jobs blijven in de queue bij stop; vervangen workers stelen
+  geen sentinels meer.
+- Live-plak van chunks volgt onder stilte en trage Whisper (hard-cap + async
+  queue).
+- Meeting Buddy-overlay Qt-bomen worden vrijgegeven vóór GC.
 
 ## [0.6.0] - 2026-08-10
 
@@ -272,7 +287,8 @@ Eerste publieke Windows-release (tag `v0.1.0`).
 - Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
 - `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`
 
-[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/benvankruistum/praatMaar/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/benvankruistum/praatMaar/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/benvankruistum/praatMaar/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/benvankruistum/praatMaar/compare/v0.3.0...v0.4.0
