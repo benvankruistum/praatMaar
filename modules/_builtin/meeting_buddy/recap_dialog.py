@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 import i18n
 from ui.app import ensure_app
+from ui.overlay_flags import apply_hud_window_flags
 from ui.theme import TOKENS
 
 from .live_summary import summary_points
@@ -30,10 +31,11 @@ def show_recap_dialog(
     transcript_path: Path,
     *,
     parent: Any = None,
-) -> None:
+) -> object:
     ensure_app()
     dialog = QDialog(parent if isinstance(parent, QWidget) else None)
     dialog.setWindowTitle(i18n.t("modules.meeting_buddy.recap.title"))
+    apply_hud_window_flags(dialog)
     dialog.setMinimumSize(520, 420)
     dialog.setStyleSheet(
         f"QDialog {{ background: {TOKENS['surface']}; "
@@ -97,7 +99,9 @@ def show_recap_dialog(
     row.addWidget(close)
     outer.addWidget(footer)
 
-    dialog.exec()
+    dialog.setModal(False)
+    dialog.show()
+    return dialog
 
 
 def _section_label(text: str) -> QLabel:

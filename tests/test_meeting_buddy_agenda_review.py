@@ -181,7 +181,7 @@ def test_run_analyze_uses_meeting_clock_for_created_at() -> None:
     caps = CapabilityRegistry()
     caps.register(CAPABILITY_ID, FakeProvider(), "local-llm", CONTRACT_VERSION)
 
-    reviewed: list[MeetingState] = []
+    reviewed: list[dict[str, object]] = []
     coord = AgendaReviewCoordinator(
         capabilities=caps,
         settings=AgendaReviewSettings(enabled=True),
@@ -196,7 +196,8 @@ def test_run_analyze_uses_meeting_clock_for_created_at() -> None:
     )
 
     assert reviewed, "on_review is niet aangeroepen"
-    question = reviewed[-1].questions[0]
+    applied = coord.apply_review_result(state, reviewed[-1], now_s=42.0)
+    question = applied.questions[0]
     assert question.created_at == 42.0
 
 

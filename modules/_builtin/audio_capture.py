@@ -225,7 +225,15 @@ class AudioCaptureEngine:
             state.worker.start()
             state.mic_stream.start()
             if state.loopback_stream is not None:
-                state.loopback_stream.start()
+                try:
+                    state.loopback_stream.start()
+                except Exception as exc:
+                    log.warning(
+                        "WASAPI loopback start() mislukt voor sessie %s, alleen microfoon: %s",
+                        state.session_id,
+                        exc,
+                    )
+                    self._disable_loopback(state, reason=str(exc), try_reconnect=False)
         except Exception as exc:
             state.stop_event.set()
             self._close_streams(state)
@@ -561,6 +569,8 @@ class AudioCaptureEngine:
         if state.loopback_enabled and state.mic_pending.size > _STARVATION_LIMIT_SAMPLES:
             if state.loopback_pending.size == 0:
                 self._disable_loopback(state, reason="loopback levert geen data (starved)")
+            else:
+                state.mic_pending = state.mic_pending[-_STARVATION_LIMIT_SAMPLES:]
         if state.loopback_pending.size > _STARVATION_LIMIT_SAMPLES:
             # Clock-drift/mic-uitval: begrens het geheugen, laat het oudste los.
             state.loopback_pending = state.loopback_pending[-_STARVATION_LIMIT_SAMPLES:]
