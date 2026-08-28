@@ -13,6 +13,9 @@ def test_builtin_modules_import_cleanly() -> None:
         "modules._builtin.meeting_buddy.hint_coordinator",
         "modules._builtin.audio_capture",
         "modules._builtin.speech_to_text",
+        "modules._builtin.file_transcription",
+        "modules._builtin.file_transcription.dialog",
+        "modules._builtin.file_transcription.jobs",
     ]
     for module_name in modules:
         importlib.import_module(module_name)

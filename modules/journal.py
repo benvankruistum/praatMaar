@@ -38,6 +38,8 @@ class EventJournal:
         transcript = payload.pop("transcript", None)
         if transcript is not None:
             payload["transcript_chars"] = len(transcript)
+        # Bestandstranscriptie: bronpad/naam horen niet in het append-only journal.
+        payload.pop("audio_path", None)
         line = json.dumps(payload, ensure_ascii=False)
         with self._lock:
             self._path.parent.mkdir(parents=True, exist_ok=True)

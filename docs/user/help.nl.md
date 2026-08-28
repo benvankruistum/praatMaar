@@ -117,8 +117,14 @@ bestemmingsmap.
 **Inbox-spiegel** (standaard aan): kopieert elk opgeslagen transcript naar
 `%APPDATA%\praatMaar\inbox\` — handig als vaste “drop zone” voor scripts.
 
+**Bestandstranscriptie** (experimenteel, standaard uit): via **Modules** kun je
+lokale **WAV**-bestanden kiezen. praatMaar transcribeert ze lokaal naar de
+actieve bestemming als `file_*.txt` (niet naast het bronbestand, geen automatisch
+plakken). Mislukte dicteeropnames blijven onder Instellingen → **Herstel-audio**.
+Als Inbox-spiegel aan staat, wordt dat `.txt` ook naar `inbox/` gekopieerd.
+
 Herstel-transcriptie (Instellingen → Herstel-audio) emitteert dezelfde soort
-events met `source: "recovery"`.
+events met `source: "recovery"`. Bestandstranscriptie gebruikt `source: "file"`.
 
 ## Risico's en tips
 

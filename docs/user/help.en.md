@@ -116,8 +116,14 @@ destination folder.
 **Inbox mirror** (on by default): copies each saved transcript to
 `%APPDATA%\praatMaar\inbox\` — a fixed drop zone for scripts.
 
+**File transcription** (experimental, off by default): via **Modules** you can
+choose local **WAV** files. praatMaar transcribes them locally into the active
+destination as `file_*.txt` (not next to the source file, no auto-paste). Failed
+dictation recordings stay under Settings → **Recovery audio**. If Inbox mirror
+is on, that `.txt` is also copied to `inbox/`.
+
 Recovery re-transcription (Settings → Recovery audio) emits the same kind of
-events with `source: "recovery"`.
+events with `source: "recovery"`. File transcription uses `source: "file"`.
 
 ## Risks and tips
 

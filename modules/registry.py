@@ -9,6 +9,7 @@ from typing import Any
 
 import host
 from modules._builtin.audio_capture import AudioCaptureModule
+from modules._builtin.file_transcription import FileTranscriptionModule
 from modules._builtin.inbox_mirror import InboxMirrorModule
 from modules._builtin.local_llm import LocalLlmModule
 from modules._builtin.meeting_buddy import MeetingBuddyModule
@@ -39,6 +40,7 @@ def all_builtin_modules() -> list[PraatMaarModule]:
         SpeechToTextModule(),
         LocalLlmModule(),
         MeetingBuddyModule(),
+        FileTranscriptionModule(),
     ]
 
 

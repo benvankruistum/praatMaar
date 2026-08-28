@@ -7,6 +7,13 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ## [Unreleased]
 
+### Added
+
+- **Bestandstranscriptie** (experimenteel, standaard uit): via Modules lokale
+  WAV-bestanden kiezen en sequentieel transcriberen naar de actieve bestemming
+  (`file_*.txt`, geen auto-plakken)
+  ([spec](docs/superpowers/specs/2026-08-18-file-transcription-product.md)).
+
 ### Changed
 
 - **Meeting Buddy:** stoppen via overlay of tray (niet via dicteer-pill); recap

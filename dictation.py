@@ -19,6 +19,7 @@ import win_identity
 from app.bootstrap import build_runtime, build_session
 from app.clipboard import copy_to_clipboard
 from app.hotkey_router import HotkeyRouter, default_signal_processing_busy
+from app.module_bindings import bind_file_transcription
 from app.recent_transcripts import recent_transcript_menu_entries
 from app.recovery_actions import retranscribe_recovery_wav as retranscribe_recovery_wav_impl
 from app.recovery_actions import save_transcript_routed
@@ -235,13 +236,19 @@ def _reload_modules() -> None:
     """Herlaadt enabled modules na splash of instellingenwijziging."""
 
     module_bus.shutdown()
-    module_bus.set_modules(
-        load_enabled_modules(
-            MODULES_CONFIG,
-            ui_dispatch=_ui_dispatch,
-            whisper=shared_whisper,
-            capabilities=capability_registry,
-        )
+    modules = load_enabled_modules(
+        MODULES_CONFIG,
+        ui_dispatch=_ui_dispatch,
+        whisper=shared_whisper,
+        capabilities=capability_registry,
+    )
+    module_bus.set_modules(modules)
+    bind_file_transcription(
+        modules,
+        session_fn=get_session,
+        destinations_fn=lambda: DESTINATIONS,
+        active_destination_fn=lambda: ACTIVE_DESTINATION,
+        emit=module_bus.emit,
     )
     if _tray is not None:
         _tray.refresh_modules_menu()

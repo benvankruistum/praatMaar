@@ -37,7 +37,9 @@ de inbox-map).
 | `transcripts/` | Default transcriptmap (retentie) |
 | `config.json` | User settings (modules aan/uit) |
 
-Het journal kan **transcripttekst** bevatten — behandel als gevoelige data.
+Het journal bevat **geen** volledige transcripttekst (wel `transcript_chars`)
+en **geen** bronpaden van bestandstranscriptie. Transcriptbestanden zelf
+blijven gevoelige data.
 
 ## Schema
 
@@ -49,14 +51,15 @@ Elke regel is één JSON-object:
 | `type` | string | ja | Event-type (zie hieronder) |
 | `session_id` | string | ja | UUID van één dicteercyclus |
 | `timestamp` | string | ja | ISO 8601 UTC |
-| `source` | string | ja | `"live"` of `"recovery"` |
-| `transcript` | string | soms | Tekst (partial of finaal) |
-| `path` | string | soms | Absoluut pad naar `.txt` op schijf |
+| `source` | string | ja | `"live"`, `"recovery"` of `"file"` |
+| `transcript` | string | soms | Alleen in-memory naar modules; **niet** in het journal |
+| `path` | string | soms | Absoluut pad naar opgeslagen `.txt` |
 | `destination` | string \| null | soms | Actieve bestemmingsnaam |
 | `language` | string | soms | Whisper-taal (`nl`, `en`, …) |
-| `mode` | string | soms | `toggle` of `ptt` |
-| `error` | string | soms | Foutmelding |
+| `mode` | string | soms | `toggle` of `ptt` (niet bij `source: "file"`) |
+| `error` | string | soms | Generieke/i18n-foutmelding (geen bronpad) |
 | `recovery_path` | string | soms | Recovery-WAV bij herstel-flow |
+| `audio_path` | string | soms | Alleen in-memory (bestandstranscriptie); **niet** in het journal |
 | `destination_command` | string | soms | `set` of `reset` |
 | `destination_name` | string | soms | Bestemmingsnaam bij `set` |
 

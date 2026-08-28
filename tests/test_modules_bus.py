@@ -85,3 +85,31 @@ def test_journal_redacts_transcript_content(tmp_path: Path) -> None:
     assert "vertrouwelijke" not in line
     assert data.get("transcript_chars") == len("vertrouwelijke burgertekst")
     assert "transcript" not in data
+
+
+def test_journal_strips_audio_path_but_keeps_saved_txt_path(tmp_path: Path) -> None:
+    import json
+
+    journal_path = tmp_path / "events.jsonl"
+    journal = EventJournal(path=journal_path)
+    saved = str(tmp_path / "file_2026-08-18_140000.txt")
+    source = str(tmp_path / "HR-ontslag-Janssen.wav")
+    journal.write(
+        CycleEvent(
+            type=CycleEventType.TRANSCRIPT_SAVED,
+            session_id="file-1",
+            source="file",
+            transcript="geheim transcript",
+            path=saved,
+            audio_path=source,
+        )
+    )
+
+    line = journal_path.read_text(encoding="utf-8").strip()
+    data = json.loads(line)
+    assert "audio_path" not in data
+    assert "HR-ontslag-Janssen" not in line
+    assert "geheim transcript" not in line
+    assert data["path"] == saved
+    assert data["source"] == "file"
+    assert data["transcript_chars"] == len("geheim transcript")
