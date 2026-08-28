@@ -116,6 +116,7 @@ def test_main_uses_qt_event_loop_and_quits_through_application(monkeypatch) -> N
         set_modules=lambda _modules: None,
         shutdown=lambda: None,
         run_action=lambda _module_id, _action_id: None,
+        emit=lambda _event: None,
     )
 
     monkeypatch.setattr(dictation, "ensure_app", lambda: app)

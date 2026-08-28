@@ -533,7 +533,10 @@ def test_first_twenty_second_cut_whispers_fourteen_seconds(
     _feed_audio(session, seconds=20.0)
     _wait_until(lambda: len(seen_sizes) >= 1, timeout=5.0)
     assert seen_sizes[0] == int(session.sample_rate * 14)
-    assert session._committed_through_samples == int(session.sample_rate * 14)
+    _wait_until(
+        lambda: session._committed_through_samples == int(session.sample_rate * 14),
+        timeout=5.0,
+    )
     session.cancel()
 
 
