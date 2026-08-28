@@ -39,5 +39,5 @@ def test_audio_capture_is_a_builtin_module() -> None:
     assert "audio-capture" in {module.id for module in all_builtin_modules()}
 
 
-def test_speech_to_text_is_a_builtin_module() -> None:
-    assert "speech-to-text" in {module.id for module in all_builtin_modules()}
+def test_file_transcription_is_a_builtin_module() -> None:
+    assert "file-transcription" in {module.id for module in all_builtin_modules()}

@@ -31,6 +31,7 @@ RECENT_TRANSCRIPT_LIMIT = 5
 
 # Stem van `save_transcript`: `YYYY-MM-DD_HHMMSS` of `…_N` bij botsing.
 _TIMESTAMP_STEM_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\d{6})(?:_(\d+))?$")
+FILE_TRANSCRIPT_STEM_PREFIX = "file_"
 
 
 def transcripts_dir() -> Path:
@@ -65,7 +66,12 @@ def _unique_path(directory: Path, stem: str, suffix: str) -> Path:
     return candidate
 
 
-def save_transcript(text: str, directory: Path | None = None) -> Path:
+def save_transcript(
+    text: str,
+    directory: Path | None = None,
+    *,
+    stem_prefix: str = "",
+) -> Path:
     """
     Schrijft het transcript atomisch weg (tmp-bestand + replace) en ruimt
     daarna oude transcripts op in de standaardmap. Geeft het pad van het
@@ -73,13 +79,15 @@ def save_transcript(text: str, directory: Path | None = None) -> Path:
 
     Bij een custom `directory` wordt alleen daar weggeschreven; prune draait
     dan niet (alleen voor de default `%APPDATA%\\praatMaar\\transcripts\\`).
+    ``stem_prefix`` (bijv. ``file_``) komt vóór de tijdstempel zodat Recente
+    transcripts dicteer-``.txt`` niet met bestandstranscriptie mengt.
     """
 
     default = transcripts_dir()
     target_dir = directory if directory is not None else default
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    target = _unique_path(target_dir, _timestamp(), ".txt")
+    target = _unique_path(target_dir, f"{stem_prefix}{_timestamp()}", ".txt")
     tmp = target.with_name(target.name + ".tmp")
 
     with tmp.open("w", encoding="utf-8") as handle:

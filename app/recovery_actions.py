@@ -35,6 +35,26 @@ def save_transcript_routed(
     return recovery.save_transcript(text, directory=directory)
 
 
+def save_transcript_discrete(
+    text: str,
+    *,
+    active_destination: str | None,
+    destinations_list: list[dict[str, Any]],
+) -> Path:
+    """Discrete ``file_*.txt`` in de bestemmingsmap; negeert append-modus."""
+
+    directory = destinations.resolve_save_dir(
+        active_destination,
+        destinations_list,
+        recovery.transcripts_dir(),
+    )
+    return recovery.save_transcript(
+        text,
+        directory=directory,
+        stem_prefix=recovery.FILE_TRANSCRIPT_STEM_PREFIX,
+    )
+
+
 def retranscribe_recovery_wav(
     path: Path,
     *,

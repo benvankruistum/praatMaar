@@ -31,7 +31,7 @@ from ui.widgets import FlowLayout, ToggleSwitch
 
 _open_dialog: QDialog | None = None
 
-_EXPERIMENTAL_IDS = frozenset({"meeting_buddy", "local_llm"})
+_EXPERIMENTAL_IDS = frozenset({"meeting-buddy", "local-llm", "file-transcription"})
 
 
 def module_shows_action_buttons(

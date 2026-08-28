@@ -55,6 +55,8 @@ class CycleEvent:
     destination_command: str | None = None
     destination_name: str | None = None
     source: str = "live"
+    audio_path: str | None = None
+    """Bron-WAV voor bestandstranscriptie (in-memory). Journal stript dit veld."""
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -82,6 +84,8 @@ class CycleEvent:
             payload["destination_command"] = self.destination_command
         if self.destination_name is not None:
             payload["destination_name"] = self.destination_name
+        if self.audio_path is not None:
+            payload["audio_path"] = self.audio_path
         return payload
 
 

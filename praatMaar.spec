@@ -114,6 +114,7 @@ hiddenimports += [
     "app.clipboard",
     "app.recent_transcripts",
     "app.recovery_actions",
+    "app.module_bindings",
     "dicteercyclus",
     "dicteercyclus.session",
     "dicteercyclus.mic_stream",
@@ -127,6 +128,10 @@ hiddenimports += [
     "modules._builtin.wasapi_loopback",
     "modules._builtin.speech_to_text",
     "modules._builtin.meeting_buddy",
+    "modules._builtin.file_transcription",
+    "modules._builtin.file_transcription.dialog",
+    "modules._builtin.file_transcription.jobs",
+    "modules._builtin.file_transcription.module",
     "modules.capabilities",
     # Platform-seam: de adapters worden lazy (in host._select) geïmporteerd,
     # dus expliciet opnemen zodat ze zeker in de bundle zitten.

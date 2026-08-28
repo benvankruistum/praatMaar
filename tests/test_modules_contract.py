@@ -28,3 +28,16 @@ def test_cycle_event_omits_empty_optional_fields() -> None:
     data = event.to_dict()
     assert "transcript" not in data
     assert "path" not in data
+    assert "audio_path" not in data
+
+
+def test_cycle_event_includes_audio_path_when_set() -> None:
+    event = CycleEvent(
+        type=CycleEventType.CYCLE_TRANSCRIBING,
+        session_id="file-1",
+        source="file",
+        audio_path=r"C:\opnames\interview.wav",
+    )
+    data = event.to_dict()
+    assert data["source"] == "file"
+    assert data["audio_path"] == r"C:\opnames\interview.wav"

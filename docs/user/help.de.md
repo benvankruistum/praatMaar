@@ -119,8 +119,16 @@ im Zielordner.
 **Inbox-Spiegel** (standardmäßig an): kopiert jedes gespeicherte Transkript nach
 `%APPDATA%\praatMaar\inbox\` — fester Ablageort für Skripte.
 
+**Dateitranskription** (experimentell, standardmäßig aus): über **Module** können
+Sie lokale **WAV**-Dateien wählen. praatMaar transkribiert sie lokal in das aktive
+Ziel als `file_*.txt` (nicht neben der Quelldatei, kein automatisches Einfügen).
+Fehlgeschlagene Diktataufnahmen bleiben unter Einstellungen →
+**Wiederherstellungsaudio**. Ist Inbox-Spiegel an, wird diese `.txt` auch nach
+`inbox/` kopiert.
+
 Wiederherstellungs-Transkription (Einstellungen → Wiederherstellungs-Audio)
-sendet dieselben Event-Typen mit `source: "recovery"`.
+sendet dieselben Event-Typen mit `source: "recovery"`. Dateitranskription nutzt
+`source: "file"`.
 
 ## Risiken und Tipps
 

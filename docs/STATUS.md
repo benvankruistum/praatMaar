@@ -66,6 +66,8 @@ Aandachtspunten, nog niet als distributie-build geverifieerd:
   anderen) via capability `ai.semantic_analysis`
 - `local-llm`: Ollama + Qwen 2.5 als provider van `ai.semantic_analysis`
   (standaard uit; Modules: statuscontrole, installatiehulp, model-download)
+- `file-transcription`: lokale WAV-bestanden kiezen en sequentieel transcriberen
+  naar de actieve bestemming (standaard uit; eigen dialoog, geen pill/auto-plak)
 
 Deze Meeting Buddy-MVP is experimenteel. Op Windows neemt Meeting Buddy naast
 de microfoon optioneel meetinggeluid op via **WASAPI-loopback** (`pyaudiowpatch`;
