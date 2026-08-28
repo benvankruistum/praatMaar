@@ -187,6 +187,16 @@ def _wait_until(predicate, timeout: float = 3.0) -> None:
     raise AssertionError("timeout waiting for condition")
 
 
+def _wait_past_minimum_recording(session: Opnamesessie) -> None:
+    """Stop uses wall-clock duration; simulated audio does not advance it."""
+
+    _wait_until(
+        lambda: session._recording_started_at is not None
+        and (time.monotonic() - session._recording_started_at) >= session.minimum_recording_seconds,
+        timeout=1.0,
+    )
+
+
 def _chunk_job(
     session: Opnamesessie,
     *,
@@ -261,6 +271,7 @@ def test_stop_uses_chunk_texts_without_full_buffer_retranscription(
     session._incremental_chunk_seconds = 3600.0
     calls_during = len(model.calls)
     _feed_audio(session, seconds=0.12)
+    _wait_past_minimum_recording(session)
 
     session.stop_and_transcribe()
     _wait_until(
@@ -596,6 +607,7 @@ def test_stop_whispers_from_committed_including_held_tail(
         lambda: any(e.type == CycleEventType.TRANSCRIPT_PARTIAL for e in events),
         timeout=5.0,
     )
+    _wait_past_minimum_recording(session)
     session.stop_and_transcribe()
     _wait_until(
         lambda: any(e.type == CycleEventType.TRANSCRIPT_SAVED for e in events),
