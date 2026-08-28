@@ -148,3 +148,23 @@ def test_wasapi_loopback_audio_reaches_mix() -> None:
 
     assert state.captured_samples == mic_frames
     engine.stop_session(session.session_id)
+
+
+def test_wasapi_start_failure_keeps_microphone_active() -> None:
+    class StartFailWasapi(FakeWasapiModule):
+        class WasapiLoopbackStream(FakeWasapiModule.WasapiLoopbackStream):
+            def start(self) -> None:
+                raise RuntimeError("device in use")
+
+    sounddevice = FakeSoundDevice()
+    engine = AudioCaptureEngine(
+        sounddevice_module=sounddevice,
+        platform_name="win32",
+        wasapi_loopback_module=StartFailWasapi,
+    )
+    session = engine.start_session({"enable_loopback": True})
+    state = engine._require_session(session.session_id)
+
+    assert engine.get_status(session.session_id) == CaptureStatus.ACTIVE
+    assert state.loopback_enabled is False
+    engine.stop_session(session.session_id)

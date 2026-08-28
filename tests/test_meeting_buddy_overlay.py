@@ -420,3 +420,64 @@ def test_listening_text_when_reconnecting_loopback() -> None:
         loopback_requested=True,
     )
     assert "meetinggeluid" in text.lower()
+
+
+def test_overlay_stays_minimized_across_updates() -> None:
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
+    from modules._builtin.meeting_buddy.state import MeetingState
+    from ui.app import ensure_app
+
+    app = ensure_app([])
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0.0,
+        on_dismiss=lambda _i: None,
+        on_confirm=lambda _i: None,
+        on_reconnect=lambda: None,
+    )
+    try:
+        overlay.update(
+            MeetingState("s", 1, (), (), (), (), ()),
+            capture_status="active",
+            transcription_status="active",
+        )
+        app.processEvents()
+        overlay.minimize()
+        app.processEvents()
+        assert overlay.window.isVisible() is False
+        overlay.update(
+            MeetingState("s", 2, (), (), (), (), ()),
+            capture_status="active",
+            transcription_status="active",
+        )
+        app.processEvents()
+        assert overlay.window.isVisible() is False
+        assert overlay._mini is not None and overlay._mini.isVisible()
+    finally:
+        _dispose_overlay(app, overlay)
+
+
+def test_overlay_headline_when_capture_starting() -> None:
+    import i18n
+    from modules._builtin.meeting_buddy.overlay import MeetingBuddyOverlay
+    from modules._builtin.meeting_buddy.state import MeetingState
+    from ui.app import ensure_app
+
+    i18n.set_ui_language("nl")
+    app = ensure_app([])
+    overlay = MeetingBuddyOverlay(
+        elapsed_seconds=lambda: 0.0,
+        on_dismiss=lambda _i: None,
+        on_confirm=lambda _i: None,
+        on_reconnect=lambda: None,
+    )
+    try:
+        overlay.update(
+            MeetingState("s", 1, (), (), (), (), ()),
+            capture_status="starting",
+            transcription_status="idle",
+        )
+        app.processEvents()
+        assert "Luistert" not in overlay._listening.text()
+        assert "starten" in overlay._listening.text().lower()
+    finally:
+        _dispose_overlay(app, overlay)

@@ -204,18 +204,22 @@ class MeetingOrchestrator:
         with self._lock:
             if self._sessions.binding is None:
                 raise RuntimeError("Meeting Buddy is niet gestart")
-
             self._sessions.reconnect()
-            self._ui.notify(self._state, force=True)
-            try:
-                self._sessions.finish_reconnect()
-                self._sessions.subscribe(
-                    on_capture_status=self.on_capture_status,
-                    on_stt_event=self.on_stt_event,
-                )
-            except Exception:
+            state = self._state
+        self._ui.notify(state, force=True)
+        try:
+            # Zelfde lock-discipline als stop(): finish_reconnect joint de
+            # STT-drain, die on_stt_event aanroept en deze lock nodig heeft.
+            self._sessions.finish_reconnect()
+            self._sessions.subscribe(
+                on_capture_status=self.on_capture_status,
+                on_stt_event=self.on_stt_event,
+            )
+        except Exception:
+            with self._lock:
                 self._ui.notify(self._state, force=True)
-                raise
+            raise
+        with self._lock:
             self._ui.notify(self._state, force=True)
 
     def stop(self) -> Path | None:
@@ -241,10 +245,7 @@ class MeetingOrchestrator:
                 except Exception:
                     pass
                 self._run_final_summary_if_enabled()
-                if self._live_summary_settings().enabled:
-                    self._last_recap_state = self._state
-                else:
-                    self._last_recap_state = None
+                self._last_recap_state = self._state
                 path = self._finalize_transcript_journal()
                 try:
                     self._sessions.clear()
@@ -384,7 +385,7 @@ class MeetingOrchestrator:
                 directory=directory,
             )
             self._last_transcript_path = self._journal.path
-            log.info("Meeting transcript opened path=%s", self._journal.path)
+            log.info("Meeting transcript opened name=%s", self._journal.path.name)
         except OSError as exc:
             self._journal = None
             log.warning("Meeting transcript create failed error=%s", exc)
@@ -396,7 +397,7 @@ class MeetingOrchestrator:
         try:
             path = self._journal.finalize(topics=topics, ended_at=datetime.now())
             self._last_transcript_path = path
-            log.info("Meeting transcript finalized path=%s", path)
+            log.info("Meeting transcript finalized name=%s", path.name)
             return path
         except OSError as exc:
             log.warning("Meeting transcript finalize failed error=%s", exc)
@@ -540,12 +541,13 @@ class MeetingOrchestrator:
         # UI buiten de lock: anders blokkeert de LLM-thread de STT-callback.
         self._ui.notify(state, force=True)
 
-    def _on_agenda_review(self, reviewed: MeetingState) -> None:
+    def _on_agenda_review(self, data: dict[str, object]) -> None:
         with self._lock:
             if self._state is None:
                 return
-            if reviewed.meeting_session_id != self._state.meeting_session_id:
-                return
+            reviewed = self._agenda_review.apply_review_result(
+                self._state, data, now_s=self._elapsed_s()
+            )
             self._state = replace(
                 reviewed,
                 live_summary=self._state.live_summary,

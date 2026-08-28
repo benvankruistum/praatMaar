@@ -25,9 +25,7 @@ def list_loopback_output_devices(
         from modules._builtin import wasapi_loopback
 
         if wasapi_loopback.is_available():
-            options = wasapi_loopback.list_loopback_output_devices(default_label=default_label)
-            if len(options) > 1:
-                return options
+            return wasapi_loopback.list_loopback_output_devices(default_label=default_label)
     except Exception:
         pass
 

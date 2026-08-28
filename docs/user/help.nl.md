@@ -155,6 +155,11 @@ acties.
 - **Eigenschappen** voor meetinggeluid (Windows loopback), uitvoerapparaat en
   optioneel een andere transcriptmap.
 
+**Stoppen:** alleen via de overlay (vierkant) of systeemvak → Meeting Buddy →
+Meeting stoppen. De dicteer-pill en de dicteersneltoets stoppen de meeting
+**niet**. Na stoppen verschijnt een kort overzicht (agenda, eventuele
+samenvatting, pad van het transcript) zonder de meeting-app te forceren.
+
 Tijdens een meeting groeit het transcript als `.md` onder
 `%APPDATA%\praatMaar\meeting-buddy\transcripts\` (alleen definitieve tekst;
 aanpasbaar via Eigenschappen). Bij stoppen volgt een melding met het pad; de
@@ -198,4 +203,5 @@ Voor Teams-gesprekken:
 3. Gebruik een **headset** om echo te beperken (je microfoon hoort de luidsprekers niet).
 
 De Meeting Buddy-overlay toont of meetinggeluid actief is. Als loopback niet
-beschikbaar is, neemt praatMaar alleen je microfoon op en zie je een waarschuwing.
+beschikbaar is, neemt praatMaar alleen je microfoon op, toont een waarschuwing
+en biedt herverbinden. De overlay is experimenteel.

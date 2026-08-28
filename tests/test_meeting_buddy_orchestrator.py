@@ -611,6 +611,58 @@ def test_stop_does_not_hold_lock_while_stopping_sessions(tmp_path: Path) -> None
     assert delivered.is_set(), "tail-delta is nooit afgeleverd tijdens stop"
 
 
+def test_reconnect_does_not_hold_lock_while_stopping_sessions(tmp_path: Path) -> None:
+    """Regression: reconnect_capture() moet de lock loslaten tijdens STT-drain."""
+
+    import threading
+
+    from modules.capabilities.continuous_capture import AudioChunk
+
+    capabilities = CapabilityRegistry()
+    capture = FakeContinuousCapture()
+    delivered = threading.Event()
+
+    class TailFlushingStt(FakeSpeechToText):
+        def stop_session(self, session_id: str) -> None:
+            chunk = AudioChunk(
+                session_id="capture",
+                chunk_id="tail",
+                start_ms=0,
+                end_ms=100,
+                sample_rate=16000,
+                pcm_f32=b"",
+            )
+            drain = threading.Thread(target=lambda: self._emit_delta(session_id, chunk))
+            drain.start()
+            drain.join(timeout=5)
+            if drain.is_alive():
+                return
+            delivered.set()
+            super().stop_session(session_id)
+
+    stt = TailFlushingStt(text_for_chunk=lambda _chunk: "tail flush")
+    capabilities.register(CAP_CAPTURE, capture, "audio-capture", 1)
+    capabilities.register(CAP_STT, stt, "speech-to-text", 1)
+
+    orchestrator = MeetingOrchestrator(
+        capabilities=capabilities,
+        app_dir=tmp_path,
+        observer=RecordingObserver(),
+    )
+    orchestrator.start()
+
+    reconnect_done = threading.Event()
+
+    def _reconnect() -> None:
+        orchestrator.reconnect_capture()
+        reconnect_done.set()
+
+    worker = threading.Thread(target=_reconnect, daemon=True)
+    worker.start()
+    assert reconnect_done.wait(timeout=10), "orchestrator.reconnect_capture() hangt (deadlock)"
+    assert delivered.is_set(), "tail-delta is nooit afgeleverd tijdens reconnect"
+
+
 def test_finish_reconnect_keeps_speech_language(tmp_path: Path) -> None:
     # Regression: het reconnect-pad herstartte STT zonder "language" —
     # Whisper viel dan midden in de meeting terug op taalauto-detectie.
@@ -690,3 +742,15 @@ def test_stop_runs_final_summary_and_keeps_recap_state(tmp_path: Path) -> None:
     final_calls = [call for call in provider.calls if call.kind == KIND_FINAL_SUMMARY]
     assert len(final_calls) == 1
     assert "We ronden het budget af." in final_calls[0].transcript
+
+
+def test_stop_keeps_recap_without_live_summary(tmp_path: Path) -> None:
+    capabilities, _capture, _stt = _capabilities()
+    orchestrator = MeetingOrchestrator(capabilities=capabilities, app_dir=tmp_path)
+    orchestrator.set_agenda("Budget")
+    orchestrator.start()
+    path = orchestrator.stop()
+    recap = orchestrator.last_recap_state
+    assert path is not None
+    assert recap is not None
+    assert recap.topics

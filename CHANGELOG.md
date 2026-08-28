@@ -14,6 +14,21 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
   (`file_*.txt`, geen auto-plakken)
   ([spec](docs/superpowers/specs/2026-08-18-file-transcription-product.md)).
 
+### Changed
+
+- **Meeting Buddy:** stoppen via overlay of tray (niet via dicteer-pill); recap
+  na elke meeting; herverbinden bij ontbrekend meetinggeluid; help-copy
+  bijgewerkt. Blijft experimenteel.
+
+### Fixed
+
+- Overlay blijft geminimaliseerd tijdens live-updates.
+- Capture-herverbinden houdt de orchestrator-lock niet meer vast tijdens STT-drain
+  (zelfde deadlock-fix als stop).
+- Agenda-review overschrijft live meetingstate niet meer met een stale snapshot.
+- WASAPI `start()`-fout valt fail-soft terug op alleen microfoon.
+- Speaker-clustering start opnieuw na capture-reconnect.
+
 ## [0.7.0] - 2026-08-21
 
 ### Added

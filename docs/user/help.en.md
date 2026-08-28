@@ -152,6 +152,11 @@ tray also has **Meeting Buddy ▸** with the same actions.
 - **Properties** for meeting audio (Windows loopback), output device, and
   optionally a different transcript folder.
 
+**Stop:** only via the overlay (square) or tray → Meeting Buddy → Stop meeting.
+The dictation pill and dictation hotkey do **not** stop the meeting. After
+stop you get a short recap (agenda, any summary, transcript path) without
+forcing the meeting app to the foreground.
+
 During a meeting the transcript grows as a `.md` file under
 `%APPDATA%\praatMaar\meeting-buddy\transcripts\` (final text only; changeable
 in Properties). On stop you get a notification with the path; the last audio

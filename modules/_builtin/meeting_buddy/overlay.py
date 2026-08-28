@@ -31,6 +31,7 @@ from ui.app import ensure_app
 from ui.overlay_flags import apply_hud_window_flags
 from ui.theme import TOKENS
 
+from .hint_text import truncate_for_hint
 from .hints import HintType
 from .live_summary import summary_points
 from .state import Hint, HintStatus, MeetingState, Question, QuestionStatus, Topic, TopicStatus
@@ -450,12 +451,16 @@ class MeetingBuddyOverlay:
         minimize = QPushButton("—")
         minimize.setCursor(Qt.CursorShape.PointingHandCursor)
         minimize.setStyleSheet(self._icon_btn_qss(TOKENS["muted"]))
+        minimize.setToolTip(i18n.t("modules.meeting_buddy.overlay.minimize"))
+        minimize.setAccessibleName(i18n.t("modules.meeting_buddy.overlay.minimize"))
         minimize.clicked.connect(self.minimize)
         head.addWidget(minimize)
         if on_stop is not None:
             stop = QPushButton("■")
             stop.setCursor(Qt.CursorShape.PointingHandCursor)
             stop.setStyleSheet(self._icon_btn_qss(TOKENS["danger"], size=9))
+            stop.setToolTip(i18n.t("modules.meeting_buddy.overlay.stop"))
+            stop.setAccessibleName(i18n.t("modules.meeting_buddy.overlay.stop"))
             stop.clicked.connect(on_stop)
             head.addWidget(stop)
         outer.addWidget(header)
@@ -655,14 +660,17 @@ class MeetingBuddyOverlay:
         if two_column:
             self._summary_time.setText(format_elapsed(self._elapsed_seconds())[:5])
         self._capture_status = capture_status
-        interrupted = _enum_value(capture_status) == "error"
-        self._listening.setText(
-            i18n.t(
-                "modules.meeting_buddy.overlay.headline.interrupted"
-                if interrupted
-                else "modules.meeting_buddy.overlay.headline.listening"
-            )
-        )
+        capture = _enum_value(capture_status)
+        interrupted = capture == "error"
+        if capture == "error":
+            headline = "modules.meeting_buddy.overlay.headline.interrupted"
+        elif capture == "starting":
+            headline = "modules.meeting_buddy.overlay.headline.starting"
+        elif capture == "reconnecting":
+            headline = "modules.meeting_buddy.overlay.headline.reconnecting"
+        else:
+            headline = "modules.meeting_buddy.overlay.headline.listening"
+        self._listening.setText(i18n.t(headline))
         self._listening.setStyleSheet(f"color: {TOKENS['danger_text']};" if interrupted else "")
         self._update_recording_banner(
             capture_status,
@@ -689,6 +697,13 @@ class MeetingBuddyOverlay:
                 )
             )
         )
+        minimized = self._mini is not None and self._mini.isVisible()
+        if minimized:
+            self._mini.set_state(
+                format_elapsed(self._elapsed_seconds()),
+                f"{self._topic_done}/{self._topic_total}",
+            )
+            return
         self.window.show()
         if not self._shown_once:
             self._shown_once = True
@@ -824,7 +839,7 @@ class MeetingBuddyOverlay:
             row.setSpacing(8)
             mark = QLabel("?")
             mark.setObjectName("overlayQ")
-            text = QLabel(question.text)
+            text = QLabel(truncate_for_hint(question.text))
             text.setObjectName("overlayQText")
             text.setWordWrap(True)
             row.addWidget(mark, 0, Qt.AlignmentFlag.AlignTop)
@@ -937,9 +952,12 @@ class MeetingBuddyOverlay:
         if capture == "error":
             kind, icon, icon_color = "bannerError", "!", TOKENS["danger"]
             text = i18n.t("modules.meeting_buddy.overlay.recording.error")
-        elif capture in {"starting", "reconnecting"}:
+        elif capture == "starting":
             kind, icon, icon_color = "bannerMuted", "●", TOKENS["muted"]
             text = i18n.t("modules.meeting_buddy.overlay.recording.starting")
+        elif capture == "reconnecting":
+            kind, icon, icon_color = "bannerMuted", "●", TOKENS["muted"]
+            text = i18n.t("modules.meeting_buddy.overlay.recording.reconnecting")
         elif delayed:
             kind, icon, icon_color = "bannerWarn", "!", TOKENS["amber_icon"]
             text = self._active_recording_text(
@@ -979,7 +997,10 @@ class MeetingBuddyOverlay:
         top.addWidget(glyph, 0, Qt.AlignmentFlag.AlignTop)
         top.addWidget(message, 1)
         box.addLayout(top)
-        if capture == "error":
+        show_reconnect = capture == "error" or (
+            capture == "active" and loopback_requested and loopback_active is False
+        )
+        if show_reconnect:
             reconnect = QPushButton(i18n.t("modules.meeting_buddy.overlay.reconnect"))
             reconnect.setObjectName("primary")
             reconnect.clicked.connect(self._on_reconnect)

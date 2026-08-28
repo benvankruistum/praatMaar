@@ -147,3 +147,37 @@ def test_start_uses_cluster_mode_and_feeds_pcm(tmp_path, monkeypatch) -> None:
 
     controller.stop(duration_ms=1000)
     assert speaker.stopped == [binding.meeting_session_id]
+
+
+def test_finish_reconnect_restarts_speaker_session(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "modules._builtin.meeting_buddy.session_controller.load_config",
+        lambda: {"microphone_device": None, "speech_language": "nl"},
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "config.load_config", lambda: {"microphone_device": None, "speech_language": "nl"}
+    )
+
+    caps = CapabilityRegistry()
+    capture = _FakeCapture()
+    stt = _FakeStt()
+    speaker = _FakeSpeaker()
+    caps.register(CAP_CAPTURE, capture, owner_module_id="audio-capture")
+    caps.register(CAP_STT, stt, owner_module_id="speech-to-text")
+    caps.register(
+        CAP_SPEAKER,
+        speaker,
+        owner_module_id="speaker-detection",
+        contract_version=SPEAKER_CONTRACT_VERSION,
+    )
+
+    controller = CapabilitySessionController(
+        capabilities=caps,
+        config=MeetingBuddyConfig.defaults(),
+    )
+    binding = controller.start()
+    controller.reconnect()
+    controller.finish_reconnect()
+    assert speaker.stopped == [binding.meeting_session_id]
+    assert speaker.started == [binding.meeting_session_id, binding.meeting_session_id]

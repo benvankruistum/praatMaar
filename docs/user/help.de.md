@@ -160,6 +160,12 @@ Aktionen.
 - **Eigenschaften** für Meeting-Audio (Windows-Loopback), Ausgabegerät und
   optional einen anderen Transkriptordner.
 
+**Beenden:** nur über das Overlay (Quadrat) oder Infobereich → Meeting Buddy →
+Besprechung beenden. Die Diktier-Pill und der Diktiertastenkürzel beenden die
+Besprechung **nicht**. Nach dem Stopp erscheint eine kurze Übersicht (Agenda,
+eventuelle Zusammenfassung, Transkriptpfad), ohne die Meeting-App in den
+Vordergrund zu zwingen.
+
 Während eines Meetings wächst das Transkript als `.md` unter
 `%APPDATA%\praatMaar\meeting-buddy\transcripts\` (nur finale Texte; änderbar
 unter Eigenschaften). Beim Stoppen erscheint eine Meldung mit dem Pfad; der
