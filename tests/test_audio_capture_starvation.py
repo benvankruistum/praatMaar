@@ -49,3 +49,15 @@ def test_loopback_pending_is_bounded_without_mic_data() -> None:
     engine._append_loopback_samples(state, ten_seconds)
 
     assert state.loopback_pending.size <= SAMPLE_RATE * 5
+
+
+def test_slow_loopback_caps_mic_pending_without_dropping_loopback() -> None:
+    engine = AudioCaptureEngine(sounddevice_module=object())
+    state = _state(loopback_enabled=True)
+    state.mic_pending = np.zeros(SAMPLE_RATE * 8, dtype=np.float32)
+    state.loopback_pending = np.zeros(SAMPLE_RATE, dtype=np.float32)
+
+    engine._flush_mixed_samples(state)
+
+    assert state.loopback_enabled is True
+    assert state.mic_pending.size <= SAMPLE_RATE * 5

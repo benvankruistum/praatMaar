@@ -538,8 +538,10 @@ class RecordingIndicator(QWidget):
                 self._invoke_callback(self._control_press_cb)
                 event.accept()
                 return
-        elif self._state == RecordingState.RECORDING and self._control_rect().contains(
-            event.position().toPoint()
+        elif (
+            self._state == RecordingState.RECORDING
+            and self._mode != "meeting"
+            and self._control_rect().contains(event.position().toPoint())
         ):
             self._control_held = True
             self._invoke_callback(self._control_press_cb)

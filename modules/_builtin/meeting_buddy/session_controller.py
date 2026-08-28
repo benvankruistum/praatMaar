@@ -208,6 +208,7 @@ class CapabilitySessionController:
             )
             self._capture_status = self._capture.get_status(capture_session.session_id)
             self._transcription_status = self._stt.get_status(transcription_session.session_id)
+            self._start_speaker_session(binding.meeting_session_id)
         except Exception as exc:
             if capture_session is not None:
                 try:

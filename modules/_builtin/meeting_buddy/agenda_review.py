@@ -24,7 +24,9 @@ from .state_service import MeetingStateService, StateProposal, StateProposalType
 
 log = logging.getLogger(__name__)
 
-OnReview = Callable[[MeetingState], None]
+OnReview = Callable[[dict[str, object]], None]
+
+_MAX_BUFFER_CHARS = 12_000
 
 
 @dataclass
@@ -126,6 +128,11 @@ class AgendaReviewCoordinator:
                 return
             self._buffer.append(labeled)
             self._chars_since += len(chunk)
+            overflow = sum(len(item.text) for item in self._buffer) - _MAX_BUFFER_CHARS
+            while overflow > 0 and self._buffer:
+                dropped = self._buffer.pop(0)
+                overflow -= len(dropped.text)
+                self._chars_since = max(0, self._chars_since - len(dropped.text))
             should = self._should_run_unlocked(now=now if now is not None else time.monotonic())
             if not should:
                 return
@@ -210,13 +217,14 @@ class AgendaReviewCoordinator:
                     labeled_parts=labeled_parts,
                 ),
             }
-            updated = self.apply_review_result(state, data, now_s=self._clock())
             with self._lock:
-                self._chars_since = 0
+                sent = {id(part) for part in labeled_parts}
+                self._buffer = [part for part in self._buffer if id(part) not in sent]
+                self._chars_since = sum(len(part.text) for part in self._buffer)
                 self._last_run_at = time.monotonic()
                 self._first_run_pending = False
             if self._on_review is not None:
-                self._on_review(updated)
+                self._on_review(data)
         except Exception:
             log.exception("Agenda review analyse mislukt")
             with self._lock:
