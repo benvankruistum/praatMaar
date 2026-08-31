@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from indicator import RecordingState
+from PySide6.QtGui import QImage, QPainter
+
+from indicator import RecordingState, set_chunk_leds_enabled, signal_chunk_trigger
 from indicator._contract import (
     INDICATOR_HEIGHT,
     NUM_BARS,
@@ -11,6 +13,7 @@ from indicator._contract import (
     WAVEFORM_BAR_WIDTH,
     elapsed_label,
 )
+from indicator._qt import _CHUNK_LED_GAP, _CHUNK_LED_SIZE
 from ui.app import ensure_app
 
 
@@ -82,3 +85,49 @@ def test_recording_tracks_elapsed_seconds() -> None:
     # Buiten de opname is er geen looptijd.
     pill._apply_state(RecordingState.TRANSCRIBING, "toggle")
     assert pill._elapsed_seconds() == 0
+
+
+def _paint_chunk_leds_at(pill, right_x: int) -> int:
+    image = QImage(INDICATOR_HEIGHT * 8, INDICATOR_HEIGHT, QImage.Format.Format_ARGB32)
+    painter = QPainter(image)
+    try:
+        return pill._paint_chunk_leds(painter, right_x)
+    finally:
+        painter.end()
+        set_chunk_leds_enabled(False)
+
+
+def test_chunk_leds_hidden_when_module_off() -> None:
+    pill = _pill()
+    set_chunk_leds_enabled(False)
+    assert _paint_chunk_leds_at(pill, 200) == 200
+
+
+def test_chunk_leds_reserve_icon_width_not_letters() -> None:
+    """Incrementele knip-LED’s zijn ruit + stopwatch, geen V/T-letters."""
+
+    import inspect
+
+    from indicator._qt import RecordingIndicator
+
+    source = inspect.getsource(RecordingIndicator._paint_chunk_leds)
+    helpers = inspect.getsource(RecordingIndicator._paint_chunk_led_diamond) + inspect.getsource(
+        RecordingIndicator._paint_chunk_led_clock
+    )
+    assert "drawText" not in source and "drawText" not in helpers
+    assert '"V"' not in source and '"T"' not in source
+
+    pill = _pill()
+    set_chunk_leds_enabled(True)
+    left = _paint_chunk_leds_at(pill, 200)
+    expected = int(_CHUNK_LED_SIZE + _CHUNK_LED_GAP + _CHUNK_LED_SIZE)
+    assert 200 - left == expected
+
+
+def test_chunk_leds_paint_when_lit() -> None:
+    pill = _pill()
+    set_chunk_leds_enabled(True)
+    signal_chunk_trigger("vad")
+    signal_chunk_trigger("fixed")
+    left = _paint_chunk_leds_at(pill, 200)
+    assert left < 200

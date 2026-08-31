@@ -22,6 +22,8 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Fixed
 
+- Opname-pill toont weer ruit- en stopwatch-iconen voor chunk-knippen (stilte
+  vs. tijdvenster) in plaats van de letters V en T.
 - Overlay blijft geminimaliseerd tijdens live-updates.
 - Capture-herverbinden houdt de orchestrator-lock niet meer vast tijdens STT-drain
   (zelfde deadlock-fix als stop).

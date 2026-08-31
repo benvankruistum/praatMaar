@@ -57,6 +57,9 @@ Pill **verborgen** (of minimaal). Gebruiker dicteert via sneltoets; tray blijft 
 - Waveform: ~18 staafjes, reageert op microfoonniveau.
 - Modus-tag: `↔ toggle` | `● ptt` | `● meeting`.
 - Dot pulseert tijdens opname.
+- Optioneel (incrementele transcriptie aan): twee LCD-iconen ná de waveform —
+  **ruit** (knip bij stilte/VAD) en **stopwatch** (knip op het tijdvenster);
+  grijs in rust, kleur bij hit. Geen letters of anonieme bolletjes.
 
 ### D. Transcriberen
 
