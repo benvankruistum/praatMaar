@@ -84,6 +84,10 @@ from ._contract import (
 _BTN = 32
 _BTN_Y = (INDICATOR_HEIGHT - _BTN) // 2
 _RIGHT_PAD = 8
+# Chunk-LED’s: geometrisch (geen emoji/letters) zodat Windows-HUD-fonts
+# de ruit (stilte) en stopwatch (tijdvenster) altijd tekenen.
+_CHUNK_LED_SIZE = 14.0
+_CHUNK_LED_GAP = 8.0
 
 
 class RecordingIndicator(QWidget):
@@ -973,37 +977,83 @@ class RecordingIndicator(QWidget):
         )
         return int(left)
 
+    def _chunk_led_pen(self, color: QColor, *, lit: bool) -> QPen:
+        pen = QPen(color)
+        pen.setWidthF(2.0 if lit else 1.5)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        return pen
+
+    def _paint_chunk_led_diamond(
+        self, painter: QPainter, cx: float, color: QColor, *, lit: bool
+    ) -> None:
+        """Ruit = knip bij stilte (VAD)."""
+
+        half_w, half_h = 5.5, 6.5
+        path = QPainterPath()
+        path.moveTo(cx, self._CY - half_h)
+        path.lineTo(cx + half_w, self._CY)
+        path.lineTo(cx, self._CY + half_h)
+        path.lineTo(cx - half_w, self._CY)
+        path.closeSubpath()
+        if lit:
+            fill = QColor(color)
+            fill.setAlpha(70)
+            painter.setBrush(fill)
+        else:
+            painter.setBrush(Qt.NoBrush)
+        painter.setPen(self._chunk_led_pen(color, lit=lit))
+        painter.drawPath(path)
+
+    def _paint_chunk_led_clock(
+        self, painter: QPainter, cx: float, color: QColor, *, lit: bool
+    ) -> None:
+        """Stopwatch = knip op het tijdvenster."""
+
+        radius = 5.5
+        if lit:
+            fill = QColor(color)
+            fill.setAlpha(70)
+            painter.setBrush(fill)
+        else:
+            painter.setBrush(Qt.NoBrush)
+        painter.setPen(self._chunk_led_pen(color, lit=lit))
+        painter.drawEllipse(QRectF(cx - radius, self._CY - radius, radius * 2, radius * 2))
+        # Kroon boven 12 uur — leest als stopwatch, niet als gewone klok.
+        painter.drawLine(QPointF(cx, self._CY - radius), QPointF(cx, self._CY - radius - 2.2))
+        painter.drawLine(
+            QPointF(cx - 2.2, self._CY - radius - 2.2),
+            QPointF(cx + 2.2, self._CY - radius - 2.2),
+        )
+        # Wijzers: korte naar 12, langere naar ~2 uur.
+        painter.drawLine(QPointF(cx, self._CY), QPointF(cx, self._CY - 3.2))
+        painter.drawLine(QPointF(cx, self._CY), QPointF(cx + 3.4, self._CY + 0.8))
+
     def _paint_chunk_leds(self, painter: QPainter, right_x: int) -> int:
-        """Twee LCD-iconen (V stilte, T tijd); retourneert linker rand voor waveform."""
+        """Twee LCD-iconen (ruit stilte, stopwatch tijd); linker rand voor waveform."""
 
         enabled, vad_on, fixed_on = chunk_led_snapshot()
         if not enabled:
             return right_x
 
-        painter.setFont(self._font(13, bold=True))
-        metrics = painter.fontMetrics()
-        # ASCII i.p.v. emoji: betrouwbaarder leesbaar op Windows HUD-fonts.
-        vad_glyph = "V"
-        time_glyph = "T"
-        gap = 8
-        vad_w = max(metrics.horizontalAdvance(vad_glyph), 12)
-        time_w = max(metrics.horizontalAdvance(time_glyph), 12)
-        width = vad_w + gap + time_w
+        size = _CHUNK_LED_SIZE
+        gap = _CHUNK_LED_GAP
+        width = size + gap + size
         left = right_x - width
-        y = 0
-        h = INDICATOR_HEIGHT
+        vad_cx = left + size / 2
+        time_cx = left + size + gap + size / 2
 
-        painter.setPen(QColor(COLOR_CHUNK_LED_VAD if vad_on else COLOR_CHUNK_LED_IDLE))
-        painter.drawText(
-            QRect(int(left), y, vad_w + 2, h),
-            Qt.AlignVCenter | Qt.AlignLeft,
-            vad_glyph,
+        self._paint_chunk_led_diamond(
+            painter,
+            vad_cx,
+            QColor(COLOR_CHUNK_LED_VAD if vad_on else COLOR_CHUNK_LED_IDLE),
+            lit=vad_on,
         )
-        painter.setPen(QColor(COLOR_CHUNK_LED_FIXED if fixed_on else COLOR_CHUNK_LED_IDLE))
-        painter.drawText(
-            QRect(int(left + vad_w + gap), y, time_w + 2, h),
-            Qt.AlignVCenter | Qt.AlignLeft,
-            time_glyph,
+        self._paint_chunk_led_clock(
+            painter,
+            time_cx,
+            QColor(COLOR_CHUNK_LED_FIXED if fixed_on else COLOR_CHUNK_LED_IDLE),
+            lit=fixed_on,
         )
         return int(left)
 
