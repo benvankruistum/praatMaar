@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import os
+
+# onnxruntime 1.31+ (VAD via Faster-Whisper) zet in officiële wheels telemetrie
+# aan. Dit moet vóór de eerste import, anders gaat er data naar Microsoft.
+os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")
+
 import signal
 import sys
 import threading
