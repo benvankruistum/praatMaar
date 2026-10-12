@@ -53,6 +53,7 @@ from mic_errors import format_recording_start_error
 from modules._contract import CycleEvent, CycleEventType
 from modules.whisper import SharedWhisper
 from transcription_progress import TranscriptionProgressTicker
+from whisper_segments import collapse_repeated_phrases, reliable_segment_text
 
 __all__ = ["CycleTiming", "Host", "NotifyFn", "Opnamesessie", "format_cycle_timing"]
 
@@ -291,6 +292,9 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             "vad_filter": bool(self.whisper_vad_filter),
             "condition_on_previous_text": bool(self.whisper_condition_on_previous_text),
             "no_speech_threshold": float(self.whisper_no_speech_threshold),
+            # Geen temperature-ladder: een mislukte beam-decode wordt een gat,
+            # niet een tweede lossere tekst.
+            "temperature": 0.0,
         }
         if self.whisper_vad_filter:
             kwargs["vad_parameters"] = {
@@ -526,7 +530,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
                     final_state = RecordingState.ERROR
                 timing.whisper_s = time.perf_counter() - whisper_started
 
-            transcript = " ".join(t for t in texts if t).strip()
+            transcript = collapse_repeated_phrases(" ".join(t for t in texts if t).strip())
             if ticker is not None:
                 ticker.stop(100)
                 ticker = None
@@ -688,7 +692,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
                     if bucket > last_logged_bucket and bucket >= 1:
                         print(i18n.t("rec.transcribing_progress", percent=bucket_source))
                         last_logged_bucket = bucket
-                    text = segment.text.strip()
+                    text = reliable_segment_text(segment)
                     if text:
                         text_parts.append(text)
             timing.whisper_s = time.perf_counter() - whisper_started
@@ -696,7 +700,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             ticker.stop(100)
             ticker = None
             deliver_started = time.perf_counter()
-            self._apply_transcript(" ".join(text_parts).strip())
+            self._apply_transcript(collapse_repeated_phrases(" ".join(text_parts).strip()))
             timing.deliver_s = time.perf_counter() - deliver_started
 
         except Exception as exc:
