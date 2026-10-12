@@ -401,7 +401,10 @@ def test_stt_subscribes_and_emits_delta():
 
     cs = capture.start_session()
     ts = stt.start_session(capture_session_id=cs.session_id, capture=capture)
-    stt.subscribe(ts.session_id, lambda ev: deltas.append(ev) if isinstance(ev, TranscriptDeltaReceived) else None)
+    stt.subscribe(
+        ts.session_id,
+        lambda ev: deltas.append(ev) if isinstance(ev, TranscriptDeltaReceived) else None,
+    )
 
     capture.emit_seconds(0.1)  # synthetische chunk
     assert any(isinstance(d, TranscriptDeltaReceived) for d in deltas)
@@ -456,6 +459,7 @@ def test_overflow_emits_gap_and_drops_oldest():
     buf.on_gap = gaps.append
     # schrijf meer samples dan max
     import numpy as np
+
     samples = np.zeros(16000, dtype=np.float32)  # 1s > 0.05s
     buf.write(samples, start_ms=0)
     assert gaps, "expected CaptureGap on overflow"
@@ -637,7 +641,9 @@ from modules._builtin.meeting_buddy.prep import parse_agenda
 
 
 def test_parse_strips_bullets_and_numbers():
-    text = "1. Stand van zaken planning\n2. Budget\n- Beveiligingsrisico's\nBesluit over livegang\n\n"
+    text = (
+        "1. Stand van zaken planning\n2. Budget\n- Beveiligingsrisico's\nBesluit over livegang\n\n"
+    )
     assert parse_agenda(text) == [
         "Stand van zaken planning",
         "Budget",
@@ -711,6 +717,7 @@ git commit -m "Add Meeting Buddy immutable state service and agenda prep."
 # tests/test_meeting_buddy_config.py
 def test_defaults_load_without_user_file(tmp_path):
     from modules._builtin.meeting_buddy.config import load_meeting_buddy_config
+
     cfg = load_meeting_buddy_config(tmp_path)
     assert cfg.max_visible_hints == 3
     assert cfg.topic_match_score == 0.55
@@ -732,25 +739,40 @@ def _cfg(**kwargs) -> MeetingBuddyConfig:
 def test_question_mark_opens_question():
     state = MeetingState.empty("m1")
     delta = TranscriptDelta("t1", 1, 0, 1000, "Hoe gaan we dit doen?", True, 0.9)
-    props = HeuristicsEngine().proposals_for(delta, state, MeetingBuddyConfig.defaults(), now_s=10.0)
+    props = HeuristicsEngine().proposals_for(
+        delta, state, MeetingBuddyConfig.defaults(), now_s=10.0
+    )
     assert any(p.type == "add_question" for p in props)
 
 
 def test_topic_match_requires_score_and_tokens():
-    topic = Topic(id="tp1", title="Beveiligingsrisico's", status=TopicStatus.OPEN, source=TopicSource.AGENDA, confidence=1.0, last_matched_at=None)
+    topic = Topic(
+        id="tp1",
+        title="Beveiligingsrisico's",
+        status=TopicStatus.OPEN,
+        source=TopicSource.AGENDA,
+        confidence=1.0,
+        last_matched_at=None,
+    )
     state = MeetingState.empty("m1").with_topics((topic,))
     weak = TranscriptDelta("t1", 1, 0, 1000, "risico", True, 0.9)
     strong = TranscriptDelta("t1", 2, 1000, 2000, "beveiligingsrisico's besproken", True, 0.9)
     eng = HeuristicsEngine()
     cfg = MeetingBuddyConfig.defaults()
-    assert not any(p.type == "mark_topic_discussed" for p in eng.proposals_for(weak, state, cfg, now_s=10.0))
-    assert any(p.type == "mark_topic_discussed" for p in eng.proposals_for(strong, state, cfg, now_s=10.0))
+    assert not any(
+        p.type == "mark_topic_discussed" for p in eng.proposals_for(weak, state, cfg, now_s=10.0)
+    )
+    assert any(
+        p.type == "mark_topic_discussed" for p in eng.proposals_for(strong, state, cfg, now_s=10.0)
+    )
 
 
 def test_action_pattern_creates_candidate_without_owner():
     state = MeetingState.empty("m1")
     delta = TranscriptDelta("t1", 1, 0, 1000, "we moeten nog de website controleren", True, 0.9)
-    props = HeuristicsEngine().proposals_for(delta, state, MeetingBuddyConfig.defaults(), now_s=10.0)
+    props = HeuristicsEngine().proposals_for(
+        delta, state, MeetingBuddyConfig.defaults(), now_s=10.0
+    )
     action_props = [p for p in props if p.type == "add_action"]
     assert action_props
     assert action_props[0].payload.get("owner") in (None, "UNKNOWN", "unknown")
@@ -761,13 +783,27 @@ def test_action_pattern_creates_candidate_without_owner():
 from modules._builtin.meeting_buddy.hints import HintEngine, HintType
 from modules._builtin.meeting_buddy.config import MeetingBuddyConfig
 from modules._builtin.meeting_buddy.state import (
-    MeetingState, Topic, TopicStatus, TopicSource, Question, QuestionStatus, ActionItem, ActionStatus,
+    MeetingState,
+    Topic,
+    TopicStatus,
+    TopicSource,
+    Question,
+    QuestionStatus,
+    ActionItem,
+    ActionStatus,
 )
 
 
 def test_max_three_hints():
     topics = tuple(
-        Topic(id=f"t{i}", title=f"Topic {i}", status=TopicStatus.OPEN, source=TopicSource.AGENDA, confidence=1.0, last_matched_at=None)
+        Topic(
+            id=f"t{i}",
+            title=f"Topic {i}",
+            status=TopicStatus.OPEN,
+            source=TopicSource.AGENDA,
+            confidence=1.0,
+            last_matched_at=None,
+        )
         for i in range(5)
     )
     state = MeetingState.empty("m1").with_topics(topics)
@@ -778,7 +814,15 @@ def test_max_three_hints():
 
 
 def test_low_confidence_question_no_hint():
-    q = Question(id="q1", text="Wat?", status=QuestionStatus.OPEN, source_delta_id="d1", created_at=0.0, resolved_at=None, confidence=0.1)
+    q = Question(
+        id="q1",
+        text="Wat?",
+        status=QuestionStatus.OPEN,
+        source_delta_id="d1",
+        created_at=0.0,
+        resolved_at=None,
+        confidence=0.1,
+    )
     state = MeetingState.empty("m1").with_questions((q,))
     hints = HintEngine().evaluate(state, MeetingBuddyConfig.defaults(), now_s=10_000.0)
     assert not any(h.type == HintType.QUESTION_OPEN for h in hints)
@@ -787,7 +831,14 @@ def test_low_confidence_question_no_hint():
 def test_cooldown_suppresses_repeat():
     engine = HintEngine()
     cfg = MeetingBuddyConfig.defaults()
-    topic = Topic(id="tp1", title="Budget", status=TopicStatus.OPEN, source=TopicSource.AGENDA, confidence=1.0, last_matched_at=None)
+    topic = Topic(
+        id="tp1",
+        title="Budget",
+        status=TopicStatus.OPEN,
+        source=TopicSource.AGENDA,
+        confidence=1.0,
+        last_matched_at=None,
+    )
     state = MeetingState.empty("m1").with_topics((topic,))
     first = engine.evaluate(state, cfg, now_s=10_000.0)
     assert first
@@ -869,7 +920,9 @@ def test_start_wires_capture_and_stt_and_updates_state():
     assert orch.state.version >= 1
     assert len(orch.state.topics) == 2
     # STT event simuleren
-    delta = TranscriptDelta(orch.binding.transcription_session_id, 1, 0, 1000, "Budget is rond", True, 0.9)
+    delta = TranscriptDelta(
+        orch.binding.transcription_session_id, 1, 0, 1000, "Budget is rond", True, 0.9
+    )
     orch.on_stt_event(TranscriptDeltaReceived(delta=delta))
     assert orch.state.version >= 2
     orch.stop()
@@ -893,7 +946,9 @@ from modules._builtin.meeting_buddy.observability import log_event, RecordingObs
 
 def test_log_event_has_no_transcript_field():
     obs = RecordingObserver()
-    log_event(obs, "hint_emitted", meeting_session_id="m1", hint_type="question_open", text="GEHEIM")
+    log_event(
+        obs, "hint_emitted", meeting_session_id="m1", hint_type="question_open", text="GEHEIM"
+    )
     payload = obs.events[0]
     assert "text" not in payload or payload.get("text") is None
 ```
@@ -933,6 +988,7 @@ git commit -m "Wire Meeting Buddy orchestrator, tray actions, and debug events."
 ```python
 def test_format_elapsed():
     from modules._builtin.meeting_buddy.overlay import format_elapsed
+
     assert format_elapsed(1458) == "00:24:18"
 
 
