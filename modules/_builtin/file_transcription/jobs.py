@@ -14,6 +14,7 @@ from typing import Any, Protocol
 import i18n
 from modules._contract import CycleEvent, CycleEventType
 from modules.whisper import SharedWhisper
+from whisper_segments import join_reliable_segments
 
 SOURCE = "file"
 SLICE_SECONDS = 30.0
@@ -392,12 +393,7 @@ class FileTranscriptionQueue:
 
 
 def _join_segments(segments: Any) -> str:
-    parts: list[str] = []
-    for segment in segments:
-        text = str(getattr(segment, "text", "")).strip()
-        if text:
-            parts.append(text)
-    return " ".join(parts).strip()
+    return join_reliable_segments(segments)
 
 
 def _as_1d(audio: Any) -> Any:

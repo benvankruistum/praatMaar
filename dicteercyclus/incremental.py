@@ -19,6 +19,7 @@ from chunk_transcription import (
 )
 from indicator import set_chunk_leds_enabled, signal_chunk_trigger
 from modules._contract import CycleEvent, CycleEventType
+from whisper_segments import collapse_repeated_phrases, join_reliable_segments
 
 # RMS onder deze drempel telt als stilte voor chunk-VAD (v1, eenvoudig).
 _CHUNK_SILENCE_RMS = 0.01
@@ -318,7 +319,7 @@ class IncrementalMixin:
             if piece_text:
                 self._chunk_transcripts.append(piece_text)
             self._committed_through_samples = int(job.commit_end_sample)
-            combined = " ".join(self._chunk_transcripts).strip()
+            combined = collapse_repeated_phrases(" ".join(self._chunk_transcripts).strip())
 
         if combined:
             self._emit_partial(combined, job.session_id)
@@ -373,13 +374,7 @@ class IncrementalMixin:
                     str(temporary_path),
                     **self.transcribe_kwargs(),
                 )
-                text_parts: list[str] = []
-                for segment in segments:
-                    text = segment.text.strip()
-                    if text:
-                        text_parts.append(text)
-
-            return " ".join(text_parts).strip()
+            return join_reliable_segments(segments)
         finally:
             if self.delete_temp_audio and temporary_path.exists():
                 try:

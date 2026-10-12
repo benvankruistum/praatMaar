@@ -729,6 +729,7 @@ def test_transcribe_kwargs_defaults_and_optional_prompt(session: Opnamesessie) -
     assert kwargs["vad_parameters"] == {"min_silence_duration_ms": 300}
     assert kwargs["condition_on_previous_text"] is False
     assert kwargs["no_speech_threshold"] == 0.6
+    assert kwargs["temperature"] == 0.0
     assert "initial_prompt" not in kwargs
     assert "hotwords" not in kwargs
 
