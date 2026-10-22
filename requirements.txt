@@ -5,6 +5,9 @@
 # Of: pip install -e ".[dev]"
 
 faster-whisper==1.2.1
+# PyAV 19 heeft metadata_errors uit av.open gehaald. faster-whisper 1.2.1
+# geeft die parameter nog door, waardoor elke transcriptie meteen faalt.
+av==18.1.0
 sounddevice==0.5.5
 pyaudiowpatch==0.2.12.8; sys_platform == "win32"
 pynput==1.8.2

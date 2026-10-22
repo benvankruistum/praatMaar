@@ -7,6 +7,8 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-22
+
 ### Added
 
 - **Bestandstranscriptie** (experimenteel, standaard uit): via Modules lokale
@@ -22,6 +24,11 @@ en dit project volgt [SemVer](https://semver.org/lang/nl/).
 
 ### Fixed
 
+- Transcriptie faalde meteen na de opname (`metadata_errors`) zodra PyAV 19
+  werd geïnstalleerd. `av` staat vast op 18.1.0, de laatste release die
+  `faster-whisper` 1.2.1 nog kan openen.
+- Mislukte Whisper-segmenten worden weggegooid in plaats van herhaalde of
+  verzonnen tekst te houden.
 - Opname-pill toont weer ruit- en stopwatch-iconen voor chunk-knippen (stilte
   vs. tijdvenster) in plaats van de letters V en T.
 - Overlay blijft geminimaliseerd tijdens live-updates.
@@ -311,7 +318,8 @@ Eerste publieke Windows-release (tag `v0.1.0`).
 - Model-download: fallback repo-id map naast private `faster_whisper.utils._MODELS`
 - `dictation.py` is dunne entrypoint (splash, hotkeys, tray); lifecycle in `Opnamesessie`
 
-[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/benvankruistum/praatMaar/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/benvankruistum/praatMaar/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/benvankruistum/praatMaar/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/benvankruistum/praatMaar/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/benvankruistum/praatMaar/compare/v0.4.0...v0.5.0

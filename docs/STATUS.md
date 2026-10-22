@@ -1,6 +1,6 @@
 # Status — praatMaar
 
-Laatst bijgewerkt: 2026-08-21.
+Laatst bijgewerkt: 2026-10-22.
 
 **Architectuur (strangler):** composition root `app/` + `dicteercyclus/`
 (ADR-0007); dunne `dictation.py`-entry. Behaviour freeze t.o.v. v1.0-scope —
@@ -51,8 +51,8 @@ Aandachtspunten, nog niet als distributie-build geverifieerd:
 - **Modules:** in-process uitbreidingen + event-journal (`modules/`, tray
   **Modules**); inbox-spiegel; optionele incrementele/chunk-transcriptie
   ([ADR-0003](adr/0003-hybrid-module-system.md))
-- Windows-release: Inno Setup + CI (gepubliceerd: tag `v0.7.0`; richting
-  **v1.0.0** volgens scope-spec hierboven)
+- Windows-release: Inno Setup + CI (vorige tag `v0.7.0`; cut `v0.8.0`,
+  tag na merge; richting **v1.0.0** volgens scope-spec hierboven)
 - macOS-release: unsigned arm64-zip via dezelfde Release-workflow (`macos-14`)
 
 ## Experimentele modules

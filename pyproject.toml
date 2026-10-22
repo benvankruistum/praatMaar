@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "praatMaar"
-version = "0.7.0"
+version = "0.8.0"
 description = "Lokale dicteertool (Faster-Whisper; Windows, macOS + Linux; UI/spraak nl/en/de)"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -26,6 +26,9 @@ classifiers = [
 ]
 dependencies = [
     "faster-whisper==1.2.1",
+    # PyAV 19 heeft metadata_errors uit av.open gehaald. faster-whisper 1.2.1
+    # geeft die parameter nog door, waardoor elke transcriptie meteen faalt.
+    "av==18.1.0",
     "sounddevice==0.5.5",
     "pyaudiowpatch==0.2.12.8; sys_platform == 'win32'",
     "pynput==1.8.2",
