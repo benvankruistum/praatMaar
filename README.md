@@ -142,8 +142,8 @@ Zie ook [SECURITY.md](SECURITY.md).
 
 - Windows: [docs/release-windows.md](docs/release-windows.md) (versie-checklist + tag)
 - macOS: [docs/release-macos.md](docs/release-macos.md)
-- Changelog: [CHANGELOG.md](CHANGELOG.md) — gepubliceerd `v0.7.0`; richting
-  `v1.0.0` onder Unreleased / scope-spec
+- Changelog: [CHANGELOG.md](CHANGELOG.md) — gepubliceerd `v0.7.0`; cut
+  `v0.8.0` (tag na merge); richting `v1.0.0` volgens de scope-spec
 
 ```text
 pyinstaller praatMaar.spec --clean
