@@ -15,11 +15,26 @@ import sys
 from pathlib import Path
 
 from . import APP_NAME
+from ._done_sound import play_command
 from ._launch import dictation_script_path
+
+# Freedesktop-themaklank "complete": kort sein dat een handeling klaar is.
+# paplay-volume 0–65536; ~40% van het huidige uitvoervolume.
+_COMPLETION_SOUNDS = (
+    "/usr/share/sounds/freedesktop/stereo/complete.oga",
+    "/usr/share/sounds/freedesktop/stereo/message.oga",
+    "/usr/share/sounds/Yaru/stereo/complete.oga",
+)
+_PAPLAY_VOLUME = "28000"
 
 
 class LinuxHost:
     """The Linux implementation of :class:`host.Host`."""
+
+    def play_completion_sound(self) -> None:
+        """Freedesktop-klank 'complete', zachter via paplay als dat kan."""
+
+        play_command(linux_completion_command())
 
     def paste(self) -> None:
         """Best-effort Ctrl+V via an installed desktop input utility."""
@@ -114,3 +129,19 @@ class LinuxHost:
             return f'"{sys.executable}"'
 
         return f'"{sys.executable}" "{dictation_script_path()}"'
+
+
+def linux_completion_command() -> list[str] | None:
+    """Speler plus systeemklank, of ``None`` als er geen thema-geluid is."""
+
+    for player in ("paplay", "pw-play"):
+        if shutil.which(player) is None:
+            continue
+        for sound in _COMPLETION_SOUNDS:
+            if Path(sound).is_file():
+                if player == "paplay":
+                    return [player, f"--volume={_PAPLAY_VOLUME}", sound]
+                return [player, sound]
+    if shutil.which("canberra-gtk-play"):
+        return ["canberra-gtk-play", "-i", "complete"]
+    return None

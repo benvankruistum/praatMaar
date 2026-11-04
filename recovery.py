@@ -9,12 +9,15 @@ later opnieuw getranscribeerd kan worden.
 Alles onder `%APPDATA%\\praatMaar\\`:
 - `transcripts\\` : elk geslaagd transcript, met retentie (nieuwste N).
 - `recovery\\`    : audio van mislukte transcripties (niet automatisch opgeschoond).
+- `analysis\\`    : tijdelijke kopie van geslaagde opnames plus Whisper-annotatie
+  (nieuwste N), om spraak en transcript te vergelijken. Geen herstelpad.
 
 Bewust puur stdlib, net als `config.py`: geen extra dependency voor deze laag.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from dataclasses import dataclass
@@ -25,6 +28,9 @@ from config import config_dir
 
 # Hoeveel transcripts we maximaal bewaren. Oudere worden opgeruimd.
 MAX_TRANSCRIPTS = 50
+
+# Tijdelijke analyse-opnames (WAV + transcript + segmenten). Oudere vallen weg.
+MAX_ANALYSIS_RECORDINGS = 30
 
 # Hoeveel recente transcripts in het tray/pill-menu.
 RECENT_TRANSCRIPT_LIMIT = 5
@@ -44,6 +50,12 @@ def recovery_dir() -> Path:
     """Map met audio van mislukte transcripties (`...\\recovery\\`)."""
 
     return config_dir() / "recovery"
+
+
+def analysis_dir() -> Path:
+    """Tijdelijke map om geslaagde opnames naast hun annotatie te leggen."""
+
+    return config_dir() / "analysis"
 
 
 def _timestamp() -> str:
@@ -157,6 +169,58 @@ def preserve_audio(wav_path: Path) -> Path:
     shutil.move(str(wav_path), str(target))
 
     return target
+
+
+def keep_analysis_recording(
+    wav_path: Path,
+    transcript: str,
+    segments: list[dict[str, object]] | None = None,
+) -> Path:
+    """
+    Kopieert een geslaagde opname naar ``analysis/`` en legt het transcript
+    plus de Whisper-segmenten ernaast. Het bronbestand blijft staan.
+
+    Oudere paren dan ``MAX_ANALYSIS_RECORDINGS`` worden verwijderd. Dit is
+    geen herstel: een mislukte transcriptie hoort in ``recovery/``.
+    """
+
+    directory = analysis_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+
+    target = _unique_path(directory, _timestamp(), ".wav")
+    shutil.copy2(wav_path, target)
+    target.with_suffix(".txt").write_text(transcript, encoding="utf-8")
+    payload = {"transcript": transcript, "segments": list(segments or [])}
+    target.with_suffix(".json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    prune_analysis_recordings()
+    return target
+
+
+def prune_analysis_recordings(max_files: int | None = None) -> None:
+    """Houdt de nieuwste analyse-WAV’s; verwijdert oudere WAV/TXT/JSON-paren."""
+
+    if max_files is None:
+        max_files = MAX_ANALYSIS_RECORDINGS
+
+    directory = analysis_dir()
+    try:
+        files = [path for path in directory.glob("*.wav") if path.is_file()]
+    except OSError:
+        return
+
+    if len(files) <= max_files:
+        return
+
+    files.sort(key=lambda path: path.stat().st_mtime)
+    for path in files[:-max_files]:
+        for sibling in (path, path.with_suffix(".txt"), path.with_suffix(".json")):
+            try:
+                sibling.unlink()
+            except OSError:
+                pass
 
 
 def list_recovery_wavs() -> list[Path]:

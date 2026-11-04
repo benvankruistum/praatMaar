@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from host._launch import dictation_script_path
-from host._mac import _AGENT_LABEL, MacHost
+from host._mac import _AGENT_LABEL, MacHost, mac_completion_command
 from host._mac_paste import _KEY_V, paste_command_v
 
 
@@ -125,3 +125,14 @@ def test_single_instance_writes_pid(mac_home: Path) -> None:
 
     other = MacHost()
     assert other.acquire_single_instance() is False
+
+
+def test_completion_sound_uses_glass_at_reduced_volume(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(Path, "is_file", lambda self: self.name == "Glass.aiff")
+    command = mac_completion_command()
+    assert command == ["afplay", "-v", "0.4", "/System/Library/Sounds/Glass.aiff"]
+
+
+def test_completion_sound_is_silent_without_a_system_sound(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(Path, "is_file", lambda self: False)
+    assert mac_completion_command() is None

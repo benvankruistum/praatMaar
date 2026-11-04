@@ -9,8 +9,10 @@ from unittest.mock import MagicMock
 from modules._builtin.speech_to_text import IncrementalSpeechToText
 from whisper_segments import (
     collapse_repeated_phrases,
+    decide_segment,
     join_reliable_segments,
     reliable_segment_text,
+    segment_annotation,
 )
 
 
@@ -31,6 +33,18 @@ def test_magicmock_scores_are_ignored() -> None:
 def test_high_compression_is_dropped() -> None:
     assert reliable_segment_text(_seg("lus", compression_ratio=2.41)) is None
     assert reliable_segment_text(_seg("net goed", compression_ratio=2.4)) == "net goed"
+
+
+def test_segment_annotation_marks_drop_on_the_recording_timeline() -> None:
+    segment = _seg("lus", compression_ratio=3.0, start=1.25, end=2.5)
+    decision = decide_segment(segment)
+    note = segment_annotation(segment, decision, origin_s=10.0)
+    assert decision.kept is False
+    assert decision.reason == "compression"
+    assert note["text"] == "lus"
+    assert note["start_s"] == 11.25
+    assert note["end_s"] == 12.5
+    assert note["origin_s"] == 10.0
 
 
 def test_sampling_fallback_is_dropped() -> None:

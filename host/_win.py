@@ -28,9 +28,37 @@ _VALUE_NAME = APP_NAME
 _MUTEX_NAME = "praatMaar-singleton"
 _ERROR_ALREADY_EXISTS = 183
 
+# Korte systeem-WAV's onder %WINDIR%\\Media, van zacht/kort naar bekender.
+_COMPLETION_WAVS = (
+    "Windows Ding.wav",
+    "ding.wav",
+    "Windows Balloon.wav",
+    "Windows Notify.wav",
+)
+
 
 class WinHost:
     """De `Host`-implementatie voor Windows."""
+
+    def play_completion_sound(self) -> None:
+        """Korte Windows-systeemklank, asynchroon. Geen volume-ingreep."""
+
+        import winsound
+
+        wav = windows_completion_wav()
+        try:
+            if wav is not None:
+                winsound.PlaySound(
+                    str(wav),
+                    winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
+                )
+                return
+            winsound.PlaySound(
+                "SystemAsterisk",
+                winsound.SND_ALIAS | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
+            )
+        except RuntimeError:
+            return
 
     def paste(self) -> None:
         import pyautogui
@@ -152,3 +180,14 @@ class WinHost:
         pythonw = Path(sys.executable).with_name("pythonw.exe")
         executable = pythonw if pythonw.exists() else Path(sys.executable)
         return f'"{executable}" "{script}"'
+
+
+def windows_completion_wav() -> Path | None:
+    """Eerste aanwezige korte systeem-WAV, of ``None`` (dan de alias)."""
+
+    media = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Media"
+    for name in _COMPLETION_WAVS:
+        path = media / name
+        if path.is_file():
+            return path
+    return None

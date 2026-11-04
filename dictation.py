@@ -100,6 +100,9 @@ WHISPER_HOTWORDS = config.DEFAULT_WHISPER_HOTWORDS
 PASTE_DELAY_SECONDS = 0.30
 MINIMUM_RECORDING_SECONDS = 0.30
 DELETE_TEMP_AUDIO = True
+# Tijdelijk: geslaagde opnames blijven in analysis/ (nieuwste 30) zodat audio
+# en Whisper-annotatie vergeleken kunnen worden. False = meteen weer weggooien.
+KEEP_ANALYSIS_AUDIO = True
 INDICATOR_POSITION = "boven-midden"
 INDICATOR_XY: tuple[int, int] | None = None
 MODE = "toggle"
@@ -356,6 +359,7 @@ def _build_session() -> Opnamesessie:
         copy_text=_copy_to_clipboard,
         save_transcript=_save_transcript_routed,
         preserve_audio=recovery.preserve_audio,
+        keep_analysis_audio=(recovery.keep_analysis_recording if KEEP_ANALYSIS_AUDIO else None),
         on_destination_command=_handle_destination_command,
         get_destinations=lambda: DESTINATIONS,
         get_active_destination=lambda: ACTIVE_DESTINATION,

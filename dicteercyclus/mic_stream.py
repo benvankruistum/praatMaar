@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 import time
 from typing import Any
 
@@ -13,6 +14,20 @@ from mic_errors import (
     format_recording_start_error,
     refresh_portaudio,
 )
+
+# Eén audiobuffer is genoeg om CallbackAbort te laten landen. Langer wachten
+# houdt de sneltoets-thread vast terwijl de stream al stopt.
+_STREAM_ABORT_GRACE_S = 0.3
+# Pa_StopStream / Pa_AbortStream mogen de Qt-thread niet vasthouden. Op macOS
+# deadlockt die call soms tegen de CoreAudio-IO-thread.
+_STREAM_STOP_JOIN_S = 1.0
+
+
+class _StreamHalt:
+    """Sein naar de audiocallback: stop de stream daar, niet via Pa_StopStream."""
+
+    def __init__(self) -> None:
+        self.requested = False
 
 
 class MicStreamMixin:
@@ -171,11 +186,12 @@ class MicStreamMixin:
         """Opent en start een InputStream; koppelt die aan de sessie."""
 
         # latency='low': kleinere buffers, snellere eerste callback na start.
+        halt = _StreamHalt()
         stream = sd.InputStream(
             samplerate=self.sample_rate,
             channels=self.channels,
             dtype="float32",
-            callback=self.audio_callback,
+            callback=self._stream_callback(halt),
             device=device,
             latency="low",
         )
@@ -183,17 +199,38 @@ class MicStreamMixin:
 
         with self._lock:
             if self._audio_stream is not None:
-                # Parallel geopend — onze stream is overbodig.
-                try:
-                    stream.stop()
-                    stream.close()
-                except Exception:
-                    pass
+                extra = True
+            else:
+                extra = False
+                self._audio_stream = stream
+                self._stream_halt = halt
+                self._stream_opened_at = time.monotonic()
+                self._last_audio_callback_at = None
+                self._bound_device_identity = device_identity(sd, device)
+        if extra:
+            # Parallel geopend — onze stream is overbodig.
+            halt.requested = True
+            self._close_stream(stream, halt)
+
+    def _stream_callback(self, halt: _StreamHalt):
+        """Audiocallback die de stream zelf laat stoppen als daarom gevraagd is.
+
+        sounddevice zet ``CallbackAbort`` om in PortAudio ``paAbort``. Daarmee
+        stopt het apparaat op de IO-thread. ``Pa_StopStream`` vanaf de
+        sneltoets-thread deadlockt op macOS soms tegen diezelfde IO-thread
+        (``AudioDeviceStop`` wacht op een HAL-lock die ``startStopCallback``
+        ook pakt).
+        """
+
+        def callback(indata: Any, frames: int, time_info: Any, status: Any) -> None:
+            self.audio_callback(indata, frames, time_info, status)
+            if not halt.requested:
                 return
-            self._audio_stream = stream
-            self._stream_opened_at = time.monotonic()
-            self._last_audio_callback_at = None
-            self._bound_device_identity = device_identity(sd, device)
+            abort = getattr(self._sd, "CallbackAbort", None)
+            if isinstance(abort, type) and issubclass(abort, BaseException):
+                raise abort
+
+        return callback
 
     def audio_callback(
         self,
@@ -251,24 +288,61 @@ class MicStreamMixin:
         return chosen
 
     def stop_audio_stream(self) -> None:
-        """Stopt en sluit de warme microfoonstream (alleen bij afsluiten / mic-wissel)."""
+        """Stopt en sluit de microfoonstream.
+
+        De aanroeper (op macOS de Qt-sneltoets) wacht begrensd. Een vastgelopen
+        ``Pa_StopStream`` mag de pill en de transcriptie niet meenemen.
+        """
 
         with self._lock:
             stream = self._audio_stream
+            halt = getattr(self, "_stream_halt", None)
             self._audio_stream = None
+            self._stream_halt = None
             self._stream_opened_at = None
             self._last_audio_callback_at = None
             self._bound_device_identity = None
+            if halt is not None:
+                halt.requested = True
 
         if stream is None:
             return
 
-        try:
-            stream.stop()
-        except Exception as exc:
-            print(i18n.t("rec.mic_stop_warn", error=exc))
+        self._close_stream(stream, halt)
 
-        try:
-            stream.close()
-        except Exception as exc:
-            print(i18n.t("rec.mic_close_warn", error=exc))
+    def _close_stream(self, stream: Any, halt: _StreamHalt | None) -> None:
+        worker = threading.Thread(
+            target=self._close_stream_worker,
+            args=(stream, halt),
+            daemon=True,
+            name="praatmaar-mic-stop",
+        )
+        worker.start()
+        timeout = float(getattr(self, "_stream_stop_join_seconds", _STREAM_STOP_JOIN_S))
+        worker.join(timeout)
+        if worker.is_alive():
+            print(i18n.t("rec.mic_stop_timeout"))
+
+    def _close_stream_worker(self, stream: Any, halt: _StreamHalt | None) -> None:
+        sd = self._sd
+        can_abort = (
+            halt is not None and sd is not None and getattr(sd, "CallbackAbort", None) is not None
+        )
+        if can_abort and getattr(stream, "active", False):
+            deadline = time.monotonic() + _STREAM_ABORT_GRACE_S
+            while time.monotonic() < deadline and getattr(stream, "active", False):
+                time.sleep(0.01)
+        if getattr(stream, "active", False):
+            self._call_stream_method(stream, "abort", "stop", warn_key="rec.mic_stop_warn")
+        self._call_stream_method(stream, "close", warn_key="rec.mic_close_warn")
+
+    def _call_stream_method(self, stream: Any, *names: str, warn_key: str) -> None:
+        for name in names:
+            method = getattr(stream, name, None)
+            if method is None:
+                continue
+            try:
+                method()
+            except Exception as exc:
+                print(i18n.t(warn_key, error=exc))
+            return

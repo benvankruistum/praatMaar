@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import threading
+import time
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -10,6 +12,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
+from dicteercyclus.timing import CycleTiming
 from indicator import RecordingState
 from opnamesessie import Opnamesessie
 
@@ -296,7 +299,9 @@ def test_start_reopens_inactive_warm_stream(
 
     session.start()
     assert sd.input_stream_calls == 2
-    assert first.stopped and first.closed
+    # Al inactief: alleen sluiten. stop() is de call die op macOS kan deadlocken.
+    assert first.closed
+    assert not first.active
     assert sd.stream.started and sd.stream.active
     assert session.is_recording
 
@@ -380,6 +385,111 @@ def test_transcribe_pastes_and_copies(
     assert host.paste_calls == 1
     assert session._clipboard == ["hallo wereld"]  # type: ignore[attr-defined]
     assert states[-1] == RecordingState.IDLE
+
+
+def test_successful_recording_is_kept_for_analysis(
+    session: Opnamesessie, sd: FakeSoundDevice, tmp_path: Path
+) -> None:
+    import recovery
+
+    session._keep_analysis_audio = recovery.keep_analysis_recording
+    session.minimum_recording_seconds = 0.0
+    session.start()
+    assert sd.last_callback is not None
+    chunk = np.zeros((1600, 1), dtype=np.float32)
+    sd.last_callback(chunk, 1600, None, None)
+    done = _install_cycle_done(session)
+    session.stop_and_transcribe()
+    assert done.wait(timeout=30), "dicteercyclus niet afgerond"
+
+    wavs = list((tmp_path / "analysis").glob("*.wav"))
+    assert len(wavs) == 1
+    kept = wavs[0]
+    assert kept.with_suffix(".txt").read_text(encoding="utf-8") == "hallo wereld"
+    payload = json.loads(kept.with_suffix(".json").read_text(encoding="utf-8"))
+    assert payload["transcript"] == "hallo wereld"
+    assert payload["segments"][0]["text"] == "hallo wereld"
+    assert payload["segments"][0]["kept"] is True
+
+
+def test_chunk_recording_keeps_the_full_wav(session: Opnamesessie, tmp_path: Path) -> None:
+    import recovery
+
+    session._keep_analysis_audio = recovery.keep_analysis_recording
+    session._analysis_notes = [
+        {"text": "hallo vanuit chunks", "kept": True, "reason": None, "start_s": 0.0}
+    ]
+    audio = np.zeros((1600, 1), dtype=np.float32)
+    timing = CycleTiming(
+        session_id="chunk-test",
+        path="chunk",
+        record_s=0.1,
+        stop_at=0.0,
+        stop_join_s=0.0,
+    )
+    done = _install_cycle_done(session)
+    session._finalize_chunk_transcript([audio], ["hallo vanuit chunks"], 0, timing)
+    assert done.wait(timeout=30), "chunk-afronding niet klaar"
+
+    wavs = list((tmp_path / "analysis").glob("*.wav"))
+    assert len(wavs) == 1
+    kept = wavs[0]
+    assert kept.stat().st_size > 0
+    assert kept.with_suffix(".txt").read_text(encoding="utf-8") == "hallo vanuit chunks"
+    payload = json.loads(kept.with_suffix(".json").read_text(encoding="utf-8"))
+    assert payload["segments"][0]["text"] == "hallo vanuit chunks"
+
+
+def test_stop_shows_progress_while_the_last_chunk_finishes(
+    session: Opnamesessie, sd: FakeSoundDevice, states: list
+) -> None:
+    from indicator._contract import get_transcription_progress, set_transcription_progress
+
+    set_transcription_progress(None)
+    release = threading.Event()
+    entered = threading.Event()
+
+    def blocked_join(*, wait: bool = True) -> None:
+        entered.set()
+        assert release.wait(timeout=2)
+
+    session._stop_incremental_worker = blocked_join  # type: ignore[method-assign]
+    session.minimum_recording_seconds = 0.0
+    session.start()
+    assert sd.last_callback is not None
+    sd.last_callback(np.zeros((1600, 1), dtype=np.float32), 1600, None, None)
+    done = _install_cycle_done(session)
+    session.stop_and_transcribe()
+
+    assert entered.wait(timeout=2)
+    assert RecordingState.TRANSCRIBING in states
+    assert get_transcription_progress() is not None
+    release.set()
+    assert done.wait(timeout=30), "dicteercyclus niet afgerond"
+    set_transcription_progress(None)
+
+
+def test_completion_sound_plays_when_transcription_finishes(
+    session: Opnamesessie, sd: FakeSoundDevice
+) -> None:
+    played: list[str] = []
+    session.host.play_completion_sound = lambda: played.append("done")  # type: ignore[method-assign]
+    _record_short_audio(session, sd)
+    assert played == ["done"]
+
+
+def test_completion_sound_stays_quiet_when_transcription_fails(
+    session: Opnamesessie, sd: FakeSoundDevice
+) -> None:
+    played: list[str] = []
+    session.host.play_completion_sound = lambda: played.append("done")  # type: ignore[method-assign]
+
+    def fail(path: str, **kwargs: Any) -> tuple[list[Any], Any]:
+        raise RuntimeError("whisper")
+
+    session.model.transcribe = fail  # type: ignore[method-assign]
+    _record_short_audio(session, sd)
+    assert played == []
 
 
 def _install_cycle_done(session: Opnamesessie) -> threading.Event:
@@ -707,6 +817,67 @@ def test_ensure_stream_opens_default_after_pinned_gone(
     assert session.microphone_device is None
     assert sd.input_stream_calls == 1
     assert session._bound_device_identity == ("Default Mic", 0)
+
+
+def test_stop_audio_stream_returns_when_portaudio_stop_blocks(
+    session: Opnamesessie, sd: FakeSoundDevice
+) -> None:
+    """Pa_StopStream mag de aanroeper niet vasthouden als CoreAudio deadlockt."""
+
+    session._ensure_stream()
+    stream = session._audio_stream
+    assert stream is not None
+    release = threading.Event()
+
+    def blocked_stop() -> None:
+        release.wait(5)
+        stream.active = False
+
+    stream.stop = blocked_stop  # type: ignore[method-assign]
+    stream.abort = blocked_stop  # type: ignore[method-assign]
+    session._stream_stop_join_seconds = 0.2
+    started = time.monotonic()
+    try:
+        session.stop_audio_stream()
+        elapsed = time.monotonic() - started
+    finally:
+        release.set()
+
+    assert elapsed < 1.0
+    assert session._audio_stream is None
+
+
+def test_stop_audio_stream_uses_callback_abort_instead_of_stop(
+    session: Opnamesessie, sd: FakeSoundDevice
+) -> None:
+    """Een levende callback stopt de stream zelf; Pa_StopStream blijft weg."""
+
+    class _Abort(Exception):
+        pass
+
+    sd.CallbackAbort = _Abort  # type: ignore[attr-defined]
+    session._ensure_stream()
+    stream = session._audio_stream
+    assert stream is not None
+
+    def fail_stop() -> None:
+        raise AssertionError("Pa_StopStream")
+
+    stream.stop = fail_stop  # type: ignore[method-assign]
+    stream.abort = fail_stop  # type: ignore[method-assign]
+
+    def fire() -> None:
+        time.sleep(0.02)
+        try:
+            assert sd.last_callback is not None
+            sd.last_callback(np.zeros((8, 1), dtype=np.float32), 8, None, None)
+        except _Abort:
+            stream.active = False
+
+    threading.Thread(target=fire, daemon=True).start()
+    session.stop_audio_stream()
+    assert stream.closed
+    assert session._audio_stream is None
 
 
 def test_stop_audio_stream_clears_bound_device_identity(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import recovery
@@ -134,6 +135,41 @@ def test_delete_all_recovery_files(tmp_path: Path, monkeypatch) -> None:
     assert recovery.delete_all_recovery_files() == 2
     assert list(directory.glob("*.wav")) == []
     assert (directory / "note.txt").exists()
+
+
+def test_keep_analysis_recording_copies_pair_and_prunes(tmp_path: Path, monkeypatch) -> None:
+    _patch_dirs(tmp_path, monkeypatch)
+    directory = tmp_path / "analysis"
+    directory.mkdir()
+    older = directory / "2026-01-01_120000.wav"
+    older.write_bytes(b"old")
+    older.with_suffix(".txt").write_text("oud", encoding="utf-8")
+    older.with_suffix(".json").write_text("{}\n", encoding="utf-8")
+    older.touch()
+    # Ouder dan de kopie die keep_analysis_recording zo meteen maakt.
+    os_utime = __import__("os").utime
+    os_utime(older, (1_700_000_000, 1_700_000_000))
+
+    source = tmp_path / "tmp_audio.wav"
+    source.write_bytes(b"RIFF")
+    kept = recovery.keep_analysis_recording(
+        source,
+        "nieuw",
+        [{"text": "nieuw", "kept": True, "reason": None}],
+    )
+
+    assert source.is_file()
+    assert kept.parent == directory
+    assert kept.read_bytes() == b"RIFF"
+    assert kept.with_suffix(".txt").read_text(encoding="utf-8") == "nieuw"
+    payload = json.loads(kept.with_suffix(".json").read_text(encoding="utf-8"))
+    assert payload["transcript"] == "nieuw"
+    assert payload["segments"][0]["kept"] is True
+
+    recovery.prune_analysis_recordings(max_files=1)
+    assert list(directory.glob("*.wav")) == [kept]
+    assert not older.with_suffix(".txt").exists()
+    assert not older.with_suffix(".json").exists()
 
 
 def test_format_size_and_label(tmp_path: Path, monkeypatch) -> None:
