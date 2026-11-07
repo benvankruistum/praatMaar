@@ -12,6 +12,7 @@ import destinations
 import i18n
 import recovery
 from modules import CycleEvent, CycleEventType
+from whisper_segments import join_reliable_segments
 
 
 def save_transcript_routed(
@@ -103,12 +104,7 @@ def retranscribe_recovery_wav(
             str(resolved),
             **session.transcribe_kwargs(),
         )
-        text_parts: list[str] = []
-        for segment in segments:
-            text = segment.text.strip()
-            if text:
-                text_parts.append(text)
-    transcript = " ".join(text_parts).strip()
+    transcript = join_reliable_segments(segments)
     if not transcript:
         module_bus.emit(
             CycleEvent(

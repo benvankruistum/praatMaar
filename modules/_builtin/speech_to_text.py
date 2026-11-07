@@ -28,6 +28,7 @@ from modules.capabilities.speech_to_text import (
     TranscriptionStatusChanged,
 )
 from modules.whisper import SharedWhisper
+from whisper_segments import join_reliable_segments
 
 MAX_WHISPER_QUEUE_DURATION_S = 10.0
 # Meerdere capture-chunks in één Whisper-call: minder overhead, beter realtime-houden.
@@ -442,11 +443,12 @@ class IncrementalSpeechToText:
             "vad_filter": True,
             "condition_on_previous_text": False,
             "without_timestamps": True,
+            "temperature": 0.0,
         }
         if language:
             kwargs["language"] = language
         segments, _info = model.transcribe(audio, **kwargs)
-        return " ".join(segment.text.strip() for segment in segments if segment.text.strip())
+        return join_reliable_segments(segments)
 
 
 class SpeechToTextModule:
