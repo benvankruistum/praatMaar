@@ -17,6 +17,8 @@ import os
 # Qt headless vóór elke PySide6-import (zelfde als CI op Windows; voorkomt macOS
 # abort in _RegisterApplication bij pytest vanuit een terminal/Cursor-sessie).
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Zelfde als dictation.py: onnxruntime 1.31+ anders telemetrie naar Microsoft.
+os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")
 
 import tempfile
 from pathlib import Path

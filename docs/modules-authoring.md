@@ -56,6 +56,7 @@ Referentie-implementatie (minimaal): `modules/_builtin/inbox_mirror.py`.
 # modules/_builtin/my_module.py
 from modules._contract import CycleEvent, CycleEventType, ModuleContext
 
+
 class MyModule:
     id = "my-module"
 
@@ -68,8 +69,7 @@ class MyModule:
     def default_enabled(self) -> bool:
         return False
 
-    def on_app_start(self, ctx: ModuleContext) -> None:
-        ...
+    def on_app_start(self, ctx: ModuleContext) -> None: ...
 
     def on_event(self, event: CycleEvent) -> None:
         if event.type != CycleEventType.TRANSCRIPT_SAVED:
@@ -83,6 +83,7 @@ In `modules/registry.py`:
 
 ```python
 from modules._builtin.my_module import MyModule
+
 
 def all_builtin_modules() -> list[PraatMaarModule]:
     return [InboxMirrorModule(), MyModule()]
@@ -140,6 +141,7 @@ Implementeer `ModuleWithActions`:
 ```python
 from modules._contract import ModuleAction, ModuleContext
 
+
 def actions(self) -> list[ModuleAction]:
     return [
         ModuleAction(
@@ -171,9 +173,11 @@ Gebruik `modules.settings_store` (eigen map per module):
 ```python
 from modules.settings_store import load_config, save_config
 
+
 def on_app_start(self, ctx: ModuleContext) -> None:
     self._config = load_config(ctx.app_dir, self.id, default={"mic": None})
     self._app_dir = ctx.app_dir
+
 
 def _persist(self) -> None:
     save_config(self._app_dir, self.id, self._config)
@@ -198,6 +202,7 @@ transcribeer via de gedeelde lock:
 ```python
 def on_app_start(self, ctx: ModuleContext) -> None:
     self._whisper = ctx.whisper
+
 
 def _transcribe_wav(self, path: Path) -> str:
     with self._whisper.locked_model() as model:

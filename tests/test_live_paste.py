@@ -375,6 +375,10 @@ def test_live_paste_pastes_tail_delta_once(
     calls_during = len(model.calls)
     _feed_audio(session, seconds=0.12)
 
+    # Stop weigert wall-clock onder 50 ms. Op een snelle runner is de chunk
+    # dan al geplakt terwijl de opname nog "te kort" is. Deze test gaat over
+    # de staart-delta, niet over die drempel.
+    session.minimum_recording_seconds = 0.0
     session.stop_and_transcribe()
     _wait_until(
         lambda: any(e.type == CycleEventType.TRANSCRIPT_SAVED for e in events),

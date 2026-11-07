@@ -61,20 +61,25 @@
 from pathlib import Path
 import destinations as d
 
+
 def test_normalize_strips_punct_and_case():
     assert d.normalize_phrase("  Boodschappenlijst! ") == "boodschappenlijst"
     assert d.normalize_phrase("Hallo, wereld.") == "hallo wereld"
+
 
 def test_match_set_exact():
     dests = [{"name": "Boodschappenlijst", "path": "D:/x"}]
     assert d.match_command("boodschappenlijst", dests) == ("set", "Boodschappenlijst")
 
+
 def test_match_reset():
     assert d.match_command("Standaard!", []) == ("reset", None)
+
 
 def test_match_none_for_content():
     dests = [{"name": "notities", "path": "D:/n"}]
     assert d.match_command("notities melk kopen", dests) == ("none", None)
+
 
 def test_resolve_active_and_default(tmp_path: Path):
     dests = [{"name": "notities", "path": str(tmp_path / "n")}]
@@ -97,11 +102,13 @@ from typing import Any
 
 RESET_PHRASE = "standaard"
 
+
 def normalize_phrase(text: str) -> str:
     cleaned = text.strip().lower()
     cleaned = re.sub(r"[^\w\s]", " ", cleaned, flags=re.UNICODE)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
+
 
 def match_command(transcript: str, destinations: list[dict[str, str]]) -> tuple[str, str | None]:
     needle = normalize_phrase(transcript)
@@ -115,12 +122,16 @@ def match_command(transcript: str, destinations: list[dict[str, str]]) -> tuple[
             return ("set", name)
     return ("none", None)
 
-def resolve_save_dir(active_name: str | None, destinations: list[dict[str, str]], default_dir: Path) -> Path:
+
+def resolve_save_dir(
+    active_name: str | None, destinations: list[dict[str, str]], default_dir: Path
+) -> Path:
     if active_name:
         for item in destinations:
             if item.get("name") == active_name:
                 return Path(item["path"])
     return default_dir
+
 
 def sanitize_destinations(raw: Any) -> list[dict[str, str]]:
     if not isinstance(raw, list):

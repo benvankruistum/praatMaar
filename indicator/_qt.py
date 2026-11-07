@@ -361,7 +361,13 @@ class RecordingIndicator(QWidget):
         """
 
         if self._hide_timer.isActive():
-            self._hide_remaining_ms = self._hide_timer.remainingTime()
+            # Qt 6.12 kan remainingTime() iets boven het interval laten uitkomen.
+            # Zonder klem zou hover de foutmelding langer laten staan dan bedoeld.
+            remaining = self._hide_timer.remainingTime()
+            interval = self._hide_timer.interval()
+            if interval > 0 and remaining > interval:
+                remaining = interval
+            self._hide_remaining_ms = remaining
             self._hide_timer.stop()
         super().enterEvent(_event)
 

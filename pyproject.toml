@@ -26,6 +26,12 @@ classifiers = [
 ]
 dependencies = [
     "faster-whisper==1.2.1",
+    # Directe Faster-Whisper-deps vastgezet. huggingface-hub blijft op 1.x:
+    # 2.x vervangt de HTTP-stack (httpx → httpx2) en kan de modeldownload breken.
+    "huggingface-hub==1.33.0",
+    "ctranslate2==4.8.2",
+    "tokenizers==0.23.3",
+    "onnxruntime==1.31.0",
     # PyAV 19 heeft metadata_errors uit av.open gehaald. faster-whisper 1.2.1
     # geeft die parameter nog door, waardoor elke transcriptie meteen faalt.
     "av==18.1.0",
@@ -35,10 +41,10 @@ dependencies = [
     "Pillow==12.3.0",
     "pyautogui==0.9.54",
     "pyperclip==1.11.0",
-    "numpy==2.5.1",
-    "scipy==1.18.0",
+    "numpy==2.5.4",
+    "scipy==1.18.1",
     "PyYAML==6.0.3",
-    "PySide6==6.11.1",
+    "PySide6==6.12.0",
     "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
 ]
@@ -46,7 +52,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest==9.1.1",
-    "ruff==0.14.14",
+    "ruff==0.17.0",
 ]
 build = [
     "pyinstaller>=6.0",

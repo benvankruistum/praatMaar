@@ -57,10 +57,12 @@
 ```python
 UNPROCESSED_TAIL_SECONDS = 6.0
 
+
 @dataclass(frozen=True)
 class CommitWindow:
     slice_start: int
     commit_end: int
+
 
 def commit_window(
     *,

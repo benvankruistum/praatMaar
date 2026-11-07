@@ -43,15 +43,27 @@
 ```python
 def transcripts_dir(app_dir: Path) -> Path: ...
 
+
 def safe_stem(title: str) -> str: ...  # filesystem-safe; default "meeting"
+
 
 @dataclass
 class TranscriptJournal:
     path: Path
+
     @classmethod
-    def create(cls, app_dir: Path, *, title: str, agenda_titles: list[str], started_at: datetime | None = None) -> TranscriptJournal: ...
+    def create(
+        cls,
+        app_dir: Path,
+        *,
+        title: str,
+        agenda_titles: list[str],
+        started_at: datetime | None = None,
+    ) -> TranscriptJournal: ...
     def append_final(self, text: str) -> None: ...  # no-op if blank; space-separate chunks
-    def finalize(self, *, topics: Sequence[Topic] | None, ended_at: datetime | None = None) -> Path: ...
+    def finalize(
+        self, *, topics: Sequence[Topic] | None, ended_at: datetime | None = None
+    ) -> Path: ...
 ```
 
 Markdown start = title H1, Gestart, Status: lopend, ## Agenda checkboxes unchecked, ## Transcript blank line.
@@ -101,7 +113,9 @@ Module sets `_orchestrator.set_journal_title(...)` from agenda path stem before 
 - Spec status → Geïmplementeerd
 
 ```python
-path = orchestrator.stop_and_transcript_path()  # or stop(); path = orchestrator.last_transcript_path
+path = (
+    orchestrator.stop_and_transcript_path()
+)  # or stop(); path = orchestrator.last_transcript_path
 # print + messagebox.showinfo
 ```
 

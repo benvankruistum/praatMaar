@@ -191,8 +191,11 @@ def _wait_past_minimum_recording(session: Opnamesessie) -> None:
     """Stop uses wall-clock duration; simulated audio does not advance it."""
 
     _wait_until(
-        lambda: session._recording_started_at is not None
-        and (time.monotonic() - session._recording_started_at) >= session.minimum_recording_seconds,
+        lambda: (
+            session._recording_started_at is not None
+            and (time.monotonic() - session._recording_started_at)
+            >= session.minimum_recording_seconds
+        ),
         timeout=1.0,
     )
 
