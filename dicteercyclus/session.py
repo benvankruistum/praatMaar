@@ -53,7 +53,11 @@ from mic_errors import format_recording_start_error
 from modules._contract import CycleEvent, CycleEventType
 from modules.whisper import SharedWhisper
 from transcription_progress import TranscriptionProgressTicker
-from whisper_segments import collapse_repeated_phrases, reliable_segment_text
+from whisper_segments import (
+    collapse_repeated_phrases,
+    decide_segment,
+    segment_annotation,
+)
 
 __all__ = ["CycleTiming", "Host", "NotifyFn", "Opnamesessie", "format_cycle_timing"]
 
@@ -103,6 +107,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         copy_text: Callable[[str], None] | None = None,
         save_transcript: Callable[[str], Path] | None = None,
         preserve_audio: Callable[[Path], Path] | None = None,
+        keep_analysis_audio: Callable[[Path, str, list[dict[str, object]]], Path] | None = None,
         on_destination_command: Callable[[str, str | None], None] | None = None,
         get_destinations: Callable[[], list[dict[str, Any]]] | None = None,
         get_active_destination: Callable[[], str | None] | None = None,
@@ -147,6 +152,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         self._copy_text = copy_text
         self._save_transcript = save_transcript
         self._preserve_audio = preserve_audio
+        self._keep_analysis_audio = keep_analysis_audio
         self._on_destination_command = on_destination_command
         self._get_destinations = get_destinations
         self._get_active_destination = get_active_destination
@@ -179,6 +185,8 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         self._live_paste_generation = 0
         self._transcribed_through_samples: int = 0
         self._committed_through_samples: int = 0
+        self._analysis_notes: list[dict[str, object]] = []
+        self._progress_ticker: TranscriptionProgressTicker | None = None
         self._incremental_thread: threading.Thread | None = None
         self._chunk_whisper_thread: threading.Thread | None = None
         self._incremental_stop: threading.Event | None = None
@@ -330,6 +338,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             self._mutable_tail = ""
             self._transcribed_through_samples = 0
             self._committed_through_samples = 0
+            self._analysis_notes = []
             self._reset_live_paste_state()
 
         self._event(CycleEventType.CYCLE_STARTED, session_id=session_id)
@@ -432,45 +441,90 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             self.on_ready()
             return
 
-        # UI meteen naar Transcriberen — join van chunk-Whisper mag daarna.
+        # UI meteen naar Transcriberen. De join van een nog lopend chunk-stuk
+        # gaat naar een achtergrondthread: op macOS komt de sneltoets op de
+        # Qt-thread binnen, en een join daar bevriest de pill tot het stuk af is.
+        # De microfoon gaat daarna dicht, met een begrensde wacht: Pa_StopStream
+        # op deze thread deadlockt soms tegen de CoreAudio-IO-thread.
         self._event(CycleEventType.CYCLE_TRANSCRIBING)
-        self._release_stream_if_cold()
         self._notify(RecordingState.TRANSCRIBING, self.mode)
+        sample_count = sum(int(chunk.shape[0]) for chunk in chunks_to_process)
+        self._begin_stop_progress(sample_count / float(self.sample_rate))
 
-        # Join zodat een in-flight chunk nog kan landen (events).
-        self._stop_incremental_worker(wait=True)
-        stop_join_s = time.perf_counter() - stop_at
+        threading.Thread(
+            target=self._finish_stop_after_chunks,
+            args=(chunks_to_process, session_id, duration, stop_at),
+            daemon=True,
+            name="praatmaar-stop-join",
+        ).start()
+        self._release_stream_if_cold()
 
-        with self._lock:
-            chunk_texts = list(self._chunk_transcripts)
-            committed = self._committed_through_samples
-            self._last_partial_transcript = None
-            self._chunk_transcripts = []
-            self._mutable_tail = ""
-            self._transcribed_through_samples = 0
-            self._committed_through_samples = 0
+    def _begin_stop_progress(self, audio_seconds: float) -> None:
+        """Percentage vanaf stop, inclusief het chunk-stuk dat nog afloopt."""
 
-        timing = CycleTiming(
-            session_id=session_id or "",
-            path="chunk" if chunk_texts else "full",
-            record_s=duration,
-            stop_at=stop_at,
-            stop_join_s=stop_join_s,
-        )
+        ticker = TranscriptionProgressTicker(max(float(audio_seconds), 0.1))
+        ticker.start()
+        self._progress_ticker = ticker
 
-        if chunk_texts:
-            thread = threading.Thread(
-                target=self._finalize_chunk_transcript,
-                args=(chunks_to_process, chunk_texts, committed, timing),
-                daemon=True,
+    def _adopt_progress_ticker(self, fallback_seconds: float) -> TranscriptionProgressTicker:
+        """Neem de ticker van stop over, of start er een als die er niet is."""
+
+        ticker = self._progress_ticker
+        self._progress_ticker = None
+        if ticker is not None:
+            return ticker
+        created = TranscriptionProgressTicker(max(float(fallback_seconds), 0.1))
+        created.start()
+        return created
+
+    def _finish_stop_after_chunks(
+        self,
+        chunks_to_process: list[Any],
+        session_id: str | None,
+        duration: float,
+        stop_at: float,
+    ) -> None:
+        """Wacht het lopende chunk-stuk af en start daarna de eindtranscriptie."""
+
+        try:
+            self._stop_incremental_worker(wait=True)
+            stop_join_s = time.perf_counter() - stop_at
+
+            with self._lock:
+                chunk_texts = list(self._chunk_transcripts)
+                committed = self._committed_through_samples
+                self._last_partial_transcript = None
+                self._chunk_transcripts = []
+                self._mutable_tail = ""
+                self._transcribed_through_samples = 0
+                self._committed_through_samples = 0
+
+            timing = CycleTiming(
+                session_id=session_id or "",
+                path="chunk" if chunk_texts else "full",
+                record_s=duration,
+                stop_at=stop_at,
+                stop_join_s=stop_join_s,
             )
-        else:
-            thread = threading.Thread(
-                target=self._transcribe_audio,
-                args=(chunks_to_process, timing),
-                daemon=True,
-            )
-        thread.start()
+            if chunk_texts:
+                self._finalize_chunk_transcript(chunks_to_process, chunk_texts, committed, timing)
+            else:
+                self._transcribe_audio(chunks_to_process, timing)
+        except Exception as exc:
+            print()
+            print(i18n.t("rec.transcribe_error"))
+            print(i18n.t("rec.error", error=exc))
+            ticker = self._progress_ticker
+            self._progress_ticker = None
+            if ticker is not None:
+                ticker.stop(None)
+            with self._lock:
+                self._processing = False
+            self._notify(RecordingState.ERROR, self.mode)
+            self._event(CycleEventType.CYCLE_ERROR, error=str(exc), session_id=session_id)
+            self._event(CycleEventType.CYCLE_IDLE, session_id=session_id)
+            self._clear_session_id(session_id)
+            self.on_ready()
 
     def _finalize_chunk_transcript(
         self,
@@ -486,6 +540,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         error_message: str | None = None
         recovery_kept: Path | None = None
         ticker: TranscriptionProgressTicker | None = None
+        transcript = ""
 
         try:
             print(i18n.t("rec.transcribing"))
@@ -500,14 +555,15 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
                 slice_start = max(0, min(committed_samples, total) - overlap)
             piece_audio = audio[slice_start:total]
             tail_seconds = piece_audio.shape[0] / float(self.sample_rate)
+            ticker = self._adopt_progress_ticker(tail_seconds)
 
             if tail_seconds >= self._incremental_min_seconds and piece_audio.shape[0] > 0:
                 whisper_started = time.perf_counter()
-                piece_seconds = tail_seconds
-                ticker = TranscriptionProgressTicker(piece_seconds)
-                ticker.start()
                 try:
-                    raw = self._transcribe_chunks_to_text([piece_audio.reshape(-1, 1)])
+                    raw = self._transcribe_chunks_to_text(
+                        [piece_audio.reshape(-1, 1)],
+                        origin_s=slice_start / float(self.sample_rate),
+                    )
                     piece = dedupe_overlap_text(previous, raw) if raw else None
                     if piece:
                         texts.append(piece)
@@ -566,6 +622,9 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             if ticker is not None:
                 ticker.stop(None)
                 ticker = None
+            if final_state != RecordingState.ERROR and chunks:
+                self._retain_full_recording(chunks, transcript)
+
             if temporary_path is not None and temporary_path.exists():
                 if final_state == RecordingState.ERROR and recovery_kept is None:
                     if self._preserve_audio is not None:
@@ -588,6 +647,8 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
                 self._processing = False
 
             self._notify_final(final_state, recovery_kept)
+            if final_state != RecordingState.ERROR:
+                self._play_completion_sound()
             if error_message is not None:
                 self._event(
                     CycleEventType.CYCLE_ERROR,
@@ -631,6 +692,64 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         self._clear_session_id(session_id)
         self.on_ready()
 
+    def _note_analysis_segment(self, decision: Any, segment: object, *, origin_s: float) -> None:
+        """Bewaart een Whisper-oordeel voor de analyse-sidecar, niet voor de log."""
+
+        if self._keep_analysis_audio is None:
+            return
+        if not decision.text and not decision.reason:
+            return
+        note = segment_annotation(segment, decision, origin_s=origin_s)
+        session_id = self._session_id
+        with self._lock:
+            if self._session_id != session_id:
+                return
+            self._analysis_notes.append(note)
+
+    def _retain_analysis_copy(self, wav_path: Path, transcript: str) -> None:
+        """Kopieert de opname naar de analyse-map. Het tijdelijke bestand blijft."""
+
+        keeper = self._keep_analysis_audio
+        if keeper is None or not wav_path.exists():
+            return
+        with self._lock:
+            notes = list(self._analysis_notes)
+        try:
+            kept = keeper(wav_path, transcript, notes)
+            print(i18n.t("rec.analysis_saved", path=kept))
+        except OSError as exc:
+            print(i18n.t("rec.analysis_warn", error=exc))
+
+    def _retain_full_recording(self, chunks: list[Any], transcript: str) -> None:
+        """Schrijft de hele opname (niet een chunk-knip) weg voor analyse."""
+
+        if self._keep_analysis_audio is None or not chunks:
+            return
+        try:
+            wav_path = self.create_temporary_wav(chunks)
+        except (OSError, ValueError) as exc:
+            print(i18n.t("rec.analysis_warn", error=exc))
+            return
+        try:
+            self._retain_analysis_copy(wav_path, transcript)
+        finally:
+            if self.delete_temp_audio and wav_path.exists():
+                try:
+                    os.remove(wav_path)
+                except OSError as exc:
+                    print(i18n.t("rec.temp_delete_warn", error=exc))
+
+    def _play_completion_sound(self) -> None:
+        """Zacht systeemgeluid. Hosts zonder deze methode (tests) slaan het over."""
+
+        play = getattr(self.host, "play_completion_sound", None)
+        if play is None:
+            return
+        try:
+            play()
+        except Exception:
+            return
+
     def create_temporary_wav(self, chunks: list[Any]) -> Path:
         """Maakt van de opgenomen audioblokken een tijdelijk WAV-bestand."""
 
@@ -660,9 +779,14 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         error_message: str | None = None
         recovery_kept: Path | None = None
         ticker: TranscriptionProgressTicker | None = None
+        transcript = ""
 
         try:
             print(i18n.t("rec.transcribing"))
+            # Volle buffer is de annotatie van deze cyclus; chunk-notities
+            # die niets opleverden horen hier niet meer bij.
+            with self._lock:
+                self._analysis_notes = []
 
             sample_count = sum(chunk.shape[0] for chunk in chunks)
             duration_seconds = sample_count / float(self.sample_rate)
@@ -672,8 +796,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             temporary_path = self.create_temporary_wav(chunks)
             timing.wav_s = time.perf_counter() - wav_started
 
-            ticker = TranscriptionProgressTicker(duration_seconds)
-            ticker.start()
+            ticker = self._adopt_progress_ticker(duration_seconds)
 
             whisper_started = time.perf_counter()
             with self._whisper.locked_model() as model:
@@ -692,15 +815,17 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
                     if bucket > last_logged_bucket and bucket >= 1:
                         print(i18n.t("rec.transcribing_progress", percent=bucket_source))
                         last_logged_bucket = bucket
-                    text = reliable_segment_text(segment)
-                    if text:
-                        text_parts.append(text)
+                    decision = decide_segment(segment)
+                    self._note_analysis_segment(decision, segment, origin_s=0.0)
+                    if decision.kept and decision.text:
+                        text_parts.append(decision.text)
             timing.whisper_s = time.perf_counter() - whisper_started
 
             ticker.stop(100)
             ticker = None
             deliver_started = time.perf_counter()
-            self._apply_transcript(collapse_repeated_phrases(" ".join(text_parts).strip()))
+            transcript = collapse_repeated_phrases(" ".join(text_parts).strip())
+            self._apply_transcript(transcript)
             timing.deliver_s = time.perf_counter() - deliver_started
 
         except Exception as exc:
@@ -728,7 +853,9 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
                                 os.remove(temporary_path)
                             except OSError:
                                 pass
-                elif self.delete_temp_audio:
+                else:
+                    self._retain_analysis_copy(temporary_path, transcript)
+                if self.delete_temp_audio and final_state != RecordingState.ERROR:
                     try:
                         os.remove(temporary_path)
                     except OSError as exc:
@@ -743,6 +870,8 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
                 self._processing = False
 
             self._notify_final(final_state, recovery_kept)
+            if final_state != RecordingState.ERROR:
+                self._play_completion_sound()
             if error_message is not None:
                 self._event(
                     CycleEventType.CYCLE_ERROR,

@@ -19,7 +19,7 @@ from chunk_transcription import (
 )
 from indicator import set_chunk_leds_enabled, signal_chunk_trigger
 from modules._contract import CycleEvent, CycleEventType
-from whisper_segments import collapse_repeated_phrases, join_reliable_segments
+from whisper_segments import collapse_repeated_phrases, decide_segment
 
 # RMS onder deze drempel telt als stilte voor chunk-VAD (v1, eenvoudig).
 _CHUNK_SILENCE_RMS = 0.01
@@ -170,7 +170,10 @@ class IncrementalMixin:
         if piece.size == 0:
             return None
         try:
-            raw = self._transcribe_chunks_to_text([piece.reshape(-1, 1)])
+            raw = self._transcribe_chunks_to_text(
+                [piece.reshape(-1, 1)],
+                origin_s=slice_start / float(self.sample_rate),
+            )
         except Exception:
             return None
         if not raw:
@@ -293,7 +296,12 @@ class IncrementalMixin:
         window_s = float(getattr(job.audio_1d, "shape", [0])[0]) / float(max(1, self.sample_rate))
         whisper_started = time.perf_counter()
         try:
-            raw = self._transcribe_chunks_to_text([job.audio_1d.reshape(-1, 1)])
+            sample_count = int(getattr(job.audio_1d, "shape", [0])[0])
+            origin_s = (job.commit_end_sample - sample_count) / float(self.sample_rate)
+            raw = self._transcribe_chunks_to_text(
+                [job.audio_1d.reshape(-1, 1)],
+                origin_s=max(0.0, origin_s),
+            )
         except Exception:
             _log.warning("chunk.whisper failed window=%.3fs", window_s)
             return
@@ -364,7 +372,7 @@ class IncrementalMixin:
             except Exception:
                 continue
 
-    def _transcribe_chunks_to_text(self, chunks: list[Any]) -> str:
+    def _transcribe_chunks_to_text(self, chunks: list[Any], *, origin_s: float = 0.0) -> str:
         """Transcribeert audioblokken naar tekst (incrementeel + finaal)."""
 
         temporary_path = self.create_temporary_wav(chunks)
@@ -374,7 +382,13 @@ class IncrementalMixin:
                     str(temporary_path),
                     **self.transcribe_kwargs(),
                 )
-            return join_reliable_segments(segments)
+            parts: list[str] = []
+            for segment in segments:
+                decision = decide_segment(segment)
+                self._note_analysis_segment(decision, segment, origin_s=origin_s)
+                if decision.kept and decision.text:
+                    parts.append(decision.text)
+            return collapse_repeated_phrases(" ".join(parts))
         finally:
             if self.delete_temp_audio and temporary_path.exists():
                 try:

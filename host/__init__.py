@@ -70,6 +70,10 @@ class Host(Protocol):
         """
         ...
 
+    def play_completion_sound(self) -> None:
+        """Kort, zacht systeemgeluid als een transcriptie klaar is. Faalt stil."""
+        ...
+
 
 def _select() -> Host:
     """Kiest de adapter voor het huidige besturingssysteem."""

@@ -16,7 +16,17 @@ import sys
 from pathlib import Path
 
 from . import APP_NAME
+from ._done_sound import play_command
 from ._launch import dictation_script_path
+
+# Korte systeemklanken, van prettig naar nog korter. Volume onder 1 houdt
+# het geluid genuanceerd ten opzichte van de systeemvolumeknop.
+_COMPLETION_SOUNDS = (
+    Path("/System/Library/Sounds/Glass.aiff"),
+    Path("/System/Library/Sounds/Tink.aiff"),
+    Path("/System/Library/Sounds/Pop.aiff"),
+)
+_COMPLETION_VOLUME = "0.4"
 
 # Reverse-DNS label voor de LaunchAgent.
 _AGENT_LABEL = "nl.wulf.praatmaar"
@@ -24,6 +34,11 @@ _AGENT_LABEL = "nl.wulf.praatmaar"
 
 class MacHost:
     """De `Host`-implementatie voor macOS."""
+
+    def play_completion_sound(self) -> None:
+        """Glass (of Tink/Pop) via afplay, zachter dan de systeemvolumeknop."""
+
+        play_command(mac_completion_command())
 
     def paste(self) -> None:
         # Quartz CGEvents i.p.v. pyautogui/pynput: die raken TSM en crashen
@@ -116,3 +131,13 @@ class MacHost:
         # Vanuit broncode: de huidige Python + het hoofdscript, één map boven
         # deze adapter.
         return [sys.executable, str(dictation_script_path())]
+
+
+def mac_completion_command() -> list[str] | None:
+    """afplay-opdracht voor de eerste aanwezige systeemklank, of ``None``."""
+
+    for sound in _COMPLETION_SOUNDS:
+        if sound.is_file():
+            # POSIX-pad: afplay draait op macOS, en de test draait ook op Windows.
+            return ["afplay", "-v", _COMPLETION_VOLUME, sound.as_posix()]
+    return None

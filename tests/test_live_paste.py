@@ -368,6 +368,9 @@ def test_live_paste_pastes_tail_delta_once(
         auto_paste=False,
         chunk_seconds=0.1,
     )
+    # De knip kan binnen één poll (< 0,05 s wandklok) landen. De minimumduur
+    # meet wandklok, niet audioduur, en zou de opname dan als te kort weggooien.
+    session.minimum_recording_seconds = 0
     session.start()
     _feed_audio(session, seconds=0.15)
     _wait_until(lambda: len(clipboard) >= 1, timeout=3.0)

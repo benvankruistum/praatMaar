@@ -40,12 +40,23 @@ def test_set_and_get_transcription_progress() -> None:
 
 
 def test_time_based_percent_clamps_and_scales() -> None:
-    assert time_based_percent(0, 10, rtf=0.4) == 1
-    # 2 s elapsed, expected = 10 * 0.4 = 4 s → 50%
-    assert time_based_percent(2.0, 10.0, rtf=0.4) == 50
-    assert time_based_percent(100.0, 10.0, rtf=0.4) == MAX_TICK_PERCENT
-    assert time_based_percent(1.0, 0.0) == 1
+    assert time_based_percent(0, 10, rtf=0.4, overhead_seconds=0) == 1
+    # 2 s elapsed, expected = 10 * 0.4 = 4 s → 45% van de lineaire 90.
+    assert time_based_percent(2.0, 10.0, rtf=0.4, overhead_seconds=0) == 45
+    assert time_based_percent(4.0, 10.0, rtf=0.4, overhead_seconds=0) == 90
+    assert time_based_percent(100.0, 10.0, rtf=0.4, overhead_seconds=0) == MAX_TICK_PERCENT
+    assert time_based_percent(1.0, 0.0, overhead_seconds=0) == 1
     assert DEFAULT_RTF == 0.4
+
+
+def test_time_based_percent_keeps_moving_after_the_estimate() -> None:
+    on_time = time_based_percent(6.0, 10.0, rtf=0.4, overhead_seconds=2.0)
+    later = time_based_percent(10.0, 10.0, rtf=0.4, overhead_seconds=2.0)
+    much_later = time_based_percent(20.0, 10.0, rtf=0.4, overhead_seconds=2.0)
+    assert on_time == 90
+    assert later > on_time
+    assert much_later > later
+    assert much_later < 100
 
 
 def test_hybrid_percent_takes_max() -> None:
@@ -74,7 +85,7 @@ def test_ticker_moves_during_wait() -> None:
 
 def test_ticker_segment_does_not_lower_time_floor() -> None:
     set_transcription_progress(None)
-    ticker = TranscriptionProgressTicker(1.0, rtf=0.01, interval_seconds=0.05)
+    ticker = TranscriptionProgressTicker(1.0, rtf=0.01, overhead_seconds=0.0, interval_seconds=0.05)
     ticker.start()
     try:
         time.sleep(0.15)

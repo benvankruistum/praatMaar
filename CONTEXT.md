@@ -14,7 +14,8 @@ de app praat alleen met `host` en raakt nooit rechtstreeks `winreg`, `ctypes` of
 een OS-specifieke plak-toets aan.
 
 - **Interface:** `Host`-Protocol — `paste()`, `set_autostart()`,
-  `is_autostart_enabled()`, `app_dir()`, `acquire_single_instance()`.
+  `is_autostart_enabled()`, `app_dir()`, `acquire_single_instance()`,
+  `play_completion_sound()` (korte systeemklank na een geslaagde transcriptie).
 - **Adapters:** `host._win` (Windows, absorbeert het vroegere `autostart.py`),
   `host._mac` (macOS; `paste`/`app_dir` compleet, LaunchAgent nog ongetest) en
   `host._linux` (Linux; autostart en plakken best-effort).
@@ -94,6 +95,15 @@ of macOS Application Support). Beheer + opnieuw transcriberen via sectie
 het settings-kind `_recovery_retranscribe` terug zodat de parent (met model)
 uitvoert. Herstel-transcriptie emitteert dezelfde `CycleEvent`-types als live
 dicteren (`source: "recovery"`).
+
+### analyse-audio
+
+Tijdelijke kopie van een **geslaagde** dicteeropname onder `analysis_dir()`
+(`%APPDATA%\praatMaar\analysis\`, op macOS Application Support). Naast de WAV
+liggen het afgeleverde transcript (`.txt`) en de Whisper-segmenten (`.json`:
+tekst, gehouden of weggegooid, reden, tijden). Nieuwste 30; oudere paren
+verdwijnen. Geen herstelpad en niet zichtbaar in Instellingen. Aan via
+`KEEP_ANALYSIS_AUDIO` in `dictation.py`. Los van **herstel-audio**.
 
 ### module (praatMaar-module)
 

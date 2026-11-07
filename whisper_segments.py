@@ -15,6 +15,7 @@ stubs die alleen ``text`` zetten blijven gewoon staan.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 _log = logging.getLogger(__name__)
@@ -52,25 +53,34 @@ def _log_drop(reason: str, segment: object) -> None:
     )
 
 
-def reliable_segment_text(segment: object) -> str | None:
-    """Tekst van één segment, of ``None`` als de decode niet betrouwbaar is."""
+@dataclass(frozen=True)
+class SegmentDecision:
+    """Of een Whisper-segment in het transcript blijft, en waarom niet."""
+
+    text: str
+    kept: bool
+    reason: str | None
+
+
+def decide_segment(segment: object) -> SegmentDecision:
+    """Beoordeelt één segment. Een drop met reden wordt gelogd, zonder tekst."""
 
     raw = getattr(segment, "text", "")
     if not isinstance(raw, str):
-        return None
+        return SegmentDecision(text="", kept=False, reason=None)
     text = raw.strip()
     if not text:
-        return None
+        return SegmentDecision(text="", kept=False, reason=None)
 
     temperature = _score(segment, "temperature")
     if temperature is not None and temperature > 0.0:
         _log_drop("temperature", segment)
-        return None
+        return SegmentDecision(text=text, kept=False, reason="temperature")
 
     compression = _score(segment, "compression_ratio")
     if compression is not None and compression > COMPRESSION_RATIO_MAX:
         _log_drop("compression", segment)
-        return None
+        return SegmentDecision(text=text, kept=False, reason="compression")
 
     no_speech = _score(segment, "no_speech_prob")
     avg_logprob = _score(segment, "avg_logprob")
@@ -81,9 +91,40 @@ def reliable_segment_text(segment: object) -> str | None:
         and avg_logprob < LOG_PROB_MIN
     ):
         _log_drop("no_speech", segment)
-        return None
+        return SegmentDecision(text=text, kept=False, reason="no_speech")
 
-    return text
+    return SegmentDecision(text=text, kept=True, reason=None)
+
+
+def reliable_segment_text(segment: object) -> str | None:
+    """Tekst van één segment, of ``None`` als de decode niet betrouwbaar is."""
+
+    decision = decide_segment(segment)
+    return decision.text if decision.kept else None
+
+
+def segment_annotation(
+    segment: object,
+    decision: SegmentDecision,
+    *,
+    origin_s: float,
+) -> dict[str, Any]:
+    """Lokale analyse-regel: tekst, drop-reden en tijd t.o.v. de hele opname."""
+
+    start = _score(segment, "start")
+    end = _score(segment, "end")
+    return {
+        "text": decision.text,
+        "kept": decision.kept,
+        "reason": decision.reason,
+        "origin_s": round(float(origin_s), 3),
+        "start_s": None if start is None else round(float(origin_s) + start, 3),
+        "end_s": None if end is None else round(float(origin_s) + end, 3),
+        "compression_ratio": _score(segment, "compression_ratio"),
+        "no_speech_prob": _score(segment, "no_speech_prob"),
+        "avg_logprob": _score(segment, "avg_logprob"),
+        "temperature": _score(segment, "temperature"),
+    }
 
 
 def collapse_repeated_phrases(
