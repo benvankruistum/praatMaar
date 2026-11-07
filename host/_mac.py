@@ -138,5 +138,6 @@ def mac_completion_command() -> list[str] | None:
 
     for sound in _COMPLETION_SOUNDS:
         if sound.is_file():
-            return ["afplay", "-v", _COMPLETION_VOLUME, str(sound)]
+            # POSIX-pad: afplay draait op macOS, en de test draait ook op Windows.
+            return ["afplay", "-v", _COMPLETION_VOLUME, sound.as_posix()]
     return None
