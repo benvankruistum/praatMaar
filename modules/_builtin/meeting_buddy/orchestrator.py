@@ -274,10 +274,13 @@ class MeetingOrchestrator:
                 notify_force = True
             elif isinstance(event, TranscriptDeltaReceived):
                 if event.delta.is_final:
-                    if self._journal is not None:
-                        self._journal.append_final(event.delta.text)
-                    final_text = event.delta.text
                     labeled = self._label_final(event.delta, binding.meeting_session_id)
+                    if self._journal is not None:
+                        self._journal.append_final(
+                            event.delta.text,
+                            speaker_id=labeled.speaker_id,
+                        )
+                    final_text = event.delta.text
 
                 version_before = self._state.version
                 hints_before = self._state.emitted_hints

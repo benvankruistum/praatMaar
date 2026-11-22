@@ -44,6 +44,21 @@ def test_append_final_grows_transcript(tmp_path: Path) -> None:
     body = doc.path.read_text(encoding="utf-8").split("## Transcript\n", 1)[1]
     assert "Hallo" in body
     assert "wereld" in body
+    assert "Hallo wereld" in body
+
+
+def test_append_final_writes_speaker_on_its_own_line(tmp_path: Path) -> None:
+    doc = journal.TranscriptJournal.create(
+        tmp_path,
+        title="Demo",
+        agenda_titles=["A"],
+        started_at=datetime(2026, 7, 22, 10, 0),
+    )
+    doc.append_final("Eerste", speaker_id="spk_1")
+    doc.append_final("Tweede", speaker_id="spk_2")
+    doc.append_final("Onbekend", speaker_id="unknown")
+    body = doc.path.read_text(encoding="utf-8").split("## Transcript\n", 1)[1]
+    assert "[spk_1] Eerste\n[spk_2] Tweede\nOnbekend" in body
 
 
 def test_append_final_ignores_blank(tmp_path: Path) -> None:

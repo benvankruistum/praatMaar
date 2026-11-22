@@ -70,7 +70,11 @@ class MicStreamMixin:
         except Exception:
             return False
         finally:
-            if not self._keep_stream_warm():
+            # Een lopende opname niet sluiten: de sprekerschakelaar op de pill
+            # roept deze probe anders aan en de klik komt niet af.
+            with self._lock:
+                recording = self._recording
+            if not self._keep_stream_warm() and not recording:
                 self.stop_audio_stream()
 
     def _keep_stream_warm(self) -> bool:
