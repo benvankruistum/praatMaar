@@ -320,6 +320,8 @@ def apply_settings(
         indicator.set_position(new_position, xy=indicator_xy)
 
     indicator.set_destination(active_destination, active_destination_path(state))
+    speaker = (modules_config or {}).get("speaker-detection") or {}
+    indicator.set_speakers_enabled(bool(speaker.get("enabled")))
 
     tray_ref = tray if tray is not None else getattr(state, "_tray", None)
     if tray_ref is not None:

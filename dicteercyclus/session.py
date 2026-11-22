@@ -33,6 +33,7 @@ from chunk_transcription import OVERLAP_SECONDS, dedupe_overlap_text, normalize_
 from dicteercyclus.delivery import DeliveryMixin
 from dicteercyclus.incremental import _CHUNK_POLL_SECONDS, IncrementalMixin
 from dicteercyclus.mic_stream import MicStreamMixin
+from dicteercyclus.speaker_labels import format_transcript_with_speakers
 from dicteercyclus.timing import CycleTiming, Host, NotifyFn, format_cycle_timing
 from indicator import (
     RecordingState,
@@ -51,6 +52,7 @@ from indicator import (
 from indicator._contract import get_transcription_progress, transcription_percent
 from mic_errors import format_recording_start_error
 from modules._contract import CycleEvent, CycleEventType
+from modules.capabilities.speaker_detection import LabelingMode
 from modules.whisper import SharedWhisper
 from transcription_progress import TranscriptionProgressTicker
 from whisper_segments import (
@@ -186,6 +188,8 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         self._transcribed_through_samples: int = 0
         self._committed_through_samples: int = 0
         self._analysis_notes: list[dict[str, object]] = []
+        self._speaker_notes: list[dict[str, object]] = []
+        self._speaker_provider: Any | None = None
         self._progress_ticker: TranscriptionProgressTicker | None = None
         self._incremental_thread: threading.Thread | None = None
         self._chunk_whisper_thread: threading.Thread | None = None
@@ -339,6 +343,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             self._transcribed_through_samples = 0
             self._committed_through_samples = 0
             self._analysis_notes = []
+            self._speaker_notes = []
             self._reset_live_paste_state()
 
         self._event(CycleEventType.CYCLE_STARTED, session_id=session_id)
@@ -594,7 +599,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
                 set_transcription_progress(100)
             if transcript:
                 deliver_started = time.perf_counter()
-                self._apply_transcript(transcript)
+                self._apply_transcript(self._with_speaker_labels(transcript, chunks))
                 timing.deliver_s = time.perf_counter() - deliver_started
             elif final_state != RecordingState.ERROR:
                 print()
@@ -692,8 +697,69 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
         self._clear_session_id(session_id)
         self.on_ready()
 
+    def set_speaker_provider(self, provider: Any | None) -> None:
+        """Getter voor ``audio.speaker_detection``. ``None`` zet labels uit."""
+
+        self._speaker_provider = provider
+
+    def _speakers_active(self) -> bool:
+        getter = self._speaker_provider
+        if not callable(getter):
+            return False
+        try:
+            return getter() is not None
+        except Exception:
+            return False
+
+    def _with_speaker_labels(self, transcript: str, chunks: list[Any]) -> str:
+        """Houdt de platte tekst als sprekers uit staan of er geen segmenten zijn."""
+
+        getter = self._speaker_provider
+        session_id = self._session_id
+        if not callable(getter) or not session_id:
+            return transcript
+        try:
+            provider = getter()
+        except Exception:
+            return transcript
+        if provider is None:
+            return transcript
+        try:
+            provider.start_session(session_id)
+            provider.set_labeling_mode(session_id, LabelingMode.CLUSTER)
+            self._observe_speaker_chunks(provider, session_id, chunks)
+            with self._lock:
+                notes = list(self._speaker_notes)
+            labeled = format_transcript_with_speakers(provider, session_id, notes)
+        except Exception:
+            return transcript
+        return labeled if labeled else transcript
+
+    def _observe_speaker_chunks(self, provider: Any, session_id: str, chunks: list[Any]) -> None:
+        np = self._np
+        rate = int(self.sample_rate)
+        if np is None or rate <= 0:
+            return
+        cursor = 0
+        for chunk in chunks:
+            samples = np.ascontiguousarray(np.asarray(chunk), dtype="<f4").reshape(-1)
+            count = int(samples.shape[0])
+            if count <= 0:
+                continue
+            start_ms = int(cursor * 1000 / rate)
+            cursor += count
+            end_ms = int(cursor * 1000 / rate)
+            provider.observe_pcm(session_id, samples.tobytes(), start_ms, end_ms, rate)
+
     def _note_analysis_segment(self, decision: Any, segment: object, *, origin_s: float) -> None:
         """Bewaart een Whisper-oordeel voor de analyse-sidecar, niet voor de log."""
+
+        if decision.kept and decision.text:
+            note = segment_annotation(segment, decision, origin_s=origin_s)
+            session_id = self._session_id
+            with self._lock:
+                if self._session_id == session_id:
+                    self._speaker_notes.append(note)
 
         if self._keep_analysis_audio is None:
             return
@@ -787,6 +853,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             # die niets opleverden horen hier niet meer bij.
             with self._lock:
                 self._analysis_notes = []
+                self._speaker_notes = []
 
             sample_count = sum(chunk.shape[0] for chunk in chunks)
             duration_seconds = sample_count / float(self.sample_rate)
@@ -825,7 +892,7 @@ class Opnamesessie(MicStreamMixin, IncrementalMixin, DeliveryMixin):
             ticker = None
             deliver_started = time.perf_counter()
             transcript = collapse_repeated_phrases(" ".join(text_parts).strip())
-            self._apply_transcript(transcript)
+            self._apply_transcript(self._with_speaker_labels(transcript, chunks))
             timing.deliver_s = time.perf_counter() - deliver_started
 
         except Exception as exc:

@@ -24,7 +24,15 @@ class DeliveryMixin:
     def _live_paste_enabled(self) -> bool:
         """Live-plak alleen als incrementele transcriptie én live-plak aan staan."""
 
+        if self._speakers_block_live_paste():
+            return False
         return bool(self.incremental_transcription and self.incremental_live_paste)
+
+    def _speakers_block_live_paste(self) -> bool:
+        """Tussenstukken blijven kaal; de definitieve tekst krijgt de sprekerlabels."""
+
+        active = getattr(self, "_speakers_active", None)
+        return bool(callable(active) and active())
 
     def _reset_live_paste_state(self) -> None:
         self._live_paste_generation += 1
@@ -150,8 +158,16 @@ class DeliveryMixin:
             except OSError as exc:
                 print(i18n.t("rec.save_warn", error=exc))
 
-        if live:
-            remaining = self._unpasted_suffix(transcript)
+        if live or (
+            self._speakers_block_live_paste()
+            and self.incremental_transcription
+            and self.incremental_live_paste
+        ):
+            remaining = (
+                transcript.strip()
+                if self._speakers_block_live_paste()
+                else self._unpasted_suffix(transcript)
+            )
             if remaining:
                 self._paste_delta(remaining)
             return

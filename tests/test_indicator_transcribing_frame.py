@@ -40,9 +40,28 @@ def test_progress_bar_rect_sits_in_the_text_column() -> None:
     assert rect.left() > 20
     assert rect.right() < pill.width()
     assert rect.height() == PROGRESS_BAR_HEIGHT
-    # Onder de tekstregel, maar binnen de capsule.
-    assert rect.top() > INDICATOR_HEIGHT // 2
-    assert rect.bottom() <= INDICATOR_HEIGHT - 8
+    # Zelfde strook als de waveform: bovenin, niet op de knoppenrij.
+    assert rect.top() < INDICATOR_HEIGHT // 2
+    assert rect.bottom() < pill._stop_rect().top()
+
+
+def test_transcribing_follows_the_recording_grid() -> None:
+    from indicator._qt import _ACTION_SIZE
+
+    pill = _pill()
+    set_transcription_progress(10)
+    pill._apply_state(RecordingState.TRANSCRIBING, "toggle")
+
+    speakers = pill._speakers_rect()
+    tag = pill._mode_tag_rect()
+    bar = pill._progress_bar_rect()
+    assert speakers is not None and tag is not None and bar is not None
+    assert speakers.width() == _ACTION_SIZE
+    assert speakers.left() == pill._stop_rect().left()
+    assert tag.right() < speakers.left()
+    assert abs(tag.center().y() - speakers.center().y()) <= 8
+    assert bar.bottom() < speakers.top()
+    set_transcription_progress(None)
 
 
 def test_no_progress_bar_without_percentage() -> None:

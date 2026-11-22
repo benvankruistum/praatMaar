@@ -83,6 +83,7 @@ class TranscriptJournal:
     path: Path
     _agenda_titles: tuple[str, ...] = field(default_factory=tuple)
     _wrote_transcript: bool = False
+    _last_labeled: bool = False
 
     @classmethod
     def create(
@@ -110,15 +111,18 @@ class TranscriptJournal:
         )
         return cls(path=path, _agenda_titles=tuple(agenda_titles))
 
-    def append_final(self, text: str) -> None:
+    def append_final(self, text: str, *, speaker_id: str | None = None) -> None:
         chunk = text.strip()
         if not chunk:
             return
+        label = (speaker_id or "").strip()
+        labeled = bool(label) and label != "unknown"
+        line = f"[{label}] {chunk}" if labeled else chunk
         try:
             with self.path.open("a", encoding="utf-8", newline="") as handle:
                 if self._wrote_transcript:
-                    handle.write(" ")
-                handle.write(chunk)
+                    handle.write("\n" if labeled or self._last_labeled else " ")
+                handle.write(line)
                 handle.flush()
                 try:
                     import os
@@ -127,6 +131,7 @@ class TranscriptJournal:
                 except OSError:
                     pass
             self._wrote_transcript = True
+            self._last_labeled = labeled
         except OSError as exc:
             log.warning("Meeting transcript append failed path=%s error=%s", self.path, exc)
 

@@ -11,6 +11,7 @@ os.environ.setdefault("ORT_DISABLE_TELEMETRY", "1")
 import signal
 import sys
 import threading
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -239,6 +240,48 @@ _session: Opnamesessie | None = None
 
 def _emit_cycle_event(event: CycleEvent) -> None:
     module_bus.emit(event)
+
+
+def _sync_speaker_module() -> None:
+    """Zet alleen speaker-detection aan of uit.
+
+    Een volle module-reload stopt andere sessies (zoals Meeting Buddy). De
+    dicteeropname blijft lopen; labels worden pas aan het eind toegekend.
+    """
+
+    from modules._builtin.speaker_detection import SpeakerDetectionModule
+    from modules._contract import ModuleContext
+    from modules.registry import module_enabled
+
+    wanted = module_enabled(SpeakerDetectionModule(), MODULES_CONFIG)
+    current = [module for module in module_bus.modules if module.id == "speaker-detection"]
+    others = [module for module in module_bus.modules if module.id != "speaker-detection"]
+    if wanted and current:
+        return
+    if not wanted and not current:
+        return
+    for module in current:
+        try:
+            module.on_app_shutdown()
+        except Exception:
+            print(f"Module {module.id} faalde bij afsluiten:")
+            traceback.print_exc()
+        capability_registry.unregister_owner(module.id)
+    if wanted:
+        module = SpeakerDetectionModule()
+        dispatch = _ui_dispatch if _ui_dispatch is not None else noop_ui_dispatch
+        module.on_app_start(
+            ModuleContext(
+                app_dir=host.app_dir(),
+                ui_dispatch=dispatch,
+                whisper=shared_whisper,
+                capabilities=capability_registry,
+            )
+        )
+        others.append(module)
+    module_bus.set_modules(others)
+    if _tray is not None:
+        _tray.refresh_modules_menu()
 
 
 def _reload_modules() -> None:

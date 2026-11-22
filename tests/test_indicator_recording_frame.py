@@ -8,7 +8,6 @@ from indicator import RecordingState, set_chunk_leds_enabled, signal_chunk_trigg
 from indicator._contract import (
     INDICATOR_HEIGHT,
     NUM_BARS,
-    STOP_BUTTON_SIZE,
     WAVEFORM_BAR_MAX_HEIGHT,
     WAVEFORM_BAR_WIDTH,
     elapsed_label,
@@ -40,9 +39,11 @@ def test_waveform_matches_canvas_dimensions() -> None:
     assert WAVEFORM_BAR_MAX_HEIGHT == 24.0
 
 
-def test_stop_button_is_36_and_fits_the_capsule() -> None:
-    assert STOP_BUTTON_SIZE == 36
-    assert STOP_BUTTON_SIZE <= INDICATOR_HEIGHT
+def test_stop_button_is_compact_and_fits_the_capsule() -> None:
+    from indicator._qt import _ACTION_SIZE
+
+    assert _ACTION_SIZE == 22
+    assert _ACTION_SIZE <= INDICATOR_HEIGHT
 
 
 def _pill():
@@ -52,16 +53,18 @@ def _pill():
     return RecordingIndicator()
 
 
-def test_stop_rect_uses_stop_button_size() -> None:
+def test_stop_rect_uses_the_compact_action_size() -> None:
+    from indicator._qt import _ACTION_SIZE
+
     pill = _pill()
     pill._apply_state(RecordingState.RECORDING, "toggle")
     rect = pill._stop_rect()
-    assert rect.width() == STOP_BUTTON_SIZE
-    assert rect.height() == STOP_BUTTON_SIZE
-    # Verticaal gecentreerd in de capsule.
-    assert abs(rect.center().y() - INDICATOR_HEIGHT // 2) <= 1
-    # En binnen de capsule.
+    assert rect.width() == _ACTION_SIZE
+    assert rect.height() == _ACTION_SIZE
+    # Rechtsonder: de waveform zit bovenin, de knop op de onderste rij.
+    assert rect.center().y() > INDICATOR_HEIGHT // 2
     assert rect.top() >= 0 and rect.bottom() <= INDICATOR_HEIGHT
+    assert rect.right() <= pill.width()
 
 
 def test_dismiss_rect_stays_32() -> None:
@@ -122,6 +125,33 @@ def test_chunk_leds_reserve_icon_width_not_letters() -> None:
     left = _paint_chunk_leds_at(pill, 200)
     expected = int(_CHUNK_LED_SIZE + _CHUNK_LED_GAP + _CHUNK_LED_SIZE)
     assert 200 - left == expected
+
+
+def test_recording_waveform_spans_the_top_and_indicators_share_the_bottom_row() -> None:
+    pill = _pill()
+    set_chunk_leds_enabled(True)
+    try:
+        pill._apply_state(RecordingState.RECORDING, "toggle")
+        x_left, x_right, wave_cy, max_half = pill._recording_waveform_band()
+        stop = pill._stop_rect()
+        speakers = pill._speakers_rect()
+        tag = pill._mode_tag_rect()
+        metrics = pill._mode_tag_metrics()
+        assert speakers is not None and tag is not None and metrics is not None
+        assert x_right - x_left > 160
+        assert max_half <= 5
+        assert wave_cy + max_half <= stop.top()
+        assert pill._waveform_point_count(x_right - x_left) > NUM_BARS
+        visual_left, _width = metrics
+        content_left = pill._recording_content_left()
+        assert int(x_left) == content_left
+        assert visual_left >= content_left + pill._chunk_led_span()
+        assert tag.right() < speakers.left()
+        assert speakers.right() < stop.left()
+        assert abs(tag.center().y() - stop.center().y()) <= 2
+        assert abs(speakers.center().y() - stop.center().y()) <= 1
+    finally:
+        set_chunk_leds_enabled(False)
 
 
 def test_chunk_leds_paint_when_lit() -> None:

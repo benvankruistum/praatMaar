@@ -38,6 +38,17 @@ def run() -> None:
     # Session: monkeypatch mag ``dictation.session`` zetten; anders lazy build.
     session = d.get_session()
 
+    def _speaker_provider() -> object | None:
+        from modules.capabilities.speaker_detection import CAPABILITY_ID, CONTRACT_VERSION
+
+        return d.capability_registry.get(
+            CAPABILITY_ID,
+            minimum_contract_version=CONTRACT_VERSION,
+        )
+
+    if hasattr(session, "set_speaker_provider"):
+        session.set_speaker_provider(_speaker_provider)
+
     def assign_globals(**kwargs: Any) -> None:
         for key, value in kwargs.items():
             setattr(d, key, value)
@@ -99,6 +110,21 @@ def run() -> None:
         )
         print("\n" + i18n.t("dictation.mode_switched", mode=i18n.t(f"state.tag.{d.MODE}")))
 
+    def pill_toggle_speakers() -> None:
+        # Niet via apply_settings: die test de microfoon opnieuw en breekt een
+        # lopende opname af voordat de knop van stand wisselt.
+        modules = dict(getattr(d, "MODULES_CONFIG", None) or {})
+        entry = dict(modules.get("speaker-detection") or {})
+        enabled = not bool(entry.get("enabled"))
+        entry["enabled"] = enabled
+        modules["speaker-detection"] = entry
+        d.MODULES_CONFIG = modules
+        if d._runtime is not None:
+            d._runtime.modules_config = modules
+        indicator.set_speakers_enabled(enabled)
+        d.config.save_config(user_config_dict(d))
+        d._sync_speaker_module()
+
     def pill_retry() -> None:
         d._refresh_mic_attention()
         router.pill_control_press()
@@ -111,11 +137,14 @@ def run() -> None:
         on_control_release=router.pill_control_release,
         on_retry=pill_retry,
         on_mode_toggle=pill_toggle_mode,
+        on_speakers_toggle=pill_toggle_speakers,
     )
     d._indicator = indicator
     if d._runtime is not None:
         d._runtime.indicator = indicator
     indicator.set_destination(d.ACTIVE_DESTINATION, active_destination_path(d))
+    speaker = (getattr(d, "MODULES_CONFIG", None) or {}).get("speaker-detection") or {}
+    indicator.set_speakers_enabled(bool(speaker.get("enabled")))
     indicator.set_hotkey_label(hotkeys.format_hotkey(d.HOTKEY_TOKENS))
     indicator.show_ready_cue()
 

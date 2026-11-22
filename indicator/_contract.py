@@ -30,7 +30,8 @@ class RecordingState(Enum):
 # UITERLIJK (constanten — bedoeld om te tunen)
 # =========================================================
 
-INDICATOR_WIDTH = 340
+INDICATOR_WIDTH = 380
+# Twee rijen, maar de waveform blijft een dunne strook: de capsule groeit niet mee.
 INDICATOR_HEIGHT = 60
 WINDOW_ALPHA = 0.94
 MARGIN_FRACTION = 0.10
