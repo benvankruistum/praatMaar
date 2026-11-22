@@ -44,3 +44,10 @@ praatMaar ships its product UI with **PySide6 (Qt 6)**.
 - Linux needs a minimal `Host` adapter before Linux support is claimed.
 - Native OS adapters may still be added narrowly where Qt cannot provide
   no-activation behaviour, especially on macOS.
+
+## Aanvulling (2026-09-16) — gelijkwaardig licht/donker
+
+De light-only token-set en de Qt Light-pin waren MVP-uitstel, geen permanente
+regel. Gelijkwaardige thema’s, OS-default en override in Instellingen →
+Algemeen staan in [0008](0008-equal-light-dark-ui-theme.md). QSS-tokens blijven
+de styling-seam; dark is een tweede palet achter dezelfde namen.
